@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="style.css" />
+    <title>사이버네틱 리모콘</title>
+    <!-- 구글 폰트 - Orbitron -->
+     <!--
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700&display=swap" rel="stylesheet">
+    -->
+    <!-- 폰트어썸 아이콘 -->
+    <link rel="stylesheet" href="all.min.css">
+</head>
+<body>
+    <!-- 배경 비디오 (테스트용 더미) -->
+    <img id="background-video" src="go2.png'"></img>
+    
+    <!-- 사이버네틱 효과 레이어 -->
+    <div class="cybernetic-effect"></div>
+    <div class="glitch-line"></div>
+    
+    <div class="hud-container">
+        <div class="top-row">
+            <!-- 음성 인식 및 입력창 (좌측 상단) -->
+            <div class="voice-control">
+                <div class="voice-input">
+                    <input type="text" placeholder="명령어를 입력하세요...">
+                    <button class="mic-button" id="mic-button">
+                        <i class="fas fa-microphone"></i>
+                    </button>
+                </div>
+                <p>
+                <button class="mic-button" id="tts-hello">안녕</button>
+                <button class="mic-button" id="tts-intro">소개</button>
+                <button class="mic-button" id="tts-follow">컴온</button>
+                <button class="mic-button" id="tts-warn">조심</button>
+                <button class="mic-button" id="tts-bye">바이</button>
+                <button class="mic-button" id="tts-poet">노래</button>
+            </div>
+            
+            <!-- 사람/사물 카운팅 패널 (중앙 상단) -->
+            <div class="counting-panel">
+                <div class="counter-container">
+                    <div class="counter-box">
+                        <div class="counter-label">Human</div>
+                        <div class="counter-value" id="people-count">3</div>
+                    </div>
+                    <div class="counter-box">
+                        <div class="counter-label">Object</div>
+                        <div class="counter-value" id="object-count">12</div>
+                    </div>
+                    <div class="counter-box">
+                        <button class="mic-button" id="mode">모드</button>
+                    </div>       
+                    <div class="counter-box">
+                        <button class="mic-button" id="connect">연결</button>
+                    </div>                                        
+                </div>
+            </div>
+            
+            <!-- 상태 패널 (우측 상단) -->
+            <div class="status-panel">
+                <div class="status-item">
+                    <span class="status-label">온도:</span>
+                    <span class="status-value" id="temp-value">42°C</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-bar-fill temperature-fill" style="width: 42%;"></div>
+                </div>
+                
+                <div class="status-item">
+                    <span class="status-label">배터리:</span>
+                    <span class="status-value" id="battery-value">78%</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-bar-fill battery-fill" style="width: 78%;"></div>
+                </div>
+                
+                <div class="status-item">
+                    <span class="status-label">CPU 이용률:</span>
+                    <span class="status-value" id="cpu-value">65%</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-bar-fill cpu-fill" style="width: 65%;"></div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 밝기 및 소리 조절 패널 (우측 중앙) -->
+        <div class="controls-panel">
+            <div class="control-slider">
+                <span class="slider-value" id="brightness-value">50%</span>
+                <div class="slider-container">
+                    <input type="range" min="0" max="10" value="50" class="slider" id="brightness-slider">
+                </div>
+                <div class="slider-icon"><i class="fas fa-sun"></i></div>
+            </div>
+            
+            <div class="control-slider">
+                <span class="slider-value" id="volume-value">50%</span>
+                <div class="slider-container">
+                    <input type="range" min="0" max="10" value="50" class="slider" id="volume-slider">
+                </div>
+                <div class="slider-icon"><i class="fas fa-volume-up"></i></div>
+            </div>
+        </div>
+                
+        <!-- 색상 변경 패널 (좌측 중앙) -->
+        <div class="color-panel">
+            <div class="color-options">
+                <div class="color-option white-theme" data-color="white"></div>
+                <div class="color-option red-theme" data-color="red"></div>
+                <div class="color-option yellow-theme" data-color="yellow"></div>
+                <div class="color-option blue-theme" data-color="blue"></div>
+                <div class="color-option green-theme" data-color="green"></div>
+                <div class="color-option cyan-theme active" data-color="cyan"></div>
+                <div class="color-option purple-theme" data-color="purple"></div>
+            </div>
+        </div>
+        
+        
+        <div class="control-row">
+            <!-- 이동 패드 (좌측) -->
+            <div class="control-pad">
+                <div class="pad-button up-button" id="move-up">
+                    <i class="fas fa-chevron-up"></i>
+                </div>
+                <div class="pad-button down-button" id="move-down">
+                    <i class="fas fa-chevron-down"></i>
+                </div>
+                <div class="pad-button left-button" id="move-left">
+                    <i class="fas fa-chevron-left"></i>
+                </div>
+                <div class="pad-button right-button" id="move-right">
+                    <i class="fas fa-chevron-right"></i>
+                </div>
+                <div class="pad-button center-button" id="move-center">
+                    <i class="fas fa-circle"></i>
+                </div>
+            </div>
+            
+            <!-- 기능 버튼 패널 (중앙 하단) -->
+            <div class="function-panel">
+                <!--
+                <button class="function-button" id="Damp">Damp</button>
+                -->
+                <button class="function-button" id="Hello">Hello</button>
+                <button class="function-button" id="WiggleHips">WiggleHips</button>
+                <button class="function-button" id="BalanceStand">BalancedStand</button>
+                <button class="function-button" id="StopMove">StopMove</button>
+                <button class="function-button" id="StandUp">StandUp</button>
+                <button class="function-button" id="StandDown">StandDown</button>
+                <button class="function-button" id="Sit">Sit</button>
+                <button class="function-button" id="RiseSit">RiseSit</button>
+                <button class="function-button" id="Stretch">Stretch</button>
+                <button class="function-button" id="Dance1">Dance1</button>
+                <button class="function-button" id="Dance2">Dance2</button>
+                <button class="function-button" id="Scrape">Scrape</button>
+                <button class="function-button" id="FrontJump">FrontJump</button>
+                <button class="function-button" id="FrontPounce">FrontPounce</button>
+                <button class="function-button" id="FingerHeart">FingerHeart</button>
+                <button class="function-button" id="Content">Content</button>
+
+                <button class="function-button" id="SwitchGait">SwitchGait</button>
+                <button class="function-button" id="TrajectoryFollow">TrajectoryFollow</button>
+                <button class="function-button" id="ContinuousGait">ContinuousGait</button>
+                <button class="function-button" id="Pose">Pose</button>
+                <button class="function-button" id="EconomicGait">EconomicGait</button>
+                <button class="function-button" id="LeadFollow">LeadFollow</button>
+                <button class="function-button" id="Bound">Bound</button>
+                <button class="function-button" id="MoonWalk">MoonWalk</button>
+                <button class="function-button" id="OnesidedStep">OnesidedStep</button>
+                <button class="function-button" id="CrossStep">CrossStep</button>
+                <button class="function-button" id="Handstand">Handstand</button>
+                <button class="function-button" id="StandOut">StandOut</button>  
+                <button class="function-button" id="FreeWalk">FreeWalk</button>
+                <button class="function-button" id="Standup">Standup</button>
+                <button class="function-button" id="CrossWalk">CrossWalk</button>                      
+
+                <!--
+                <button class="function-button" id="Wallow">Wallow</button>       
+                -->                         
+            </div>
+            
+            <!-- 회전 패드 (우측) -->
+            <div class="rotation-pad">
+                <div class="rotation-button tilt-up" id="tilt-up">
+                    <i class="fas fa-angle-up"></i>
+                </div>
+                <div class="rotation-button tilt-down" id="tilt-down">
+                    <i class="fas fa-angle-down"></i>
+                </div>
+                <div class="rotation-button rotate-left" id="rotate-left">
+                    <i class="fas fa-undo"></i>
+                </div>
+                <div class="rotation-button rotate-right" id="rotate-right">
+                    <i class="fas fa-redo"></i>
+                </div>
+                <div class="rotation-button center-rotation" id="rotation-center">
+                    <i class="fas fa-crosshairs"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src='./recorder.js'></script>
+    <script src='./index.js'></script>
+</body>
+</html>

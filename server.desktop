@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=server
+Comment=Run Python script in terminal
+Exec=gnome-terminal -- bash -c "cd /home/circulus/git/pibog-v1;python index.py; exec bash"
+Icon=utilities-terminal
+Terminal=false
+Type=Application
+Encoding=UTF-8

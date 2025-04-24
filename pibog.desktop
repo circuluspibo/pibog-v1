@@ -1,0 +1,9 @@
+[Desktop Entry]
+Version=1.0
+Name=pibog
+Comment=Launch website in fullscreen
+Exec=chromium --start-fullscreen http://127.0.0.1:59531/web/index.html
+Icon=chromium
+Terminal=false
+Type=Application
+Categories=Network;WebBrowser;
