@@ -271,19 +271,19 @@ document.addEventListener('DOMContentLoaded', function() {
                     cmd = '/sport?cmd=BodyHeight&x=-1&y=0&z=0' // get height
                     break;        
                 case 'tts-hello':
-                    cmd = '/v1/tts?text="안녕하세요, 저는 파이온 이에요. 만나서 반가워요."&isPlay=1'
+                    cmd = '/v1/tts?text="최원철 공주시장님 안녕하세요. 공주시 학습형 늘봄센터 개소를 축하드립니다."&isPlay=1'
                     break;
                 case 'tts-intro':
-                    cmd = '/v1/tts?text="환영합니다. 공주 교육의 중심 관문에 온걸 환영해."&isPlay=1'
+                    cmd = '/v1/tts?text="본 개소의 하이라이트! 현판식을 진행하겠습니다. 참석하신 분들은 준비된 현판 양 옆으로 나란히 서주시기 바랍니다."&isPlay=1'
                     break; 
                 case 'tts-follow':
                     cmd = '/v1/tts?text="반갑습니다. 공주교육대학교에 방문하신 여러분을 환영합니다."&isPlay=1'
                     break;
                 case 'tts-warn':
-                    cmd = '/v1/tts?text="나랑 부딪칠 수 있으니 조심히 피해줘."&isPlay=1'
+                    cmd = '/v1/tts?text="안녕하세요. 저와 함께 사진좀 찍어보실래요?"&isPlay=1'
                     break;
                 case 'tts-bye':
-                    cmd = '/v1/tts?text="다음에 다시 만나길 기대할께 안녕~!"&isPlay=1'
+                    cmd = '/v1/tts?text="환영합니다. 저는 휴머노이드 로봇 파이온입니다."&isPlay=1'
                     break;
                 case 'tts-poet':
                     cmd = '/v1/tts?text="새로운 교육의 미래를 열어갈 센터장님을 소개합니다. 한규정 교수님을 박수로 환영해 주세요!"&isPlay=1'
