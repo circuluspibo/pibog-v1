@@ -216,6 +216,10 @@ hR = None
 
 @app.get("/prepare")
 async def prepare():
+
+  global hL
+  global hR
+
   try:
       hL = HadnControler('/dev/ttyACM0') # L 컨트롤러 L동글 부터 연결
       hR = HadnControler('/dev/ttyACM1') # R 컨트롤러
@@ -226,12 +230,16 @@ async def prepare():
 
 @app.get("/hands")
 async def hands(cmd : str):
-    print(cmd)
-    thread_L = threading.Thread(target=hL.send_motion, args=(cmd,))
-    thread_R = threading.Thread(target=hR.send_motion, args=(cmd,))
 
-    thread_L.start()
-    thread_R.start()
+  global hL
+  global hR
+
+  print(cmd)
+  thread_L = threading.Thread(target=hL.send_motion, args=(cmd,))
+  thread_R = threading.Thread(target=hR.send_motion, args=(cmd,))
+
+  thread_L.start()
+  thread_R.start()
 
 @app.get("/heartbeat")
 async def heartbeat():
