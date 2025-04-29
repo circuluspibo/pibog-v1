@@ -274,10 +274,10 @@ document.addEventListener('DOMContentLoaded', function() {
                     cmd = '/speech?text="안녕, 나는 파이독이야. 만나서 반가워요."&motion=Hello'
                     break;
                 case 'tts-intro':
-                    cmd = '/speech?text="안녕, 인천 교육의 중심 관문에 온걸 환영해."&motion=RiseSit'
+                    cmd = '/speech?text="안녕, 공주교육대학교에 온걸 환영해."&motion=RiseSit'
                     break; 
                 case 'tts-follow':
-                    cmd = '/speech?text="안녕, 인천 교육의 중심 관문에 온걸 환영해."&motion=WiggleHips'
+                    cmd = '/speech?text="안녕, 공주시 학습형 늘봄 센터에 온걸 환영해요."&motion=WiggleHips'
                     break;
                 case 'tts-warn':
                     cmd = '/speech?text="나랑 부딪칠 수 있으니 조심히 피해줘."&motion=FrontPounce'
@@ -286,7 +286,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     cmd = '/speech?text="다음에 다시 만나길 기대할께 안녕~!"&motion=Scrape'
                     break;
                 case 'tts-poet':
-                    cmd = '/speech?text="나는 강아지 로봇중에 최강인 파이독이라고 하지~ 사랑스럽지? 또 보고싶지?"&motion=FingerHeart'
+                    cmd = '/speech?text="나는 강아지 로봇중에 최강인 파이독이라고 하지~ 사람을 물진 않아.?"&motion=FingerHeart'
                     break;    
                 case 'mode':
                     if(mode == 'normal'){
