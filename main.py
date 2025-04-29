@@ -535,7 +535,7 @@ def tts(text = "", voice = 1, lang='ko', static=0, isPlay=0):
       #wav_file_path = audiofile_path.replace('.mp3', '.wav')
       audio.export(f"output/{filename}.wav", format='wav', codec="pcm_s16le" )#parameters=["-ar", "44100"])
       if int(isPlay) > 0 :
-        soundplay(f"output/{filename}.wav")
+        playsound(f"output/{filename}.wav")
 
       return f"output/{filename}.wav"
 
