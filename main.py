@@ -41,6 +41,7 @@ from fastapi.staticfiles import StaticFiles
 from queue import Queue
 from ultralytics import YOLO
 import openvino as ov
+from playsound import playsound
 core = ov.Core()
 
 det_ov_model = core.read_model('yolo12m_int8_openvino_model/yolo12m.xml')
@@ -118,7 +119,7 @@ class Generator(ov_genai.Generator):
     def next(self):
         return np.random.normal(self.mu, self.sigma)
 
-async def generate_text_stream(chat : Chat, isStream=True):
+async def generate_text_stream(chat : Chat, isStream=True, isPlay=0):
     
     if chat.rag is not None and len(chat.rag) > 10: 
       chat.type=  f"{chat.type} 그리고, 다음 내용을 참고하여 대답을 하되 잘 모르는 내용이면 모른다고 솔직하게 대답하세요.\n<|context|>\n{chat.rag}"    
@@ -143,7 +144,12 @@ async def generate_text_stream(chat : Chat, isStream=True):
                 
                 sentence = sentence.strip()
                 print(sentence)
-                await speech(sentence, 'Hello', 0, 'ko')
+                if int(isPlay) > 0:
+                  file = tts(sentence)
+                  print('playing', file)
+                  playsound(file)
+                else:
+                  await speech(sentence, 'Hello', 0, 'ko')
 
                 yield sentence
                 #await asyncio.sleep(0) 
@@ -371,6 +377,7 @@ async def speech(text : str, motion ='Hello', voice=0, lang='ko'):
       
   return { "result" : True, "data" : True }  
 
+
 @app.get("/color")
 async def color(value = 'purple'):
   global conn
@@ -447,17 +454,17 @@ def monitor():
 
 
 @app.post("/v1/txt2chat", summary="문장 기반의 chatgpt 스타일 구현 / batch ")
-def txt2chat(chat : Chat): # gen or med
+def txt2chat(chat : Chat, isPlay = 0): # gen or med
   print(chat)
-  return StreamingResponse(generate_text_stream(chat, False), media_type="text/plain")
+  return StreamingResponse(generate_text_stream(chat, False, isPlay), media_type="text/plain")
 
 @app.post("/v2/txt2chat", summary="문장 기반의 chatgpt 스타일 구현 / stream")
-def txt2chat2(chat : Chat): # gen or med
+def txt2chat2(chat : Chat, isPlay = 0): # gen or med
   print(chat)
-  return StreamingResponse(generate_text_stream(chat, True), media_type="text/plain")
+  return StreamingResponse(generate_text_stream(chat, True, isPlay), media_type="text/plain")
 
 @app.post("/v1/stt", summary="음성을 인식합니다.")
-def stt(file : UploadFile = File(...), lang="ko"):
+def stt(file : UploadFile = File(...), lang="ko", isPlay=0):
   start = t.time()
   location = f"uploads/{file.filename}"
 
@@ -484,7 +491,7 @@ def stt(file : UploadFile = File(...), lang="ko"):
   chat = Chat()
   chat.prompt = str(out)
 
-  return txt2chat(chat)
+  return txt2chat(chat, isPlay)
 
   #return { "result" : True, "data" : str(out) }
 

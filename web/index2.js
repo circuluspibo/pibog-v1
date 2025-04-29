@@ -72,7 +72,7 @@ function stt(blob){
   var fd = new FormData();
   fd.append("file", blob, 'voice.wav')
 
-  fetch(`/v1/stt`,{ //?prompt=${query}&temp=${temp}&lang=en
+  fetch(`/v2/stt?isPlay=1`,{ //?prompt=${query}&temp=${temp}&lang=en
     method: 'POST',
     body: fd
   }).then(async res=>{
@@ -271,22 +271,22 @@ document.addEventListener('DOMContentLoaded', function() {
                     cmd = '/sport?cmd=BodyHeight&x=-1&y=0&z=0' // get height
                     break;        
                 case 'tts-hello':
-                    cmd = '/speech?text="안녕, 나는 파이독이야. 만나서 반가워요."&motion=Hello'
+                    cmd = '/tts?text="안녕하세요, 저는 파이온 이에요. 만나서 반가워요."&motion=Hello'
                     break;
                 case 'tts-intro':
-                    cmd = '/speech?text="안녕, 인천 교육의 중심 관문에 온걸 환영해."&motion=RiseSit'
+                    cmd = '/tts?text="환영합니다. 공주 교육의 중심 관문에 온걸 환영해."&motion=RiseSit'
                     break; 
                 case 'tts-follow':
-                    cmd = '/speech?text="안녕, 인천 교육의 중심 관문에 온걸 환영해."&motion=WiggleHips'
+                    cmd = '/tts?text="반갑습니다. 공주교육대학교에 방문하신 여러분을 환영합니다."&motion=WiggleHips'
                     break;
                 case 'tts-warn':
-                    cmd = '/speech?text="나랑 부딪칠 수 있으니 조심히 피해줘."&motion=FrontPounce'
+                    cmd = '/tts?text="나랑 부딪칠 수 있으니 조심히 피해줘."&motion=FrontPounce'
                     break;
                 case 'tts-bye':
-                    cmd = '/speech?text="다음에 다시 만나길 기대할께 안녕~!"&motion=Scrape'
+                    cmd = '/tts?text="다음에 다시 만나길 기대할께 안녕~!"&motion=Scrape'
                     break;
                 case 'tts-poet':
-                    cmd = '/speech?text="나는 강아지 로봇중에 최강인 파이독이라고 하지~ 사랑스럽지? 또 보고싶지?"&motion=FingerHeart'
+                    cmd = '/tts?text="새로운 교육의 미래를 열어갈 센터장님을 소개합니다. 한규정 교수님을 박수로 환영해 주세요!"&motion=FingerHeart'
                     break;    
                 case 'mode':
                     if(mode == 'normal'){
