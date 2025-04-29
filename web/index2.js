@@ -414,7 +414,7 @@ document.addEventListener('DOMContentLoaded', function() {
     //updateSystemStatus();
     
     // 주기적으로 시스템 상태 업데이트 (5초마다)
-    setInterval(updateSystemStatus, 60000);
+    //setInterval(updateSystemStatus, 60000);
     
     // 사이버네틱 글리치 효과 랜덤 생성
     setInterval(() => {
