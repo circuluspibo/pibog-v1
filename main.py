@@ -503,7 +503,7 @@ def getHash(text):
   return hash_func.hexdigest()
 
 @app.get("/v1/tts", response_class=FileResponse, summary="입력한 문장으로 부터 음성을 생성합니다.")
-def tts(text = "", voice = 1, lang='ko', static=0):
+def tts(text = "", voice = 1, lang='ko', static=0, isPlay=0):
     #org_text = parse.quote(text, safe='', encoding="cp949")
     start = t.time()
     print(text, static)
@@ -534,6 +534,9 @@ def tts(text = "", voice = 1, lang='ko', static=0):
       audio = audio.set_channels(1)
       #wav_file_path = audiofile_path.replace('.mp3', '.wav')
       audio.export(f"output/{filename}.wav", format='wav', codec="pcm_s16le" )#parameters=["-ar", "44100"])
+      if int(isPlay) > 0 :
+        soundplay(f"output/{filename}.wav")
+
       return f"output/{filename}.wav"
 
 print("Loading Complete!")
