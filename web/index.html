@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="style.css" />
+
     <title>사이버네틱 리모콘</title>
     <!-- 구글 폰트 - Orbitron -->
      <!--
@@ -13,6 +14,8 @@
     <link rel="stylesheet" href="all.min.css">
 </head>
 <body>
+
+
     <!-- 배경 비디오 (테스트용 더미) -->
     <img id="background-video" src="/web/go2.jpg"></img>
     
@@ -44,11 +47,11 @@
                 <div class="counter-container">
                     <div class="counter-box">
                         <div class="counter-label">Human</div>
-                        <div class="counter-value" id="people-count">3</div>
+                        <div class="counter-value" id="people-count">0</div>
                     </div>
                     <div class="counter-box">
                         <div class="counter-label">Object</div>
-                        <div class="counter-value" id="object-count">12</div>
+                        <div class="counter-value" id="object-count">0</div>
                     </div>
                     <div class="counter-box">
                         <button class="mic-button" id="mode">모드</button>
@@ -136,7 +139,7 @@
                     <i class="fas fa-chevron-right"></i>
                 </div>
                 <div class="pad-button center-button" id="move-center">
-                    <i class="fas fa-circle"></i>
+                    <i class="fa-solid fa-arrow-down"></i>
                 </div>
             </div>
             
@@ -198,7 +201,7 @@
                     <i class="fas fa-redo"></i>
                 </div>
                 <div class="rotation-button center-rotation" id="rotation-center">
-                    <i class="fas fa-crosshairs"></i>
+                    <i class="fa-solid fa-arrow-up"></i>
                 </div>
             </div>
         </div>

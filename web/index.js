@@ -9,6 +9,7 @@ var input;                  //MediaStreamAudioSourceNode we'll be recording
 var AudioContext = window.AudioContext || window.webkitAudioContext;
 var audioContext //new audio context to help us record
 let lastTime = 0
+let multi = 1
 
 function listen(){
   if (document.documentElement.requestFullscreen) 
@@ -136,6 +137,8 @@ document.addEventListener("keydown", (event) => {
                 startKeyRepeat("PageDown");
             }
             break;
+        default:
+            console.log('unknown',event.key)
     }
 });
 
@@ -174,22 +177,22 @@ function startKeyRepeat(key) {
         }
         switch (key) {
             case "ArrowUp":
-                cmd = 'Move&x=1&y=0&z=0'
+                cmd = `Move&x=${multi * 1}&y=0&z=0`
                 break;
             case "ArrowDown":
-                cmd = 'Move&x=-1&y=0&z=0'
+                cmd = `Move&x=${multi * -1}&y=0&z=0`
                 break;
             case "ArrowLeft":
-                cmd = 'Move&x=0&y=1&z=0'
+                cmd = `Move&x=0&y=${multi * 1}&z=0`
                 break;
             case "ArrowRight":
-                cmd = 'Move&x=0&y=-1&z=0'
+                cmd = `Move&x=0&y=${multi * -1}&z=0`
                 break;
             case "PageUp":
-                cmd = 'Move&x=0&y=0&z=1'
+                cmd = `Move&x=0&y=0&z=${multi * 1}`
                 break;
             case "PageDown":
-                cmd = 'Move&x=0&y=0&z=-1'
+                cmd = `Move&x=0&y=0&z=-${multi * -1}`
                 break;
         }
         // 여기에 방향키 또는 페이지 업/다운에 대한 원하는 동작을 추가
@@ -201,6 +204,7 @@ function startKeyRepeat(key) {
     
         const json = await response.json()
         console.log(cmd ,json)
+
 
     }, intervalTime);
     
@@ -247,22 +251,22 @@ document.addEventListener('DOMContentLoaded', function() {
 
             switch(this.id){
                 case 'move-up':
-                    cmd = '/sport?cmd=Move&x=1&y=0&z=0'
+                    cmd = `/sport?cmd=Move&x=${multi * 1}&y=0&z=0`
                     break;
                 case 'move-down':
-                    cmd = '/sport?cmd=Move&x=-1&y=0&z=0'
+                    cmd = `/sport?cmd=Move&x=${multi * -1}&y=0&z=0`
                     break;                                        
                 case 'move-left':
-                    cmd = '/sport?cmd=Move&x=0&y=1&z=0'
+                    cmd = `/sport?cmd=Move&x=0&y=${multi * 1}&z=0`
                     break;
                 case 'move-right':
-                    cmd = '/sport?cmd=Move&x=0&y=-1&z=0'
+                    cmd = `/sport?cmd=Move&x=0&y=${multi * -1}&z=0`
                     break;
                 case 'rotate-left':
-                    cmd = '/sport?cmd=Move&x=0&y=0&z=1'
+                    cmd = `/sport?cmd=Move&x=0&y=0&z=${multi * 1}`
                     break;
                 case 'rotate-right':
-                    cmd = '/sport?cmd=Move&x=0&y=0&z=-1'
+                    cmd = `/sport?cmd=Move&x=0&y=0&z=${multi * -1}`
                     break;                    
                 case 'tilt-up':
                     cmd = '/sport?cmd=BodyHeight&x=1&y=0&z=0' // get height
@@ -286,8 +290,16 @@ document.addEventListener('DOMContentLoaded', function() {
                     cmd = '/speech?text="다음에 다시 만나길 기대할께 안녕~!"&motion=Scrape'
                     break;
                 case 'tts-poet':
-                    cmd = '/speech?text="나는 강아지 로봇중에 최강인 파이독이라고 하지~ 사람을 물진 않아.?"&motion=FingerHeart'
+                    cmd = '/speech?text="나는 서큘러스의 사족 보행 로봇, 파이독이라고 하지~ 사람을 물진 않아.?"&motion=FingerHeart'
                     break;    
+                case 'move-center':
+                    cmd = '/speech?text="기본 속도로 행동합니다."&motion=Content'
+                    multi = 0.5
+                    break;    
+                case 'rotation-center':
+                    cmd = '/speech?text="빠른속도로 행동합니다."&motion=Content'
+                    multi = 1
+                    break;                                            
                 case 'mode':
                     if(mode == 'normal'){
                         mode = 'ai'
@@ -585,4 +597,80 @@ document.addEventListener('DOMContentLoaded', function() {
         // 실제 볼륨 조절은 구현되지 않음 (시뮬레이션)
     });
     
+    // 마우스 이벤트 처리
+    const canvas = document.querySelector(".hud-container");
+
+
+    let posX = window.innerWidth / 2;
+    let posY = window.innerHeight / 2;
+
+    // 포인터 잠금 요청
+    canvas.addEventListener('click', () => {
+      canvas.requestPointerLock();
+    });
+
+    document.addEventListener('pointerlockchange', () => {
+      if (document.pointerLockElement === canvas) {
+        document.addEventListener("mousemove", updatePosition, false);
+      } else {
+        document.removeEventListener("mousemove", updatePosition, false);
+      }
+    });
+
+    async function updatePosition(e) {
+      const dx = e.movementX;
+      const dy = e.movementY;
+
+      // 좌표 업데이트
+      posX += dx;
+      posY += dy;
+
+      // 화면 경계 제한
+      posX = Math.max(0, Math.min(window.innerWidth, posX));
+      posY = Math.max(0, Math.min(window.innerHeight, posY));
+
+      // 방향 감지
+      let key = '-';
+      if (Math.abs(dx) > Math.abs(dy)) {
+        // 좌우 움직임이 더 큼
+        key = dx > 0 ? 'ArrowRight' : 'ArrowLeft';
+      } else if (Math.abs(dy) > 0) {
+        // 상하 움직임
+        key = dy > 0 ? 'ArrowDown' : 'ArrowUp';
+      }
+
+      console.log('Mouse',key)
+      // 방향에 따른 처리 (예시 switch)
+        switch (key) {
+            case "ArrowUp":
+                cmd = `Move&x=${multi * 1}&y=0&z=0`
+                break;
+            case "ArrowDown":
+                cmd = `Move&x=${multi * -1}&y=0&z=0`
+                break;
+            case "ArrowLeft":
+                cmd = `Move&x=0&y=${multi * 1}&z=0`
+                break;
+            case "ArrowRight":
+                cmd = `Move&x=0&y=${multi * -1}&z=0`
+                break;
+            case "PageUp":
+                cmd = `Move&x=0&y=0&z=${multi * 1}`
+                break;
+            case "PageDown":
+                cmd = `Move&x=0&y=0&z=-${multi * -1}`
+                break;
+        }
+        // 여기에 방향키 또는 페이지 업/다운에 대한 원하는 동작을 추가
+
+        const response = await fetch(`/sport?cmd=${cmd}`)
+        if (!response.ok) {
+            throw new Error(`Response status: ${response.status}`)
+        }
+
+        const json = await response.json()
+        console.log(cmd ,json)
+        
+      }
+
 });
