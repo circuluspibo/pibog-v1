@@ -154,7 +154,7 @@ async def generate_text_stream(chat : Chat, isStream=True, isPlay=0):
                   print('playing', file)
                   playsound(file)
                 else:
-                  await speech(sentence, 'Hello', 0, 'ko')
+                  await speech(sentence, 'Content', 0, 'ko')
 
                 yield sentence
                 #await asyncio.sleep(0) 
@@ -214,9 +214,17 @@ async def connect():
   conn.video.switchVideoChannel(True)
   conn.video.add_track_callback(recv_camera_stream)
 
+  def lowstate_callback(message):
+    msg = message['data']      
+    state["charge"] = msg['bms_state']['soc']
+    state["temp"] = msg['temperature_ntc1']
+    state["voltage"] = msg['power_v']
+
+  conn.datachannel.pub_sub.subscribe(RTC_TOPIC['LOW_STATE'], lowstate_callback)
+
   return { "result" : True, "data" : True }        
 
-state = { "charge" : 0, "temp" : 0, "voltage" : 0}
+state = { "charge" : 0, "temp" : 0, "voltage" : 0, "cnt_live" : 0, "cnt_object" : 0 }
 
 
 from mandro import HadnControler
@@ -254,22 +262,8 @@ async def hands(cmd : str):
 
 @app.get("/heartbeat")
 async def heartbeat():
-  global conn
   global state
-  global cnt_live
-  global cnt_object
-
-  def lowstate_callback(message):
-    msg = message['data']      
-    state["charge"] = msg['bms_state']['soc']
-    state["temp"] = msg['temperature_ntc1']
-    state["voltage"] = msg['power_v']
-    state["live"] = cnt_live
-    state["object"] = cnt_object
-    #print(msg)
-
-  conn.datachannel.pub_sub.subscribe(RTC_TOPIC['LOW_STATE'], lowstate_callback)
-
+  print(state)
   return { "result" : True, "data" : state }        
 
 @app.get("/video_feed")
@@ -278,10 +272,11 @@ async def video_feed():
     global cnt_live
     global cnt_object
     global lastTime 
+    global state
     """
     Endpoint to stream video frames as MJPEG.
     """
-    async def generate():
+    def generate():
         processing_times = collections.deque()
         while True:
             if not frame_queue.empty():
@@ -329,6 +324,10 @@ async def video_feed():
                 #  await color('red',True)
                 #else:
                 #  await color('cyan')
+
+                state["cnt_live"] = cnt_live
+                state["cnt_object"] = cnt_object
+
 
                 frame = output#.results.plot()
                 processing_times.append(stop_time - start_time)
@@ -387,7 +386,7 @@ async def sport(cmd : str, x=0.0, y=0.0, z=0.0):
   return { "result" : True, "data" : True }      
 
 @app.get("/speech")
-async def speech(text : str, motion ='Hello', voice=0, lang='ko'):
+async def speech(text : str, motion ='Content', voice=0, lang='ko'):
   print('speech', text)
   global audio_hub
   filename = getHash(text)
@@ -429,15 +428,16 @@ async def speech(text : str, motion ='Hello', voice=0, lang='ko'):
 
 
 @app.get("/color")
-async def color(value = 'purple', warn=False):
+async def color(value = 'purple', warn = 0):
   global conn
   global lastColor 
 
   if lastColor == value:
     return
 
-  #if warn == True:
-  #  await speech("저한테 접근하면 위험하니, 조심해 주세요.", 'Content', 0,'ko')
+  print(warn)
+  if int(warn) > 0:
+    await speech("저한테 접근하면 위험하니, 조심해 주세요.", 'Content', 0,'ko')
 
   if conn is None:
     print('brightness', value)

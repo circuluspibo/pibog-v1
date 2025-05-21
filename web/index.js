@@ -271,7 +271,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     cmd = '/sport?cmd=BodyHeight&x=-1&y=0&z=0' // get height
                     break;        
                 case 'tts-hello':
-                    cmd = '/speech?text="안녕, 나는 파이독이야. 만나서 반가워요."&motion=Hello'
+                    cmd = '/speech?text="안녕, 나는 파이독이야. 만나서 반가워요."&motion=Content'
                     break;
                 case 'tts-intro':
                     cmd = '/speech?text="안녕, 인텔과 함께하는 글로벌 챌린지에 온 것을 환영해."&motion=RiseSit'
@@ -307,6 +307,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         console.log('connect ok',json)
 
                         setTimeout(()=>{
+                            updateSystemStatus()
                             document.getElementById('background-video').src = '/video_feed'
                         },5000)
                     })
@@ -414,7 +415,7 @@ document.addEventListener('DOMContentLoaded', function() {
         objectCount.textContent = data.cnt_object
 
         if(data.cnt_live > 0){
-            const response = await fetch(`/color?value=red&warn=true`)
+            const response = await fetch(`/color?value=red&warn=1`)
             if (!response.ok) {
                 throw new Error(`Response status: ${response.status}`)
             }
