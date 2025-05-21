@@ -274,10 +274,10 @@ document.addEventListener('DOMContentLoaded', function() {
                     cmd = '/speech?text="안녕, 나는 파이독이야. 만나서 반가워요."&motion=Hello'
                     break;
                 case 'tts-intro':
-                    cmd = '/speech?text="안녕, 공주교육대학교에 온걸 환영해."&motion=RiseSit'
+                    cmd = '/speech?text="안녕, 인텔과 함께하는 글로벌 챌린지에 온 것을 환영해."&motion=RiseSit'
                     break; 
                 case 'tts-follow':
-                    cmd = '/speech?text="안녕, 공주시 학습형 늘봄 센터에 온걸 환영해요."&motion=WiggleHips'
+                    cmd = '/speech?text="안녕, 나는 인텔의 온 디바이스 A I를 활용하여 동작되는 로봇이야.."&motion=WiggleHips'
                     break;
                 case 'tts-warn':
                     cmd = '/speech?text="나랑 부딪칠 수 있으니 조심히 피해줘."&motion=FrontPounce'
@@ -405,13 +405,34 @@ document.addEventListener('DOMContentLoaded', function() {
         } else {
             tempFill.style.backgroundColor = 'var(--danger-color)';
         }
+
+        const peopleCount = document.getElementById('people-count');
+        const objectCount = document.getElementById('object-count');
+    
+
+        peopleCount.textContent = data.cnt_live
+        objectCount.textContent = data.cnt_object
+
+        if(data.cnt_live > 0){
+            const response = await fetch(`/color?value=red&warn=true`)
+            if (!response.ok) {
+                throw new Error(`Response status: ${response.status}`)
+            }
+        } else {
+            const response = await fetch(`/color?value=cyan`)
+            if (!response.ok) {
+                throw new Error(`Response status: ${response.status}`)
+            }           
+        }
+
+
     }
     
     // 초기 시스템 상태 설정
     //updateSystemStatus();
     
     // 주기적으로 시스템 상태 업데이트 (5초마다)
-    setInterval(updateSystemStatus, 60000);
+    setInterval(updateSystemStatus, 30000);
     
     // 사이버네틱 글리치 효과 랜덤 생성
     setInterval(() => {
@@ -563,20 +584,4 @@ document.addEventListener('DOMContentLoaded', function() {
         // 실제 볼륨 조절은 구현되지 않음 (시뮬레이션)
     });
     
-    // 카운팅 시뮬레이션 (랜덤하게 변화)
-    const peopleCount = document.getElementById('people-count');
-    const objectCount = document.getElementById('object-count');
-    
-    function updateCounts() {
-        // 사람 수 변화 (2-8명 사이)
-        const newPeopleCount = Math.floor(Math.random() * 7) + 2;
-        peopleCount.textContent = newPeopleCount;
-        
-        // 사물 수 변화 (8-20개 사이)
-        const newObjectCount = Math.floor(Math.random() * 13) + 8;
-        objectCount.textContent = newObjectCount;
-    }
-    
-    // 주기적으로 카운트 업데이트 (3초마다)
-    setInterval(updateCounts, 3000);
 });

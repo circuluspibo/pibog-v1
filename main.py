@@ -68,7 +68,12 @@ _PORT = int(open("port.txt", 'r').read())
 conn = None
 audio_hub = None
 track = None
+lastColor = 'cyan'
 frame_queue = Queue(maxsize=5)
+
+cnt_live = 0
+cnt_object = 0
+lastTime = 0
 
 app = FastAPI()
 
@@ -251,12 +256,16 @@ async def hands(cmd : str):
 async def heartbeat():
   global conn
   global state
+  global cnt_live
+  global cnt_object
 
   def lowstate_callback(message):
     msg = message['data']      
     state["charge"] = msg['bms_state']['soc']
     state["temp"] = msg['temperature_ntc1']
     state["voltage"] = msg['power_v']
+    state["live"] = cnt_live
+    state["object"] = cnt_object
     #print(msg)
 
   conn.datachannel.pub_sub.subscribe(RTC_TOPIC['LOW_STATE'], lowstate_callback)
@@ -266,21 +275,62 @@ async def heartbeat():
 @app.get("/video_feed")
 async def video_feed():
     global frame_queue
+    global cnt_live
+    global cnt_object
+    global lastTime 
     """
     Endpoint to stream video frames as MJPEG.
     """
-    def generate():
+    async def generate():
         processing_times = collections.deque()
         while True:
             if not frame_queue.empty():
                 img = frame_queue.get()
 
-                input_image = np.array(img)
+                image = np.array(img)
 
                 start_time = time.time()
-                detections = det_model(input_image, verbose=False)
+                results = det_model(image, verbose=False)[0]
                 stop_time = time.time()
-                frame = detections[0].plot()
+
+
+                # 사람이거나 동물인 클래스 이름들
+                highlight_classes = ['person', 'dog', 'cat', 'horse', 'cow', 'sheep', 'bird', 'elephant', 'bear', 'zebra', 'giraffe','teddy bear']
+
+                # 클래스 ID와 이름 매핑
+                names = det_model.names
+
+                # 결과 이미지 복사
+                output = image.copy()
+
+                cnt_live = 0
+                cnt_object = 0
+                for box in results.boxes:
+                    cls_id = int(box.cls.item())
+                    cls_name = names[cls_id]
+                    conf = box.conf.item()
+                    x1, y1, x2, y2 = map(int, box.xyxy[0].tolist())
+
+                    # 색상 결정: 붉은색 or 파란색
+                    if cls_name in highlight_classes:
+                        rgb_color = (0, 0, 255)  # 붉은색 (BGR)
+                        cnt_live = cnt_live + 1
+                        lastTime = time.time()
+                    else:
+                        rgb_color = (255, 255, 0)  # 다른 색 (예: 노란색)
+                        cnt_object = cnt_object + 1
+
+                    # 바운딩 박스 그리기
+                    cv2.rectangle(output, (x1, y1), (x2, y2), rgb_color, 2)
+                    label = f'{cls_name} {conf:.2f}'
+                    cv2.putText(output, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, rgb_color, 2)
+
+                #if cnt_live > 0:
+                #  await color('red',True)
+                #else:
+                #  await color('cyan')
+
+                frame = output#.results.plot()
                 processing_times.append(stop_time - start_time)
 
                 if len(processing_times) > 200:
@@ -379,11 +429,20 @@ async def speech(text : str, motion ='Hello', voice=0, lang='ko'):
 
 
 @app.get("/color")
-async def color(value = 'purple'):
+async def color(value = 'purple', warn=False):
   global conn
+  global lastColor 
+
+  if lastColor == value:
+    return
+
+  #if warn == True:
+  #  await speech("저한테 접근하면 위험하니, 조심해 주세요.", 'Content', 0,'ko')
+
   if conn is None:
     print('brightness', value)
   else:  
+    lastColor = value
     await conn.datachannel.pub_sub.publish_request_new(
       RTC_TOPIC["VUI"], 
       {
