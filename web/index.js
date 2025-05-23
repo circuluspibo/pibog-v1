@@ -9,7 +9,7 @@ var input;                  //MediaStreamAudioSourceNode we'll be recording
 var AudioContext = window.AudioContext || window.webkitAudioContext;
 var audioContext //new audio context to help us record
 let lastTime = 0
-let multi = 1
+let multi = 0.5
 
 function listen(){
   if (document.documentElement.requestFullscreen) 
