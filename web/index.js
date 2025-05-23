@@ -192,7 +192,7 @@ function startKeyRepeat(key) {
                 cmd = `Move&x=0&y=0&z=${multi * 1}`
                 break;
             case "PageDown":
-                cmd = `Move&x=0&y=0&z=-${multi * -1}`
+                cmd = `Move&x=0&y=0&z=${multi * -1}`
                 break;
         }
         // 여기에 방향키 또는 페이지 업/다운에 대한 원하는 동작을 추가
