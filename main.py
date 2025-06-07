@@ -48,7 +48,7 @@ det_ov_model = core.read_model('yolo12m_int8_openvino_model/yolo12m.xml')
 det_model = YOLO('yolo12m_int8_openvino_model', task='detect')
 
 det_ov_model.reshape({0: [1, 3, 384, 640]})
-compiled_model = core.compile_model(det_ov_model, 'CPU')
+compiled_model = core.compile_model(det_ov_model, 'NPU')
 
 if det_model.predictor is None:
     custom = {"conf": 0.25, "batch": 1, "save": False, "mode": "predict"}  # method defaults
@@ -106,13 +106,13 @@ class Chat(BaseModel):
   top_k : int = 50
   max : int = 256 #16384
 
-model_txt = None # Llama("../models/txt/gemma-3-1b-it-Q4_K_M.gguf", n_threads=4, verbose=False) #from_pretrained
-token_txt = None #AutoTokenizer.from_pretrained("../models/txt/")
+model_txt = Llama("../models/txt/gemma-3-1b-it-Q4_K_M.gguf", n_threads=4, verbose=False) #from_pretrained
+token_txt = AutoTokenizer.from_pretrained("../models/txt/")
 
-pipe_stt = None #ov_genai.WhisperPipeline('../models/stt',device="GPU")
+pipe_stt = ov_genai.WhisperPipeline('../models/stt',device="GPU")
 
-pipe_tts = None #rt.InferenceSession('../models/tts/ko_base_f16.onnx', sess_options=rt.SessionOptions(), providers=["OpenVINOExecutionProvider"], provider_options=[{"device_type" : "CPU" }]) #, "precision" : "FP16"
-conf_tts = None #utils.get_hparams_from_file('../models/tts/ko_base.json')
+pipe_tts = rt.InferenceSession('../models/tts/ko_base_f16.onnx', sess_options=rt.SessionOptions(), providers=["OpenVINOExecutionProvider"], provider_options=[{"device_type" : "CPU" }]) #, "precision" : "FP16"
+conf_tts = utils.get_hparams_from_file('../models/tts/ko_base.json')
 
 class Generator(ov_genai.Generator):
     def __init__(self, seed, mu=0.0, sigma=1.0):
@@ -200,7 +200,7 @@ async def recv_camera_stream(track: MediaStreamTrack):
 async def connect():
   global conn
   global audio_hub
-  conn = Go2WebRTCConnection(WebRTCConnectionMethod.LocalSTA, ip="192.168.0.101") #Go2WebRTCConnection(WebRTCConnectionMethod.LocalAP)
+  conn =  Go2WebRTCConnection(WebRTCConnectionMethod.LocalAP) #Go2WebRTCConnection(WebRTCConnectionMethod.LocalSTA, ip="192.168.0.101")
   await conn.connect()
   print(1)
   #audio_hub = WebRTCAudioHub(conn, logger)
