@@ -48,7 +48,7 @@ det_ov_model = core.read_model('yolo12m_int8_openvino_model/yolo12m.xml')
 det_model = YOLO('yolo12m_int8_openvino_model', task='detect')
 
 det_ov_model.reshape({0: [1, 3, 384, 640]})
-compiled_model = core.compile_model(det_ov_model, 'NPU')
+compiled_model = core.compile_model(det_ov_model, 'CPU')
 
 if det_model.predictor is None:
     custom = {"conf": 0.25, "batch": 1, "save": False, "mode": "predict"}  # method defaults
@@ -106,13 +106,13 @@ class Chat(BaseModel):
   top_k : int = 50
   max : int = 256 #16384
 
-model_txt = Llama("../models/txt/gemma-3-1b-it-Q4_K_M.gguf", n_threads=4, verbose=False) #from_pretrained
-token_txt = AutoTokenizer.from_pretrained("../models/txt/")
+model_txt = None # Llama("../models/txt/gemma-3-1b-it-Q4_K_M.gguf", n_threads=4, verbose=False) #from_pretrained
+token_txt = None #AutoTokenizer.from_pretrained("../models/txt/")
 
-pipe_stt = ov_genai.WhisperPipeline('../models/stt',device="GPU")
+pipe_stt = None #ov_genai.WhisperPipeline('../models/stt',device="GPU")
 
-pipe_tts = rt.InferenceSession('../models/tts/ko_base_f16.onnx', sess_options=rt.SessionOptions(), providers=["OpenVINOExecutionProvider"], provider_options=[{"device_type" : "CPU" }]) #, "precision" : "FP16"
-conf_tts = utils.get_hparams_from_file('../models/tts/ko_base.json')
+pipe_tts = None #rt.InferenceSession('../models/tts/ko_base_f16.onnx', sess_options=rt.SessionOptions(), providers=["OpenVINOExecutionProvider"], provider_options=[{"device_type" : "CPU" }]) #, "precision" : "FP16"
+conf_tts = None #utils.get_hparams_from_file('../models/tts/ko_base.json')
 
 class Generator(ov_genai.Generator):
     def __init__(self, seed, mu=0.0, sigma=1.0):
@@ -200,10 +200,13 @@ async def recv_camera_stream(track: MediaStreamTrack):
 async def connect():
   global conn
   global audio_hub
-  conn = Go2WebRTCConnection(WebRTCConnectionMethod.LocalAP)
+  conn = Go2WebRTCConnection(WebRTCConnectionMethod.LocalSTA, ip="192.168.0.101") #Go2WebRTCConnection(WebRTCConnectionMethod.LocalAP)
   await conn.connect()
-  audio_hub = WebRTCAudioHub(conn, logger)
-  await audio_hub.set_play_mode('no_cycle')
+  print(1)
+  #audio_hub = WebRTCAudioHub(conn, logger)
+  #await audio_hub.set_play_mode('no_cycle')
+  print(2)
+  """
   await conn.datachannel.pub_sub.publish_request_new(
     RTC_TOPIC["MOTION_SWITCHER"], 
     {
@@ -211,10 +214,12 @@ async def connect():
         "parameter": {"name": "normal"}
     }
   )
+  """
   conn.video.switchVideoChannel(True)
   conn.video.add_track_callback(recv_camera_stream)
-
+  #print(3)
   def lowstate_callback(message):
+    #print(message)
     msg = message['data']      
     state["charge"] = msg['bms_state']['soc']
     state["temp"] = msg['temperature_ntc1']
@@ -384,6 +389,22 @@ async def sport(cmd : str, x=0.0, y=0.0, z=0.0):
     )
         
   return { "result" : True, "data" : True }      
+
+@app.get("/sport_arm")
+async def sport(cmd = 7106, value = 27):
+  global conn
+
+  await conn.datachannel.pub_sub.publish_request_new(
+    "rt/api/arm/request", {
+        "api_id": int(cmd),
+        "parameter" : { "data" : value }
+    }
+  )
+
+  print("sended....")
+       
+  return { "result" : True, "data" : True }      
+
 
 @app.get("/speech")
 async def speech(text : str, motion ='Content', voice=0, lang='ko'):
