@@ -140,10 +140,67 @@ motions = {
         create_command([1, 0, 0, 0, 0], "unfold", 0.5),
     ],
 }
+
+releases = {
+
+    "fold_a": [ #all
+        create_command([0, 1, 1, 1, 1], "unfold",   1),
+        create_command([1, 0, 0, 0, 0], "unfold",   1),
+    ],
+
+    "fold_ha": [ #half all
+        create_command([0, 1, 1, 1, 1], "unfold", 0.5),
+        create_command([1, 0, 0, 0, 0], "unfold", 0.5),
+    ],
+
+
+    "point": [
+        create_command([0, 0, 1, 1, 1], "unfold",   1),
+        create_command([1, 0, 0, 0, 0], "unfold",   1),
+    ],
+
+    "handshake": [
+        create_command([0, 1, 1, 1, 1], "unfold", 0.3),
+    ],
+
+
+    "ok": [
+        create_command([0, 1, 0, 0, 0], "unfold", 0.9),
+        create_command([1, 0, 0, 0, 0], "unfold", 0.5),
+    ],
+
+
+    "thumbup": [
+        create_command([0, 1, 1, 1, 1], "unfold",   1),
+    ],
+
+
+    "victory": [
+        create_command([0, 0, 0, 1, 1], "unfold",   1),
+        create_command([1, 0, 0, 0, 0], "unfold",   1),
+    ],
+
+
+    "rock": [
+        create_command([0, 0, 1, 1, 0], "unfold",   1),
+    ],
+
+    "promise": [
+        create_command([0, 1, 1, 1, 0], "unfold",   1),
+        create_command([1, 0, 0, 0, 0], "unfold",   1),
+    ],
+
+    "grab": [
+        create_command([0, 1, 1, 1, 1], "unfold", 0.5),
+        create_command([1, 0, 0, 0, 0], "unfold", 0.5),
+    ],
+}
+
 #print([ name for name in motions])
 
 class HadnControler:
     def __init__(self, port):
+        self.cmd = 'fold_a'
         self.port = port
         self.ser = serial.Serial(port=port, baudrate=115200, bytesize=serial.EIGHTBITS, parity=serial.PARITY_NONE, stopbits=serial.STOPBITS_ONE, timeout=3)
         #self.send_motor([0xAA, 0x55, 0x01, 0x01, 0x01, 0x01, 0x01,  0x08, 0xFC,  0x04, 0x30,  0x00, 0x00, 0x00, 0x0])
@@ -161,6 +218,7 @@ class HadnControler:
             print(f"[Failed to send command: {e}")
     
     def send_motion(self, motion_name):
+        self.cmd = motion_name
         if motion_name not in motions:
             print(f"Invalid command name: {motion_name}")
             return
@@ -170,6 +228,17 @@ class HadnControler:
             #print([hex(i) for i in item["pos"]],item["time"])
             self.send_motor(item["pos"])
             time.sleep(item["time"])
+
+    def send_release(self, release_name=None):
+        print('release', release_name)
+        if release_name is None or release_name == "":
+            release_name = self.cmd          
+        
+        items = releases[release_name]
+        for item in items:
+            #print([hex(i) for i in item["pos"]],item["time"])
+            self.send_motor(item["pos"])
+            time.sleep(item["time"])            
         
     def close(self):
         self.ser.close()

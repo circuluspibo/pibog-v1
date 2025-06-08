@@ -42,6 +42,11 @@ from queue import Queue
 from ultralytics import YOLO
 import openvino as ov
 from playsound import playsound
+from mandro import HadnControler
+import threading
+
+hL = None
+hR = None
 core = ov.Core()
 
 det_ov_model = core.read_model('yolo12m_int8_openvino_model/yolo12m.xml')
@@ -69,6 +74,43 @@ conn = None
 audio_hub = None
 track = None
 lastColor = 'cyan'
+state = { "charge" : 0, "temp" : 0, "voltage" : 0, "cnt_live" : 0, "cnt_object" : 0 }
+
+G1_ARM = {
+  "clamp": 17, 
+  "highFive": 18, 
+  "shakeHands_1": 27,
+  "makeHeartBothHands": 20, 
+  "makeHeartSingleHands": 21,
+  "blowKiss": 12, 
+  "hug": 19,
+  "hightWave": 26, 
+  "lowWave" : 25,
+  "ultramanRay" : 24, 
+  "bothHandsUp" : 15,
+  "singleHandsUp" : 23,
+  "Refuse" : 22, 
+  "Release Arm" : 99,
+}
+
+G1_STATE = {
+  "ZeroTorque" : 0,
+  "Damp" : 1,
+  "Preparation": 4,
+  "Seating": 3,       
+  "Walk_G1": 500,
+  "Walk2_G1" : 501,
+  "Run_G1" : 801,
+  "Squat_G1" : 706,  
+  "SquatUp_G1" : 706,
+  "LieUp_G1" : 702,
+}
+
+G1_BALANCE = {
+  "Stand_G1" : 0,
+  "Step_G1" : 1 
+}
+
 frame_queue = Queue(maxsize=5)
 
 cnt_live = 0
@@ -203,8 +245,8 @@ async def connect():
   conn =  Go2WebRTCConnection(WebRTCConnectionMethod.LocalAP) #Go2WebRTCConnection(WebRTCConnectionMethod.LocalSTA, ip="192.168.0.101")
   await conn.connect()
   print(1)
-  #audio_hub = WebRTCAudioHub(conn, logger)
-  #await audio_hub.set_play_mode('no_cycle')
+  audio_hub = WebRTCAudioHub(conn, logger)
+  await audio_hub.set_play_mode('no_cycle')
   print(2)
   """
   await conn.datachannel.pub_sub.publish_request_new(
@@ -229,14 +271,28 @@ async def connect():
 
   return { "result" : True, "data" : True }        
 
-state = { "charge" : 0, "temp" : 0, "voltage" : 0, "cnt_live" : 0, "cnt_object" : 0 }
+@app.get("/connect2")
+async def connect2():
+  global conn
+  #global audio_hub
+  conn =  Go2WebRTCConnection(WebRTCConnectionMethod.LocalAP) #Go2WebRTCConnection(WebRTCConnectionMethod.LocalSTA, ip="192.168.0.101")
+  await conn.connect()
+  print(1)
+  #audio_hub = WebRTCAudioHub(conn, logger)
+  #await audio_hub.set_play_mode('no_cycle')
+  #conn.video.switchVideoChannel(True)
+  #conn.video.add_track_callback(recv_camera_stream)
+  #print(3)
+  def lowstate_callback(message):
+    #print(message)
+    msg = message['data']      
+    state["charge"] = msg['bms_state']['soc']
+    state["temp"] = msg['temperature_ntc1']
+    state["voltage"] = msg['power_v']
 
+  conn.datachannel.pub_sub.subscribe(RTC_TOPIC['LOW_STATE'], lowstate_callback)
 
-from mandro import HadnControler
-import threading
-
-hL = None
-hR = None
+  return { "result" : True, "data" : True }        
 
 @app.get("/prepare")
 async def prepare():
@@ -252,15 +308,20 @@ async def prepare():
       print(f"컨트롤러 초기화 실패: {e}")
       exit()
 
-@app.get("/hands")
-async def hands(cmd : str):
+@app.get("/hand")
+async def hand(cmd : str):
 
   global hL
   global hR
 
   print(cmd)
-  thread_L = threading.Thread(target=hL.send_motion, args=(cmd,))
-  thread_R = threading.Thread(target=hR.send_motion, args=(cmd,))
+
+  if cmd == 'release':
+    thread_L = threading.Thread(target=hL.send_release, args=(cmd,))
+    thread_R = threading.Thread(target=hR.send_release, args=(cmd,))     
+  else:
+    thread_L = threading.Thread(target=hL.send_motion, args=(cmd,))
+    thread_R = threading.Thread(target=hR.send_motion, args=(cmd,))
 
   thread_L.start()
   thread_R.start()
@@ -390,19 +451,59 @@ async def sport(cmd : str, x=0.0, y=0.0, z=0.0):
         
   return { "result" : True, "data" : True }      
 
-@app.get("/sport_arm")
-async def sport(cmd = 7106, value = 27):
+@app.get("/arm")
+async def arm(cmd = "clamp"):
   global conn
+  global G1_ARM
 
   await conn.datachannel.pub_sub.publish_request_new(
     "rt/api/arm/request", {
-        "api_id": int(cmd),
-        "parameter" : { "data" : value }
+        "api_id": 7106,
+        "parameter" : { "data" : G1_ARM[cmd] }
     }
   )
 
-  print("sended....")
-       
+  return { "result" : True, "data" : True }      
+
+@app.get("/walkG1")
+def walkG1(lx = 0, ly = 0, rx = 0, ry = 0):
+  global conn
+
+  asyncio.create_task(conn.datachannel.pub_sub.publish_request_new(
+    "rt/wirelesscontroller", {
+        "api_id": 7106,
+        "parameter" : { "lx": int(lx), "ly": int(ly), "rx": int(rx), "ry": int(ry) }
+    }
+  ))
+
+  return { "result" : True, "data" : True }     
+
+@app.get("/stateG1")
+async def stateG1(cmd="Walk_G1"):
+  global conn
+  global G1_STATE
+
+  await conn.datachannel.pub_sub.publish_request_new(
+    "rt/api/sport/request", {
+        "api_id": 7101,
+        "parameter" : { "data" : G1_STATE[cmd] }
+    }
+  )
+
+  return { "result" : True, "data" : True }      
+
+@app.get("/balanceG1")
+async def balanceG1(cmd="Stand_G1"):
+  global conn
+  global G1_BALANCE
+
+  await conn.datachannel.pub_sub.publish_request_new(
+    "rt/api/sport/request", {
+        "api_id": 7102,
+        "parameter" : { "data" : G1_BALANCE[cmd] }
+    }
+  )
+
   return { "result" : True, "data" : True }      
 
 

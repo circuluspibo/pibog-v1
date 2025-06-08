@@ -289,16 +289,16 @@ document.addEventListener('DOMContentLoaded', function() {
                     cmd = '/v1/tts?text="새로운 교육의 미래를 열어갈 센터장님을 소개합니다. 한규정 교수님을 박수로 환영해 주세요!"&isPlay=1'
                     break;    
                 case 'mode':
-                    if(mode == 'normal'){
-                        mode = 'ai'
-                        cmd = '/mode?value=ai'
+                    if(mode == 'Step_G1'){
+                        mode = 'Stand_G1'
+                        cmd = '/balanceG1?cmd=Stand_G1'
                     } else {
-                        mode = 'normal'
-                        cmd = '/mode?value=normal'
+                        mode = 'Step_G1'
+                        cmd = '/balanceG1?cmd=Step_G1'
                     }
                     break;     
                 case 'connect':
-                    fetch(`/connect`).then(async response=>{
+                    fetch(`/connect2`).then(async response=>{
                         if (!response.ok) {
                             throw new Error(`Response status: ${response.status}`)
                         }
@@ -306,16 +306,23 @@ document.addEventListener('DOMContentLoaded', function() {
                         const json = await response.json()
                         console.log('connect ok',json)
 
+                        /*
                         setTimeout(()=>{
                             document.getElementById('background-video').src = '/video_feed'
                         },5000)
+                        */
                     })
                     break;
                 case 'prepare':
                     cmd = '/prepare'
                     break;                    
                 default:
-                    cmd = `/hands?cmd=${this.id}`
+                    if(this.classList.contains('hands'))
+                        cmd = `/hand?cmd=${this.id}`
+                    else if(this.classList.contains('states'))
+                        cmd = `/stateG1?cmd=${this.id}`                    
+                    else
+                        cmd = `/arm?cmd=${this.id}`
             }
             const response = await fetch(cmd)
             if (!response.ok) {
