@@ -147,27 +147,27 @@ document.addEventListener("keyup", async (event) => {
     switch (event.key) {
         case "ArrowUp":
             keyStatus.ArrowUp = false;
-            cmd = '/walkG1?lx=0&rx=0&ly=0&ry=0'
+            cmd = '/walkG1?lx=1&rx=1&ly=0&ry=0'
             break;
         case "ArrowDown":
             keyStatus.ArrowDown = false;
-            cmd = '/walkG1?lx=0&rx=0&ly=0&ry=0'
+            cmd = '/walkG1?lx=-1&rx=-1&ly=0&ry=0'
             break;
         case "ArrowLeft":
             keyStatus.ArrowLeft = false;
-            cmd = '/walkG1?lx=0&rx=0&ly=0&ry=0'
+            cmd = '/walkG1?lx=0&rx=0&ly=1&ry=1'
             break;
         case "ArrowRight":
             keyStatus.ArrowRight = false;
-            cmd = '/walkG1?lx=0&rx=0&ly=0&ry=0'
+            cmd = '/walkG1?lx=0&rx=0&ly=0&ry=1'
             break;
         case "PageUp":
             keyStatus.PageUp = false;
-            cmd = '/walkG1?lx=0&rx=0&ly=0&ry=0'
+            cmd = '/walkG1?lx=0&rx=0&ly=1&ry=0'
             break;
         case "PageDown":
             keyStatus.PageDown = false;
-            cmd = '/walkG1?lx=0&rx=0&ly=0&ry=0'
+            cmd = '/walkG1?lx=0&rx=0&ly=0&ry=1'
             break;
     }
 
@@ -261,7 +261,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 return
             }
 
+            alert(this.id)
             switch(this.id){
+                case 'rotation-center':
                 case 'move-center':
                     cmd = '/walkG1?lx=0&rx=0&ly=0&ry=0'
                     break;                
