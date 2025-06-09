@@ -281,7 +281,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     cmd = '/speech?text="안녕, 인텔과 함께하는 글로벌 챌린지에 온 것을 환영해."&motion=RiseSit'
                     break; 
                 case 'tts-follow':
-                    cmd = '/speech?text="안녕, 나는 인텔의 온 디바이스 A I를 활용하여 동작되는 로봇이야.."&motion=WiggleHips'
+                    cmd = '/speech?text="안녕,  온 디바이스 A I를 활용하여 동작되는 로봇이야.."&motion=WiggleHips'
                     break;
                 case 'tts-warn':
                     cmd = '/speech?text="나랑 부딪칠 수 있으니 조심히 피해줘."&motion=FrontPounce'

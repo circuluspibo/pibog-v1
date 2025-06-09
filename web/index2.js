@@ -5,6 +5,8 @@ var gumStream;              //stream from getUserMedia()
 var rec;                    //Recorder.js object
 var input;                  //MediaStreamAudioSourceNode we'll be recording
 
+let multi = 1
+
 // shim for AudioContext when it's not avb.
 var AudioContext = window.AudioContext || window.webkitAudioContext;
 var audioContext //new audio context to help us record
@@ -147,27 +149,27 @@ document.addEventListener("keyup", async (event) => {
     switch (event.key) {
         case "ArrowUp":
             keyStatus.ArrowUp = false;
-            cmd = '/walkG1?lx=1&rx=1&ly=0&ry=0'
+            cmd = '/walkG1?lx=0&rx=0&ly=0&ry=0'
             break;
         case "ArrowDown":
             keyStatus.ArrowDown = false;
-            cmd = '/walkG1?lx=-1&rx=-1&ly=0&ry=0'
+            cmd = '/walkG1?lx=0&rx=0&ly=0&ry=0'
             break;
         case "ArrowLeft":
             keyStatus.ArrowLeft = false;
-            cmd = '/walkG1?lx=0&rx=0&ly=1&ry=1'
+            cmd = '/walkG1?lx=0&rx=0&ly=0&ry=0'
             break;
         case "ArrowRight":
             keyStatus.ArrowRight = false;
-            cmd = '/walkG1?lx=0&rx=0&ly=0&ry=1'
+            cmd = '/walkG1?lx=0&rx=0&ly=0&ry=0'
             break;
         case "PageUp":
             keyStatus.PageUp = false;
-            cmd = '/walkG1?lx=0&rx=0&ly=1&ry=0'
+            cmd = '/walkG1?lx=0&rx=0&ly=0&ry=0'
             break;
         case "PageDown":
             keyStatus.PageDown = false;
-            cmd = '/walkG1?lx=0&rx=0&ly=0&ry=1'
+            cmd = '/walkG1?lx=0&rx=0&ly=0&ry=0'
             break;
     }
 
@@ -190,27 +192,27 @@ function startKeyRepeat(key) {
         }
         switch (key) {
             case "ArrowUp":
-                cmd = 'lx=1&rx=1&ly=0&ry=0'
+                cmd = `/walkG1?lx=0&rx=0&ly=${0.5 * multi}&ry=${0.5 * multi}`
                 break;
             case "ArrowDown":
-                cmd = 'lx=-1&rx=-1&ly=0&ry=0'
+                cmd = `/walkG1?lx=0&rx=0&ly=${-0.5 * multi}&ry=${-0.5 * multi}`
                 break;
             case "ArrowLeft":
-                cmd = 'lx=0&rx=0&ly=1&ry=1'
+                cmd = `/walkG1?lx=${-0.5 * multi}&rx=0&ly=0&ry=0`
                 break;
             case "ArrowRight":
-                cmd = 'lx=0&rx=0&ly=0&ry=1'
+                cmd = `/walkG1?lx=0&rx=${-0.5 * multi}&ly=0&ry=0`
                 break;
             case "PageUp":
-                cmd = 'lx=0&rx=0&ly=1&ry=0'
+                cmd = `/walkG1?lx=0&rx=0&ly=${1 * multi}&ry=${1 * multi}`
                 break;
             case "PageDown":
-                cmd = 'lx=0&rx=0&ly=0&ry=1'
+                cmd = `/walkG1?lx=0&rx=0&ly=${-1 * multi}&ry=${-1 * multi}`
                 break;
         }
         // 여기에 방향키 또는 페이지 업/다운에 대한 원하는 동작을 추가
 
-        const response = await fetch(`/walkG1?${cmd}`)
+        const response = await fetch(cmd)
         if (!response.ok) {
             throw new Error(`Response status: ${response.status}`)
         }
@@ -267,28 +269,28 @@ document.addEventListener('DOMContentLoaded', function() {
                     cmd = '/walkG1?lx=0&rx=0&ly=0&ry=0'
                     break;                
                 case 'move-up':
-                    cmd = '/walkG1?lx=0.5&rx=0.5&ly=0&ry=0'
+                    cmd = `/walkG1?lx=0&rx=0&ly=${0.5 * multi}&ry=${0.5 * multi}`
                     break;
                 case 'move-down':
-                    cmd = '/walkG1?lx=-0.5&rx=-0.5&ly=0&ry=0'
+                    cmd = `/walkG1?lx=0&rx=0&ly=${-0.5 * multi}&ry=${-0.5 * multi}`
                     break;                                        
                 case 'move-left':
-                    cmd = '/walkG1?lx=0&rx=0&ly=1&ry=0'
+                    cmd = `/walkG1?lx=${-0.5 * multi}&rx=0&ly=0&ry=0`
                     break;
                 case 'move-right':
-                    cmd = '/walkG1?lx=0&rx=0&ly=0&ry=1'
+                    cmd = `/walkG1?lx=0&rx=${-0.5 * multi}&ly=0&ry=0`
                     break;
                 case 'rotate-left':
-                    cmd = '/walkG1?lx=0&rx=0&ly=1&ry=1'
+                    cmd = `/walkG1?lx=${-0.5 * multi}&rx=${-0.5 * multi}&ly=0&ry=0`
                     break;
                 case 'rotate-right':
-                    cmd = '/walkG1?lx=0&rx=0&ly=-1&ry=-1'
+                    cmd = `/walkG1?lx=${0.5 * multi}&rx=${0.5 * multi}&ly=0&ry=0`
                     break;                    
                 case 'tilt-up':
-                    cmd = '/sport?cmd=BodyHeight&x=1&y=0&z=0' // get height
+                    cmd = `/walkG1?lx=0&rx=0&ly=${1 * multi}&ry=${1 * multi}`
                     break;
                 case 'tilt-down':
-                    cmd = '/sport?cmd=BodyHeight&x=-1&y=0&z=0' // get height
+                    cmd = `/walkG1?lx=0&rx=0&ly=${-1 * multi}&ry=${-1 * multi}`
                     break;        
                 case 'tts-hello':
                     cmd = '/v1/tts?text="안녕? 나는 서큘러스의 파이온이라고 해. 만나서 반가워."&isPlay=1'
@@ -312,9 +314,11 @@ document.addEventListener('DOMContentLoaded', function() {
                     if(mode == 'Step_G1'){
                         mode = 'Stand_G1'
                         cmd = '/balanceG1?cmd=Stand_G1'
+                        multi = 1
                     } else {
                         mode = 'Step_G1'
                         cmd = '/balanceG1?cmd=Step_G1'
+                        multi = 2
                     }
                     break;     
                 case 'connect':

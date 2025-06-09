@@ -472,7 +472,7 @@ async def walkG1(lx = 0, ly = 0, rx = 0, ry = 0):
 
   conn.datachannel.pub_sub.publish_without_callback(
      "rt/wirelesscontroller", {
-        "lx": int(lx), "ly": int(ly), "rx": int(rx), "ry": int(ry) 
+        "lx": float(lx), "ly": float(ly), "rx": float(rx), "ry": float(ry) 
      }
   )
   """
