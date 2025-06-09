@@ -466,15 +466,15 @@ async def arm(cmd = "clamp"):
   return { "result" : True, "data" : True }      
 
 @app.get("/walkG1")
-def walkG1(lx = 0, ly = 0, rx = 0, ry = 0):
+async def walkG1(lx = 0, ly = 0, rx = 0, ry = 0):
   global conn
 
-  asyncio.create_task(conn.datachannel.pub_sub.publish_request_new(
+  await conn.datachannel.pub_sub.publish_request_new(
     "rt/wirelesscontroller", {
         "api_id": 7106,
         "parameter" : { "lx": int(lx), "ly": int(ly), "rx": int(rx), "ry": int(ry) }
     }
-  ))
+  )
 
   return { "result" : True, "data" : True }     
 
