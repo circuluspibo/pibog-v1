@@ -468,15 +468,11 @@ async def arm(cmd = "clamp"):
 @app.get("/walkG1")
 async def walkG1(lx = 0, ly = 0, rx = 0, ry = 0):
   print("walking",f"L : {lx} {ly} | R : {rx} {ry}")
-
   global conn
 
-  await conn.datachannel.pub_sub.publish_request_new(
-    "rt/wirelesscontroller", {
-        "api_id": 7106,
-        "parameter" : { "lx": int(lx), "ly": int(ly), "rx": int(rx), "ry": int(ry) }
-    }
-  )
+  await conn.datachannel.pub_sub.publish("rt/wirelesscontroller", { 
+     "lx": int(lx), "ly": int(ly), "rx": int(rx), "ry": int(ry) 
+  })
 
   return { "result" : True, "data" : True }     
 
