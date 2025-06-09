@@ -261,17 +261,16 @@ document.addEventListener('DOMContentLoaded', function() {
                 return
             }
 
-            alert(this.id)
             switch(this.id){
                 case 'rotation-center':
                 case 'move-center':
                     cmd = '/walkG1?lx=0&rx=0&ly=0&ry=0'
                     break;                
                 case 'move-up':
-                    cmd = '/walkG1?lx=1&rx=1&ly=0&ry=0'
+                    cmd = '/walkG1?lx=0.5&rx=0.5&ly=0&ry=0'
                     break;
                 case 'move-down':
-                    cmd = '/walkG1?lx=-1&rx=-1&ly=0&ry=0'
+                    cmd = '/walkG1?lx=-0.5&rx=-0.5&ly=0&ry=0'
                     break;                                        
                 case 'move-left':
                     cmd = '/walkG1?lx=0&rx=0&ly=1&ry=0'

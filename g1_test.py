@@ -191,7 +191,6 @@ LF_SPORT_MOD_STATE = "rt/lf/sportmodestate"
 
     def print_instructions(self):
         print("\n--- 🤖 G1 조종 방법 (input 명령어 입력 방식) 🤖 ---")
-        print(f"SPORT_API_ID: {SPORT_API_ID} (추정), ARM_API_ID: {ARM_API_ID} (추정)")
         print("\n[🚶‍♂️ 이동 명령어]")
         print(" w: 앞으로, s: 뒤로, a: 좌회전, d: 우회전")
         print(" wa: 앞+좌회전, wd: 앞+우회전, sa: 뒤+좌회전, sd: 뒤+우회전")
@@ -225,15 +224,16 @@ LF_SPORT_MOD_STATE = "rt/lf/sportmodestate"
     def send_stop_command(self):
         """로봇의 움직임을 즉시 정지"""
         params = { "lx": 0, "ly": 0, "rx": 0, "ry": 0 }
-        asyncio.create_task(self.conn.datachannel.pub_sub.publish(SPORT_REQUEST_TOPIC, params))
+        self.conn.datachannel.pub_sub.publish_without_callback(SPORT_REQUEST_TOPIC, params)
+        #asyncio.create_task(self.conn.datachannel.pub_sub.publish(SPORT_REQUEST_TOPIC, params))
         print("🛑 모든 동작 정지")
         self.is_moving = False
 
     def send_movement_command(self, lx, ly, rx, ry):
         """이동 명령 전송"""
         params = { "lx": lx, "ly": ly, "rx": rx, "ry": ry }
-        asyncio.create_task(self.conn.datachannel.pub_sub.publish(SPORT_REQUEST_TOPIC, params))
-        print(f"🚶‍♂️(lx: {lx},rx: {rx})")
+        print(params)
+        self.conn.datachannel.pub_sub.publish_without_callback(SPORT_REQUEST_TOPIC, params)        print(f"🚶‍♂️(lx: {lx},rx: {rx})")
         self.is_moving = True
 
     async def send_arm_animation_command(self, anim_id, anim_name):
