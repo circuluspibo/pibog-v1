@@ -140,29 +140,45 @@ document.addEventListener("keydown", (event) => {
 });
 
 // 키가 떼어졌을 때
-document.addEventListener("keyup", (event) => {
+document.addEventListener("keyup", async (event) => {
 
     cmd = ''
 
     switch (event.key) {
         case "ArrowUp":
             keyStatus.ArrowUp = false;
+            cmd = '/walkG1?lx=0&rx=0&ly=0&ry=0'
             break;
         case "ArrowDown":
             keyStatus.ArrowDown = false;
+            cmd = '/walkG1?lx=0&rx=0&ly=0&ry=0'
             break;
         case "ArrowLeft":
             keyStatus.ArrowLeft = false;
+            cmd = '/walkG1?lx=0&rx=0&ly=0&ry=0'
             break;
         case "ArrowRight":
             keyStatus.ArrowRight = false;
+            cmd = '/walkG1?lx=0&rx=0&ly=0&ry=0'
             break;
         case "PageUp":
             keyStatus.PageUp = false;
+            cmd = '/walkG1?lx=0&rx=0&ly=0&ry=0'
             break;
         case "PageDown":
             keyStatus.PageDown = false;
+            cmd = '/walkG1?lx=0&rx=0&ly=0&ry=0'
             break;
+    }
+
+    if(cmd){
+        const response = await fetch(`/walkG1?${cmd}`)
+        if (!response.ok) {
+            throw new Error(`Response status: ${response.status}`)
+        }
+    
+        const json = await response.json()
+        console.log(cmd ,json)
     }
 });
 
@@ -174,27 +190,27 @@ function startKeyRepeat(key) {
         }
         switch (key) {
             case "ArrowUp":
-                cmd = 'Move&x=1&y=0&z=0'
+                cmd = 'lx=1&rx=1&ly=0&ry=0'
                 break;
             case "ArrowDown":
-                cmd = 'Move&x=-1&y=0&z=0'
+                cmd = 'lx=-1&rx=-1&ly=0&ry=0'
                 break;
             case "ArrowLeft":
-                cmd = 'Move&x=0&y=1&z=0'
+                cmd = 'lx=0&rx=0&ly=1&ry=1'
                 break;
             case "ArrowRight":
-                cmd = 'Move&x=0&y=-1&z=0'
+                cmd = 'lx=0&rx=0&ly=0&ry=1'
                 break;
             case "PageUp":
-                cmd = 'Move&x=0&y=0&z=1'
+                cmd = 'lx=0&rx=0&ly=1&ry=0'
                 break;
             case "PageDown":
-                cmd = 'Move&x=0&y=0&z=-1'
+                cmd = 'lx=0&rx=0&ly=0&ry=1'
                 break;
         }
         // 여기에 방향키 또는 페이지 업/다운에 대한 원하는 동작을 추가
 
-        const response = await fetch(`/sport?cmd=${cmd}`)
+        const response = await fetch(`/walkG1?${cmd}`)
         if (!response.ok) {
             throw new Error(`Response status: ${response.status}`)
         }
@@ -246,23 +262,26 @@ document.addEventListener('DOMContentLoaded', function() {
             }
 
             switch(this.id){
+                case 'move-center':
+                    cmd = '/walkG1?lx=0&rx=0&ly=0&ry=0'
+                    break;                
                 case 'move-up':
-                    cmd = '/sport?cmd=Move&x=1&y=0&z=0'
+                    cmd = '/walkG1?lx=1&rx=1&ly=0&ry=0'
                     break;
                 case 'move-down':
-                    cmd = '/sport?cmd=Move&x=-1&y=0&z=0'
+                    cmd = '/walkG1?lx=-1&rx=-1&ly=0&ry=0'
                     break;                                        
                 case 'move-left':
-                    cmd = '/sport?cmd=Move&x=0&y=1&z=0'
+                    cmd = '/walkG1?lx=0&rx=0&ly=1&ry=0'
                     break;
                 case 'move-right':
-                    cmd = '/sport?cmd=Move&x=0&y=-1&z=0'
+                    cmd = '/walkG1?lx=0&rx=0&ly=0&ry=1'
                     break;
                 case 'rotate-left':
-                    cmd = '/sport?cmd=Move&x=0&y=0&z=1'
+                    cmd = '/walkG1?lx=0&rx=0&ly=1&ry=1'
                     break;
                 case 'rotate-right':
-                    cmd = '/sport?cmd=Move&x=0&y=0&z=-1'
+                    cmd = '/walkG1?lx=0&rx=0&ly=-1&ry=-1'
                     break;                    
                 case 'tilt-up':
                     cmd = '/sport?cmd=BodyHeight&x=1&y=0&z=0' // get height
