@@ -201,7 +201,7 @@ function startKeyRepeat(key) {
                 cmd = `/walkG1?lx=${-0.5 * multi}&rx=0&ly=0&ry=0`
                 break;
             case "ArrowRight":
-                cmd = `/walkG1?lx=0&rx=${-0.5 * multi}&ly=0&ry=0`
+                cmd = `/walkG1?lx=0&rx=${0.5 * multi}&ly=0&ry=0`
                 break;
             case "PageUp":
                 cmd = `/walkG1?lx=0&rx=0&ly=${1 * multi}&ry=${1 * multi}`
@@ -278,19 +278,21 @@ document.addEventListener('DOMContentLoaded', function() {
                     cmd = `/walkG1?lx=${-0.5 * multi}&rx=0&ly=0&ry=0`
                     break;
                 case 'move-right':
-                    cmd = `/walkG1?lx=0&rx=${-0.5 * multi}&ly=0&ry=0`
+                    cmd = `/walkG1?lx=${0.5 * multi}&rx=0&ly=0&ry=0`
                     break;
                 case 'rotate-left':
-                    cmd = `/walkG1?lx=${-0.5 * multi}&rx=${-0.5 * multi}&ly=0&ry=0`
+                    cmd = `/walkG1?lx=0&rx=${-0.5 * multi}&ly=0&ry=0`
+                    //cmd = `/walkG1?lx=${-0.5 * multi}&rx=${-0.5 * multi}&ly=0&ry=0`
                     break;
                 case 'rotate-right':
-                    cmd = `/walkG1?lx=${0.5 * multi}&rx=${0.5 * multi}&ly=0&ry=0`
+                    cmd = `/walkG1?lx=0&rx=${0.5 * multi}&ly=0&ry=0`
+                    //cmd = `/walkG1?lx=${0.5 * multi}&rx=${0.5 * multi}&ly=0&ry=0`
                     break;                    
                 case 'tilt-up':
-                    cmd = `/walkG1?lx=0&rx=0&ly=${1 * multi}&ry=${1 * multi}`
+                    cmd = `/walkG1?lx=0&rx=0&ly=${1.5 * multi}&ry=${1.5 * multi}`
                     break;
                 case 'tilt-down':
-                    cmd = `/walkG1?lx=0&rx=0&ly=${-1 * multi}&ry=${-1 * multi}`
+                    cmd = `/walkG1?lx=0&rx=0&ly=${-1.5 * multi}&ry=${-1.5 * multi}`
                     break;        
                 case 'tts-hello':
                     cmd = '/v1/tts?text="안녕? 나는 서큘러스의 파이온이라고 해. 만나서 반가워."&isPlay=1'
