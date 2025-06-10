@@ -9,7 +9,7 @@ var input;                  //MediaStreamAudioSourceNode we'll be recording
 var AudioContext = window.AudioContext || window.webkitAudioContext;
 var audioContext //new audio context to help us record
 let lastTime = 0
-let multi = 0.5
+let multi = 1
 
 function listen(){
   if (document.documentElement.requestFullscreen) 
@@ -298,9 +298,11 @@ document.addEventListener('DOMContentLoaded', function() {
                     break;    
                 case 'rotation-center':
                     cmd = '/speech?text="빠른속도로 행동합니다."&motion=Content'
-                    multi = 1
+                    multi = 2
                     break;                                            
                 case 'mode':
+                    multi = 1
+                    /*
                     if(mode == 'normal'){
                         mode = 'ai'
                         cmd = '/mode?value=ai'
@@ -308,6 +310,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         mode = 'normal'
                         cmd = '/mode?value=normal'
                     }
+                    */
                     break;     
                 case 'connect':
                     fetch(`/connect`).then(async response=>{
