@@ -26,7 +26,7 @@ import json
 from pydub import AudioSegment
 from serverinfo import si
 #import onnxruntime_genai as og
-from llama_cpp import Llama
+#from llama_cpp import Llama
 import asyncio
 from go2_webrtc_driver.webrtc_audiohub import WebRTCAudioHub
 import logging
@@ -37,6 +37,7 @@ from aiortc import MediaStreamTrack
 from requests import get
 import time
 import cv2
+from openvino import Core
 from fastapi.staticfiles import StaticFiles
 from queue import Queue
 from ultralytics import YOLO
@@ -44,6 +45,13 @@ import openvino as ov
 from playsound import playsound
 from mandro import HadnControler
 import threading
+from threading import Event, Thread
+from transformers import AutoTokenizer
+from pydantic import BaseModel, Field
+from iterator import IterableStreamer
+#optimum-cli export openvino --weight-format int4 --task text-generation-with-past --model growdle/HyperCLOVAX-SEED-Text-Instruct-1.5B ./CLOVAX-1.5B-ov-int4
+#kakaocorp/kanana-1.5-2.1b-instruct-2505
+
 
 hL = None
 hR = None
@@ -148,13 +156,25 @@ class Chat(BaseModel):
   top_k : int = 50
   max : int = 256 #16384
 
-model_txt = Llama("../models/txt/gemma-3-1b-it-Q4_K_M.gguf", n_threads=4, verbose=False) #from_pretrained
-token_txt = AutoTokenizer.from_pretrained("../models/txt/")
+# gemma-3-1b-it-Q4_K_M.gguf
+#model_txt = Llama("../models/txt/hyperclovax-seed-text-instruct-1.5b-q4_k_m.gguf", n_threads=4, verbose=False) #from_pretrained
+
+
+
+token_txt = AutoTokenizer.from_pretrained("../models/CLOVAX-1.5B-ov-int4")
+pipe_txt = ov_genai.LLMPipeline("../models/CLOVAX-1.5B-ov-int4", device="GPU")
+
 
 pipe_stt = ov_genai.WhisperPipeline('../models/stt',device="GPU")
 
-pipe_tts = rt.InferenceSession('../models/tts/ko_base_f16.onnx', sess_options=rt.SessionOptions(), providers=["OpenVINOExecutionProvider"], provider_options=[{"device_type" : "CPU" }]) #, "precision" : "FP16"
-conf_tts = utils.get_hparams_from_file('../models/tts/ko_base.json')
+#pipe_tts = rt.InferenceSession('../models/tts/ko_base_f16.onnx', sess_options=rt.SessionOptions(), providers=["OpenVINOExecutionProvider"], provider_options=[{"device_type" : "CPU" }]) #, "precision" : "FP16"
+#conf_tts = utils.get_hparams_from_file('../models/tts/ko_base.json')
+
+core = Core()
+config = {"PERFORMANCE_HINT": "LATENCY"}
+path_tts = snapshot_download(repo_id="rippertnt/on-vits2-multi-tts-v1", allow_patterns="*ov*")
+pipe_tts = core.compile_model(core.read_model(model=f"{path_tts}/all_base_ov.xml"), device_name="CPU", config=config)
+conf_tts = utils.get_hparams_from_file(hf_hub_download(repo_id="rippertnt/on-vits2-multi-tts-v1", filename="all_base.json"))
 
 class Generator(ov_genai.Generator):
     def __init__(self, seed, mu=0.0, sigma=1.0):
@@ -166,6 +186,44 @@ class Generator(ov_genai.Generator):
     def next(self):
         return np.random.normal(self.mu, self.sigma)
 
+# for genai
+async def process_stream(streamer, isStream=True, isPlay=0):
+  cnt = 0
+  sentence = ""
+  print("streaming start...")
+  for new_token in streamer:
+    if "assistant" in new_token:
+      cnt += 1
+      if cnt == 1:
+          continue  # Skip the first one (don't yield)
+      elif cnt == 2:
+          break  # Stop stream (don't yield)
+        
+    if isStream:
+      #print(new_token)
+      yield new_token
+      #await asyncio.sleep(0) 
+    elif "." in new_token or "\n" in new_token:
+      sentence = sentence + new_token
+      if len(sentence) > 3:      
+        sentence = sentence.strip()
+        print(sentence)
+        if int(isPlay) > 0:
+          file = tts(sentence)
+          print('playing', file)
+          playsound(file)
+        else:
+          await speech(sentence, 'Content', 0, 'ko')
+
+        yield sentence
+        #await asyncio.sleep(0) 
+        sentence = ""
+    else:
+      sentence = sentence + new_token
+  if len(sentence) > 3:
+    yield sentence
+
+# llama cpp verion
 async def generate_text_stream(chat : Chat, isStream=True, isPlay=0):
     
     if chat.rag is not None and len(chat.rag) > 10: 
@@ -513,7 +571,7 @@ async def balanceG1(cmd="Stand_G1"):
 
 
 @app.get("/speech")
-async def speech(text : str, motion ='Content', voice=0, lang='ko'):
+async def speech(text : str, motion = None, voice=31, lang='ko'):
   print('speech', text)
   global audio_hub
   filename = getHash(text)
@@ -542,14 +600,15 @@ async def speech(text : str, motion ='Content', voice=0, lang='ko'):
             existing_audio = next((audio for audio in audio_list if audio['CUSTOM_NAME'] == filename), None)
             uuid = existing_audio['UNIQUE_ID']
     print(f"Starting audio playback of file: {uuid}")
+
+    if motion is not None:
+      conn.datachannel.pub_sub.publish_without_callback(
+        RTC_TOPIC["SPORT_MOD"], {
+            "api_id": SPORT_CMD[motion]
+        }
+      )
+
     await audio_hub.play_by_uuid(uuid)
-
-    await conn.datachannel.pub_sub.publish_request_new(
-      RTC_TOPIC["SPORT_MOD"], {
-          "api_id": SPORT_CMD[motion]
-      }
-    )
-
       
   return { "result" : True, "data" : True }  
 
@@ -570,7 +629,7 @@ async def color(value = 'purple', warn = 0):
     print('brightness', value)
   else:  
     lastColor = value
-    await conn.datachannel.pub_sub.publish_request_new(
+    conn.datachannel.pub_sub.publish_without_callback(
       RTC_TOPIC["VUI"], 
       {
         "api_id": 1007,
@@ -592,7 +651,7 @@ async def brightness(value = 10):
   if conn is None:
     print('brightness', value)
   else:
-    await conn.datachannel.pub_sub.publish_request_new(
+    conn.datachannel.pub_sub.publish_without_callback(
       RTC_TOPIC["VUI"], 
       {
           "api_id": 1005,
@@ -608,7 +667,7 @@ async def mode(value = 'normal'):
   if conn is None:
     print('mode', value)
   else:  
-    await conn.datachannel.pub_sub.publish_request_new(
+    conn.datachannel.pub_sub.publish_without_callback(
       RTC_TOPIC["MOTION_SWITCHER"], 
       {
           "api_id": 1002,
@@ -624,7 +683,7 @@ async def volume(value = 10):
   if conn is None:
     print('volume', value)
   else:
-    await conn.datachannel.pub_sub.publish_request_new(
+    conn.datachannel.pub_sub.publish_without_callback(
       RTC_TOPIC["VUI"], 
       {
           "api_id": 1003,
@@ -634,11 +693,47 @@ async def volume(value = 10):
 
   return { "result" : True, "data" : True }  
 
+
 @app.get("/monitor")
 def monitor():
   return si.getAll()
 
+@app.post("/v1/txt2chat", summary="문장 기반의 chatgpt 스타일 구현")
+def txt2chat(chat : Chat, isPlay = 0): # gen or med
+  streamer = IterableStreamer(pipe_txt.get_tokenizer())
 
+  messages = [
+    {"role": "system", "content": chat.type},
+    {"role": "user", "content": chat.prompt}
+  ] 
+  prompt = token_txt.apply_chat_template(
+    messages,
+    tokenize=False,
+    add_generation_prompt=True
+  )
+
+  print(prompt)
+
+  generate_kwargs = dict(
+      inputs = prompt,
+      max_new_tokens=int(chat.max),
+      temperature=float(chat.temp),
+      #do_sample=True,
+      repetition_penalty=1.1,
+      top_k=20,
+      top_p=0.92,
+      #top_p=float(chat.top_p),
+      #top_k=int(chat.top_k),
+      streamer=streamer, # !do_sample || top_k > 0
+  )
+
+  t1 = Thread(target=pipe_txt.generate, kwargs=generate_kwargs)
+  t1.start()
+
+  out = process_stream(streamer, False, isPlay)
+  return StreamingResponse(out, media_type='text/event-stream')
+
+"""
 @app.post("/v1/txt2chat", summary="문장 기반의 chatgpt 스타일 구현 / batch ")
 def txt2chat(chat : Chat, isPlay = 0): # gen or med
   print(chat)
@@ -648,6 +743,7 @@ def txt2chat(chat : Chat, isPlay = 0): # gen or med
 def txt2chat2(chat : Chat, isPlay = 0): # gen or med
   print(chat)
   return StreamingResponse(generate_text_stream(chat, True, isPlay), media_type="text/plain")
+"""
 
 @app.post("/v1/stt", summary="음성을 인식합니다.")
 def stt(file : UploadFile = File(...), lang="ko", isPlay=0):
@@ -688,31 +784,66 @@ def getHash(text):
   hash_func.update(text.encode('utf-8'))
   return hash_func.hexdigest()
 
+"""
+    start = t.time()
+    print(text, static)
+
+    #phoneme_ids = text_to_sequence(text, conf_tts.data.text_cleaners)
+    phoneme_ids = text_to_sequence(text, [f'canvers_{lang}_cleaners'])
+    text = np.expand_dims(np.array(phoneme_ids, dtype=np.int64), 0)
+
+    inputs = {
+        "input": text,
+        "input_lengths":  np.array([text.shape[1]], dtype=np.int64),
+        "scales": np.array([0.667, 1.0, 0.8], dtype=np.float16),
+        "sid" : np.array([int(voice)], dtype=np.int64) if voice is not None else None
+    }
+
+    start_time = t.time()
+    result = pipe_tts(inputs)
+    print(f"Inference time: {t.time() - start_time:.4f} seconds")
+
+    audio = list(result.values())[0].squeeze((0, 1))  
+
+    if int(static) > 0:
+      write(data=audio, rate=conf_tts.data.sampling_rate, filename=f"human.wav")
+      return f"human.wav"
+    else:
+      write(data=audio, rate=conf_tts.data.sampling_rate, filename=f"output/{str(start)}.wav")
+      return f"output/{str(start)}.wav"
+"""
+
 @app.get("/v1/tts", response_class=FileResponse, summary="입력한 문장으로 부터 음성을 생성합니다.")
-def tts(text = "", voice = 1, lang='ko', static=0, isPlay=0):
+def tts(text = "", voice=31, lang='ko', static=0, isPlay=0):
     #org_text = parse.quote(text, safe='', encoding="cp949")
     start = t.time()
     print(text, static)
     filename = getHash(text)
 
-    phoneme_ids = text_to_sequence(text, conf_tts.data.text_cleaners)
-    if conf_tts.data.add_blank:
-        phoneme_ids = commons.intersperse(phoneme_ids, 0)
-    phoneme_ids = torch.LongTensor(phoneme_ids)
+    #phoneme_ids = text_to_sequence(text, conf_tts.data.text_cleaners)
+    phoneme_ids = text_to_sequence(text, [f'canvers_{lang}_cleaners'])
     text = np.expand_dims(np.array(phoneme_ids, dtype=np.int64), 0)
-    text_lengths = np.array([text.shape[1]], dtype=np.int64)
-    scales = np.array([0.667, 1.0, 0.8], dtype=np.float16)#dtype=np.float16) 16
-    sid = np.array([int(voice)], dtype=np.int64) if voice is not None else None
-    #sid = np.array([int(voice)]) if voice is not None else None
-    audio = pipe_tts.run(None, {"input": text,"input_lengths": text_lengths,"scales": scales,"sid": sid})[0].squeeze((0, 1))
-    #print(audio)
+
+    inputs = {
+        "input": text,
+        "input_lengths":  np.array([text.shape[1]], dtype=np.int64),
+        "scales": np.array([0.667, 1.0, 0.8], dtype=np.float16),
+        "sid" : np.array([int(voice)], dtype=np.int64) if voice is not None else None
+    }
+
+    start_time = t.time()
+    result = pipe_tts(inputs)
+    print(f"Inference time: {t.time() - start_time:.4f} seconds")
+
+    audio = list(result.values())[0].squeeze((0, 1))  
+
     print(t.time() - start)
     
     if int(static) > 0:
-      write(data=audio.astype(np.float32), rate=conf_tts.data.sampling_rate, filename="output/human.wav")
+      write(data=audio, rate=conf_tts.data.sampling_rate, filename="output/human.wav")
       return "output/human.wav"
     else:
-      write(data=audio.astype(np.float32), rate=conf_tts.data.sampling_rate, filename=f"output/{filename}.wav")
+      write(data=audio, rate=conf_tts.data.sampling_rate, filename=f"output/{filename}.wav")
       audio = AudioSegment.from_wav(f"output/{filename}.wav")
       # Set specific audio parameters for compatibility
       audio = audio.set_frame_rate(22050)  # Standard sample rate

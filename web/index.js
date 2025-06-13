@@ -11,6 +11,13 @@ var audioContext //new audio context to help us record
 let lastTime = 0
 let multi = 1
 
+function smooth(value){
+    if(value < 0.5)
+        return 0.5
+    else if (value > 1)
+        return 1
+}
+
 function listen(){
   if (document.documentElement.requestFullscreen) 
     document.documentElement.requestFullscreen()
@@ -83,9 +90,93 @@ function stt(blob){
     if($.query('[name=prompt]').value.length > 0)
       generate()    
   })
-
 }
 
+
+            case "ArrowUp":
+                cmd = `Move&x=${multi * 1}&y=0&z=0`
+                break;
+            case "ArrowDown":
+                cmd = `Move&x=${multi * -1}&y=0&z=0`
+                break;
+            case "ArrowLeft":
+                cmd = `Move&x=0&y=${smooth(multi * 1)}&z=0`
+                break;
+            case "ArrowRight":
+                cmd = `Move&x=0&y=${smooth(multi * -1)}&z=0`
+                break;
+            case "PageUp":
+                cmd = `Move&x=0&y=0&z=${multi * 1}`
+                break;
+            case "PageDown":
+                cmd = `Move&x=0&y=0&z=${multi * -1}`
+                break;
+        }
+        // 여기에 방향키 또는 페이지 업/다운에 대한 원하는 동작을 추가
+
+        const response = await fetch(`/sport?cmd=${cmd}`)
+        if (!response.ok) {
+            throw new Error(`Response status: ${response.status}`)
+        }
+    
+        const json = await response.json()
+        console.log(cmd ,json)
+
+const keysPressed = {};
+
+window.addEventListener('keydown', (e) => {
+  keysPressed[e.key] = true;
+});
+
+window.addEventListener('keyup', (e) => {
+  keysPressed[e.key] = false;
+});
+
+function getDirection() {
+    const up = keysPressed['ArrowUp'];
+    const down = keysPressed['ArrowDown'];
+    const left = keysPressed['ArrowLeft'];
+    const right = keysPressed['ArrowRight'];
+
+    if (up && right) //'↗ 북동쪽';
+        cmd = `Move&x=${multi * 1}&y=${smooth(multi * -1)}&z=0`
+    else if (down && right) //'↘ 남동쪽';
+        cmd = `Move&x=${multi * -1}&y=${smooth(multi * -1)}&z=0`
+    else if (down && left) //'↙ 남서쪽';
+        cmd = `Move&x=${multi * -1}&y=${smooth(multi * 1)}&z=0`
+    else if (up && left) //'↖ 북서쪽';
+        cmd = `Move&x=${multi * 1}&y=${smooth(multi * 1)}&z=0`
+    else if (up) //'⬆ 북쪽';
+        cmd = `Move&x=${multi * 1}&y=0&z=0`
+    else if (down) //'⬇ 남쪽';
+        cmd = `Move&x=${multi * -1}&y=0&z=0`
+    else if (left) //'⬅ 서쪽';
+        cmd = `Move&x=0&y=${smooth(multi * 1)}&z=0`
+    else if (right) //'➡ 동쪽';
+        cmd = `Move&x=0&y=${smooth(multi * -1)}&z=0`
+    else //'정지';
+        cmd = `Move&x=0&y=0&z=0`
+
+    const response = await fetch(`/sport?cmd=${cmd}`)
+    if (!response.ok) {
+        throw new Error(`Response status: ${response.status}`)
+    }
+
+    const json = await response.json()
+    console.log(cmd ,json)
+}
+
+function gameLoop() {
+  const direction = getDirection();
+  console.log(direction);
+
+  requestAnimationFrame(gameLoop);
+}
+
+gameLoop(); // 루프 시작
+
+
+/*
 let keyStatus = {
     ArrowUp: false,
     ArrowDown: false,
@@ -183,10 +274,10 @@ function startKeyRepeat(key) {
                 cmd = `Move&x=${multi * -1}&y=0&z=0`
                 break;
             case "ArrowLeft":
-                cmd = `Move&x=0&y=${multi * 1}&z=0`
+                cmd = `Move&x=0&y=${smooth(multi * 1)}&z=0`
                 break;
             case "ArrowRight":
-                cmd = `Move&x=0&y=${multi * -1}&z=0`
+                cmd = `Move&x=0&y=${smooth(multi * -1)}&z=0`
                 break;
             case "PageUp":
                 cmd = `Move&x=0&y=0&z=${multi * 1}`
@@ -209,6 +300,7 @@ function startKeyRepeat(key) {
     }, intervalTime);
     
 }
+*/
 
 // 글로벌 키 입력 감지
 /*
@@ -257,16 +349,16 @@ document.addEventListener('DOMContentLoaded', function() {
                     cmd = `/sport?cmd=Move&x=${multi * -1}&y=0&z=0`
                     break;                                        
                 case 'move-left':
-                    cmd = `/sport?cmd=Move&x=0&y=${multi * 1}&z=0`
+                    cmd = `/sport?cmd=Move&x=0&y=${smooth(multi * 1)}&z=0`
                     break;
                 case 'move-right':
-                    cmd = `/sport?cmd=Move&x=0&y=${multi * -1}&z=0`
+                    cmd = `/sport?cmd=Move&x=0&y=${smooth(multi * -1)}&z=0`
                     break;
                 case 'rotate-left':
-                    cmd = `/sport?cmd=Move&x=0&y=0&z=${multi * 1}`
+                    cmd = `/sport?cmd=Move&x=0&y=0&z=${smooth(multi * 1)}`
                     break;
                 case 'rotate-right':
-                    cmd = `/sport?cmd=Move&x=0&y=0&z=${multi * -1}`
+                    cmd = `/sport?cmd=Move&x=0&y=0&z=${smooth(multi * -1)}`
                     break;                    
                 case 'tilt-up':
                     cmd = '/sport?cmd=BodyHeight&x=1&y=0&z=0' // get height
@@ -293,24 +385,28 @@ document.addEventListener('DOMContentLoaded', function() {
                     cmd = '/speech?text="나는 서큘러스의 사족 보행 로봇, 파이독이라고 하지~ 사람을 물진 않아.?"&motion=FingerHeart'
                     break;    
                 case 'move-center':
-                    cmd = '/speech?text="기본 속도로 행동합니다."&motion=Content'
+                    cmd = '/speech?text="0.5배 속도로 행동합니다."&motion=WiggleHips'
                     multi = 0.5
                     break;    
                 case 'rotation-center':
-                    cmd = '/speech?text="빠른속도로 행동합니다."&motion=Content'
-                    multi = 2
+                    cmd = '/speech?text="3배 속도로 행동합니다."&motion=WiggleHips'
+                    multi = 3
                     break;                                            
                 case 'mode':
-                    multi = 1
-                    /*
+                   
+       
                     if(mode == 'normal'){
                         mode = 'ai'
-                        cmd = '/mode?value=ai'
+                        multi = 1
+                        cmd = '/speech?text="기본 속도로 행동합니다."&motion=WiggleHips'
+                        //cmd = '/mode?value=ai'
                     } else {
                         mode = 'normal'
-                        cmd = '/mode?value=normal'
+                        multi = 2
+                        cmd = '/speech?text="2배 속도로 행동합니다."&motion=WiggleHips'
+                        //cmd = '/mode?value=normal'
                     }
-                    */
+
                     break;     
                 case 'connect':
                     fetch(`/connect`).then(async response=>{
