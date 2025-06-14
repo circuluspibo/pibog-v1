@@ -1,4 +1,4 @@
-alert("Nice to meet you again! 2504162100")
+alert("Nice to meet you again! 2506142130")
 // 버튼 클릭 효과 및 상태 변화 시뮬레이션
 let isRecord = false
 var gumStream;              //stream from getUserMedia()
@@ -21,8 +21,7 @@ function smooth(value){
 }
 
 function listen(){
-  if (document.documentElement.requestFullscreen) 
-    document.documentElement.requestFullscreen()
+
 
 
   if(!isRecord){
@@ -94,7 +93,6 @@ function stt(blob){
   })
 }
 
-
 const keysPressed = {
     ArrowUp : false,
     ArrowDown : false,
@@ -102,16 +100,27 @@ const keysPressed = {
     ArrowRight : false,
     PageUp : false,
     PageDown : false
+}
 
-};
-
-window.addEventListener('keydown', (e) => {
+window.addEventListener('keydown', async (e) => {
     console.log(e.key)
-  keysPressed[e.key] = true;
+    keysPressed[e.key] = true;
+
+    /*
+    if(e.key == 'Escape'){
+        const response = await fetch(`/sport?cmd=Hello`)
+        if (!response.ok) {
+            throw new Error(`Response status: ${response.status}`)
+        }
+
+        const json = await response.json()
+        console.log(cmd ,json)
+    }
+    */
 });
 
 window.addEventListener('keyup', (e) => {
-  keysPressed[e.key] = false;
+    keysPressed[e.key] = false;
 });
 
 
@@ -199,6 +208,7 @@ gameLoop() // 루프 시작
 let mode = 'normal'
 
 document.addEventListener('DOMContentLoaded', function() {
+    document.getElementById('object-speed').textContent = multi
     // 모든 기능 버튼에 클릭 이벤트 추가
     const allButtons = document.querySelectorAll('.function-button, .pad-button, .rotation-button, .mic-button');
     
@@ -274,7 +284,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 case 'rotation-center':
                     cmd = '/speech?text="3배 속도로 행동합니다."&motion=WiggleHips'
                     multi = 3
-                    break;                                            
+                    break;          
+                /*                                  
                 case 'mode':
                     if(mode == 'normal'){
                         mode = 'ai'
@@ -289,6 +300,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
 
                     break;     
+                */
                 case 'connect':
                     fetch(`/connect`).then(async response=>{
                         if (!response.ok) {
@@ -508,7 +520,6 @@ document.addEventListener('DOMContentLoaded', function() {
             const json = await response.json()
             console.log(color ,json)
 
-            
             root.style.setProperty('--primary-color', theme.primary);
             root.style.setProperty('--secondary-color', theme.secondary);
             root.style.setProperty('--accent-color', theme.accent);
@@ -581,14 +592,17 @@ document.addEventListener('DOMContentLoaded', function() {
  
     const canvas = document.querySelector(".hud-container");
 
-
     let posX = window.innerWidth / 2;
     let posY = window.innerHeight / 2;
 
     // 포인터 잠금 요청
     canvas.addEventListener('click', () => {
-      canvas.requestPointerLock();
-    });
+
+        if (document.documentElement.requestFullscreen) 
+            document.documentElement.requestFullscreen()
+
+        canvas.requestPointerLock()
+    })
 
     document.addEventListener('pointerlockchange', () => {
       if (document.pointerLockElement === canvas) {
@@ -598,6 +612,7 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     });
 
+    // 속도 조정 (geer)
     async function updatePosition(e) {
         const dx = e.movementX;
         const dy = e.movementY;
@@ -610,14 +625,25 @@ document.addEventListener('DOMContentLoaded', function() {
         posX = Math.max(0, Math.min(window.innerWidth, posX));
         posY = Math.max(0, Math.min(window.innerHeight, posY));
 
+        if(dy > 0) // down
+            multi = 0.5
+        else if(dy < 0) // up
+            multi = 2
 
+        if(dx > 0) // right
+            multi = 1.5
+        else if(dx < 0) // left
+            multi = 1       
+
+        document.getElementById('object-speed').textContent = multi
+        // 방향 감지
+
+        /*
         keysPressed['ArrowRight'] = false
         keysPressed['ArrowLeft'] = false
         keysPressed['ArrowDown'] = false
-        keysPressed['ArrowUp'] = false
-        // 방향 감지
+        keysPressed['ArrowUp'] = false        
         let key = '-';
-
         key = dx > 0 ? 'ArrowRight' : 'ArrowLeft';
 
         if(dx > 0)
@@ -631,7 +657,27 @@ document.addEventListener('DOMContentLoaded', function() {
             keysPressed['ArrowDown'] = true
         else if(dy < 0)
             keysPressed['ArrowUp'] = true
-        
+        */        
     }
+
+    document.addEventListener('mousedown', async (event) => {
+        let cmd = ''
+
+        if (event.button === 0) {
+            const response = await fetch(`/sport?cmd=WiggleHips`)
+            if (!response.ok) {
+                throw new Error(`Response status: ${response.status}`)
+            }
+
+            const json = await response.json()
+            console.log(cmd ,json)
+        }
+    })
+
+    // 오른쪽 클릭 메뉴 방지 (선택 사항)
+    document.addEventListener('contextmenu', (event) => {
+      event.preventDefault()
+      //console.log('기본 우클릭 메뉴 차단됨');
+    })
     
 })
