@@ -146,6 +146,8 @@ class Param (BaseModel):
 #path_stt = snapshot_download(repo_id="circulus/whisper-large-v3-turbo-ov-int4")
 #path_text = snapshot_download(repo_id="circulus/gemma-3-1b-it-gguf")
 
+_SYSTEM = "당신은 서큘러스에서 만든 파이봇 이라고 하는 강아지 로봇 인공지능 입니다. 젊은 톤의 대화체로 입력된 언어로 사람 같이 짧게 응답하세요."
+
 class Chat(BaseModel):
   prompt : str = ''
   lang : str = 'auto'
@@ -159,11 +161,8 @@ class Chat(BaseModel):
 # gemma-3-1b-it-Q4_K_M.gguf
 #model_txt = Llama("../models/txt/hyperclovax-seed-text-instruct-1.5b-q4_k_m.gguf", n_threads=4, verbose=False) #from_pretrained
 
-
-
 token_txt = AutoTokenizer.from_pretrained("../models/CLOVAX-1.5B-ov-int4")
 pipe_txt = ov_genai.LLMPipeline("../models/CLOVAX-1.5B-ov-int4", device="GPU")
-
 
 pipe_stt = ov_genai.WhisperPipeline('../models/stt',device="GPU")
 
@@ -209,14 +208,12 @@ async def process_stream(streamer, isStream=True, isPlay=0):
         sentence = sentence.strip()
         print(sentence)
         if int(isPlay) > 0:
-          file = tts(sentence)
-          print('playing', file)
-          playsound(file)
+          file = tts(sentence,31,"ko",0,0)
         else:
           await speech(sentence, 'Content', 0, 'ko')
 
         yield sentence
-        #await asyncio.sleep(0) 
+        await asyncio.sleep(0.01) # thread 처리
         sentence = ""
     else:
       sentence = sentence + new_token
@@ -488,25 +485,31 @@ async def video_feed():
 @app.get("/sport")
 async def sport(cmd : str, x=0.0, y=0.0, z=0.0):
   global conn
-
+  print(cmd, f'x:{x}, y:{y}, z:{z}')
   if conn is None:
     print('Disconnected', cmd)
   elif cmd == 'Move':
-    print('Move', f'x:{x}, y:{y}, z:{z}')
     await conn.datachannel.pub_sub.publish_request_new(
         RTC_TOPIC["SPORT_MOD"], {
           "api_id": SPORT_CMD['Move'],
           "parameter": {"x": float(x), "y": float(y), "z": float(z)}
         }
     )
-  else:
-    print(cmd)
+  elif SPORT_CMD[cmd] != None:
     await conn.datachannel.pub_sub.publish_request_new(
       RTC_TOPIC["SPORT_MOD"], {
-          "api_id": SPORT_CMD[cmd]
+          "api_id": SPORT_CMD[cmd],
+          "parameter": { "data" : True } # if possible
       }
     )
-        
+  else:
+    await conn.datachannel.pub_sub.publish_request_new(
+      RTC_TOPIC["SPORT_MOD"], {
+          "api_id": int(cmd),
+          "parameter": { "data" : True } # if possible
+      }
+    )
+            
   return { "result" : True, "data" : True }      
 
 @app.get("/arm")
@@ -601,13 +604,14 @@ async def speech(text : str, motion = None, voice=31, lang='ko'):
             uuid = existing_audio['UNIQUE_ID']
     print(f"Starting audio playback of file: {uuid}")
 
+    """
     if motion is not None:
       conn.datachannel.pub_sub.publish_without_callback(
         RTC_TOPIC["SPORT_MOD"], {
             "api_id": SPORT_CMD[motion]
         }
       )
-
+    """      
     await audio_hub.play_by_uuid(uuid)
       
   return { "result" : True, "data" : True }  
@@ -629,7 +633,7 @@ async def color(value = 'purple', warn = 0):
     print('brightness', value)
   else:  
     lastColor = value
-    conn.datachannel.pub_sub.publish_without_callback(
+    await conn.datachannel.pub_sub.publish_request_new(
       RTC_TOPIC["VUI"], 
       {
         "api_id": 1007,
@@ -651,7 +655,7 @@ async def brightness(value = 10):
   if conn is None:
     print('brightness', value)
   else:
-    conn.datachannel.pub_sub.publish_without_callback(
+    await conn.datachannel.pub_sub.publish_request_new(
       RTC_TOPIC["VUI"], 
       {
           "api_id": 1005,
@@ -698,13 +702,13 @@ async def volume(value = 10):
 def monitor():
   return si.getAll()
 
-@app.post("/v1/txt2chat", summary="문장 기반의 chatgpt 스타일 구현")
-def txt2chat(chat : Chat, isPlay = 0): # gen or med
+@app.get("/v1/txt2chat", summary="문장 기반의 chatgpt 스타일 구현")
+def txt2chat(prompt : str , isPlay = 0): # gen or med
   streamer = IterableStreamer(pipe_txt.get_tokenizer())
 
   messages = [
-    {"role": "system", "content": chat.type},
-    {"role": "user", "content": chat.prompt}
+    {"role": "system", "content": _SYSTEM},
+    {"role": "user", "content": prompt}
   ] 
   prompt = token_txt.apply_chat_template(
     messages,
@@ -716,14 +720,12 @@ def txt2chat(chat : Chat, isPlay = 0): # gen or med
 
   generate_kwargs = dict(
       inputs = prompt,
-      max_new_tokens=int(chat.max),
-      temperature=float(chat.temp),
+      max_new_tokens= 256,
+      temperature= 0.5,
       #do_sample=True,
       repetition_penalty=1.1,
-      top_k=20,
-      top_p=0.92,
-      #top_p=float(chat.top_p),
-      #top_k=int(chat.top_k),
+      top_k=50,
+      top_p=0.9,
       streamer=streamer, # !do_sample || top_k > 0
   )
 

@@ -9,13 +9,15 @@ var input;                  //MediaStreamAudioSourceNode we'll be recording
 var AudioContext = window.AudioContext || window.webkitAudioContext;
 var audioContext //new audio context to help us record
 let lastTime = 0
-let multi = 1
+let multi = 0.5
 
 function smooth(value){
     if(value < 0.5)
         return 0.5
     else if (value > 1)
         return 1
+    else    
+        return value
 }
 
 function listen(){
@@ -93,38 +95,18 @@ function stt(blob){
 }
 
 
-            case "ArrowUp":
-                cmd = `Move&x=${multi * 1}&y=0&z=0`
-                break;
-            case "ArrowDown":
-                cmd = `Move&x=${multi * -1}&y=0&z=0`
-                break;
-            case "ArrowLeft":
-                cmd = `Move&x=0&y=${smooth(multi * 1)}&z=0`
-                break;
-            case "ArrowRight":
-                cmd = `Move&x=0&y=${smooth(multi * -1)}&z=0`
-                break;
-            case "PageUp":
-                cmd = `Move&x=0&y=0&z=${multi * 1}`
-                break;
-            case "PageDown":
-                cmd = `Move&x=0&y=0&z=${multi * -1}`
-                break;
-        }
-        // 여기에 방향키 또는 페이지 업/다운에 대한 원하는 동작을 추가
+const keysPressed = {
+    ArrowUp : false,
+    ArrowDown : false,
+    ArrowLeft : false,
+    ArrowRight : false,
+    PageUp : false,
+    PageDown : false
 
-        const response = await fetch(`/sport?cmd=${cmd}`)
-        if (!response.ok) {
-            throw new Error(`Response status: ${response.status}`)
-        }
-    
-        const json = await response.json()
-        console.log(cmd ,json)
-
-const keysPressed = {};
+};
 
 window.addEventListener('keydown', (e) => {
+    console.log(e.key)
   keysPressed[e.key] = true;
 });
 
@@ -132,186 +114,87 @@ window.addEventListener('keyup', (e) => {
   keysPressed[e.key] = false;
 });
 
+
+const lastPressed = {}
+let lastCmd = ''
+
 function getDirection() {
+
     const up = keysPressed['ArrowUp'];
     const down = keysPressed['ArrowDown'];
     const left = keysPressed['ArrowLeft'];
     const right = keysPressed['ArrowRight'];
 
-    if (up && right) //'↗ 북동쪽';
-        cmd = `Move&x=${multi * 1}&y=${smooth(multi * -1)}&z=0`
-    else if (down && right) //'↘ 남동쪽';
-        cmd = `Move&x=${multi * -1}&y=${smooth(multi * -1)}&z=0`
-    else if (down && left) //'↙ 남서쪽';
-        cmd = `Move&x=${multi * -1}&y=${smooth(multi * 1)}&z=0`
-    else if (up && left) //'↖ 북서쪽';
-        cmd = `Move&x=${multi * 1}&y=${smooth(multi * 1)}&z=0`
-    else if (up) //'⬆ 북쪽';
-        cmd = `Move&x=${multi * 1}&y=0&z=0`
-    else if (down) //'⬇ 남쪽';
-        cmd = `Move&x=${multi * -1}&y=0&z=0`
-    else if (left) //'⬅ 서쪽';
-        cmd = `Move&x=0&y=${smooth(multi * 1)}&z=0`
-    else if (right) //'➡ 동쪽';
-        cmd = `Move&x=0&y=${smooth(multi * -1)}&z=0`
-    else //'정지';
-        cmd = `Move&x=0&y=0&z=0`
-
-    const response = await fetch(`/sport?cmd=${cmd}`)
-    if (!response.ok) {
-        throw new Error(`Response status: ${response.status}`)
-    }
-
-    const json = await response.json()
-    console.log(cmd ,json)
-}
-
-function gameLoop() {
-  const direction = getDirection();
-  console.log(direction);
-
-  requestAnimationFrame(gameLoop);
-}
-
-gameLoop(); // 루프 시작
-
-
-/*
-let keyStatus = {
-    ArrowUp: false,
-    ArrowDown: false,
-    ArrowLeft: false,
-    ArrowRight: false,
-    PageUp: false,
-    PageDown: false,
-    Escape : false
-};
-
-const intervalTime = 100; // 키가 눌린 상태에서 반복하는 간격 (ms)
-
-// 키가 눌렸을 때
-document.addEventListener("keydown", (event) => {
-    switch (event.key) {
-        case "ArrowUp":
-            if (!keyStatus.ArrowUp) {
-                keyStatus.ArrowUp = true;
-                startKeyRepeat("ArrowUp");
-            }
-            break;
-        case "ArrowDown":
-            if (!keyStatus.ArrowDown) {
-                keyStatus.ArrowDown = true;
-                startKeyRepeat("ArrowDown");
-            }
-            break;
-        case "ArrowLeft":
-            if (!keyStatus.ArrowLeft) {
-                keyStatus.ArrowLeft = true;
-                startKeyRepeat("ArrowLeft");
-            }
-            break;
-        case "ArrowRight":
-            if (!keyStatus.ArrowRight) {
-                keyStatus.ArrowRight = true;
-                startKeyRepeat("ArrowRight");
-            }
-            break;
-        case "PageUp":
-            if (!keyStatus.PageUp) {
-                keyStatus.PageUp = true;
-                startKeyRepeat("PageUp");
-            }
-            break;
-        case "PageDown":
-            if (!keyStatus.PageDown) {
-                keyStatus.PageDown = true;
-                startKeyRepeat("PageDown");
-            }
-            break;
-        default:
-            console.log('unknown',event.key)
-    }
-});
-
-// 키가 떼어졌을 때
-document.addEventListener("keyup", (event) => {
+    const rt_left = keysPressed['PageUp'];
+    const rt_right = keysPressed['PageDown'];
 
     cmd = ''
 
-    switch (event.key) {
-        case "ArrowUp":
-            keyStatus.ArrowUp = false;
-            break;
-        case "ArrowDown":
-            keyStatus.ArrowDown = false;
-            break;
-        case "ArrowLeft":
-            keyStatus.ArrowLeft = false;
-            break;
-        case "ArrowRight":
-            keyStatus.ArrowRight = false;
-            break;
-        case "PageUp":
-            keyStatus.PageUp = false;
-            break;
-        case "PageDown":
-            keyStatus.PageDown = false;
-            break;
+    if( lastPressed['ArrowUp'] != keysPressed['ArrowUp'] ||lastPressed['ArrowDown'] != keysPressed['ArrowDown'] || 
+        lastPressed['ArrowLeft'] != keysPressed['ArrowLeft'] ||lastPressed['ArrowRight'] != keysPressed['ArrowRight'] ||
+        lastPressed['PageUp'] != keysPressed['PageUp'] ||lastPressed['PageDown'] != keysPressed['PageDown']){
+
+        console.log('control',`/up ${up} /down ${down} /left ${left} /right ${right} / rt_left ${rt_left} /rt_right ${rt_right}`)
+        lastPressed['ArrowUp'] = keysPressed['ArrowUp']
+        lastPressed['ArrowDown'] = keysPressed['ArrowDown']
+        lastPressed['ArrowLeft'] = keysPressed['ArrowLeft']
+        lastPressed['ArrowRight'] = keysPressed['ArrowRight']
+        lastPressed['PageUp'] = keysPressed['PageUp']
+        lastPressed['PageDown'] = keysPressed['PageDown']
     }
-});
+        
+    let x = 0, y = 0, z = 0;
 
-// 키가 반복적으로 눌릴 때 실행될 함수
-function startKeyRepeat(key) {
-    const interval = setInterval(async () => {
-        if (!keyStatus[key]) {
-            clearInterval(interval); // 키가 떼어졌으면 반복 멈춤
-        }
-        switch (key) {
-            case "ArrowUp":
-                cmd = `Move&x=${multi * 1}&y=0&z=0`
-                break;
-            case "ArrowDown":
-                cmd = `Move&x=${multi * -1}&y=0&z=0`
-                break;
-            case "ArrowLeft":
-                cmd = `Move&x=0&y=${smooth(multi * 1)}&z=0`
-                break;
-            case "ArrowRight":
-                cmd = `Move&x=0&y=${smooth(multi * -1)}&z=0`
-                break;
-            case "PageUp":
-                cmd = `Move&x=0&y=0&z=${multi * 1}`
-                break;
-            case "PageDown":
-                cmd = `Move&x=0&y=0&z=${multi * -1}`
-                break;
-        }
-        // 여기에 방향키 또는 페이지 업/다운에 대한 원하는 동작을 추가
+    // 방향 이동 처리
+    if (up && right) { // ↗ 북동쪽
+        x = multi;
+        y = - smooth(multi);
+    } else if (down && right) { // ↘ 남동쪽
+        x = -1 * multi;
+        y = -1 * smooth(multi);
+    } else if (down && left) { // ↙ 남서쪽
+        x = -1 * multi;
+        y = smooth(multi);
+    } else if (up && left) { // ↖ 북서쪽
+        x = multi;
+        y = smooth(multi);
+    } else if (up) { // ⬆ 북쪽
+        x = multi;
+    } else if (down) { // ⬇ 남쪽
+        x = -1 * multi;
+    } else if (left) { // ⬅ 서쪽
+        y = smooth(multi);
+    } else if (right) { // ➡ 동쪽
+        y = -1 * smooth(multi);
+    } 
 
-        const response = await fetch(`/sport?cmd=${cmd}`)
-        if (!response.ok) {
-            throw new Error(`Response status: ${response.status}`)
-        }
+    // 회전 처리
+    if (rt_left)
+        z = smooth(multi);
+    else if (rt_right)
+        z = -1 * smooth(multi);
     
-        const json = await response.json()
-        console.log(cmd ,json)
-
-
-    }, intervalTime);
+    // 명령어 생성
+    if(x || y || z){
+        cmd = `x=${x}&y=${y}&z=${z}`
+        if(lastCmd != cmd){
+            console.log('cmd',`x=${x}&y=${y}&z=${z}`)    
+            lastCmd = cmd
+        }
+        
+        fetch(`/sport?cmd=Move&x=${x}&y=${y}&z=${z}`)
+    }
     
 }
-*/
 
-// 글로벌 키 입력 감지
-/*
-document.addEventListener("keydown", (event) => {
-    console.log(`Global Keydown: ${event.key}`);
-});
+function gameLoop() {
+  getDirection()
+  requestAnimationFrame(gameLoop)
+}
 
-document.addEventListener("keyup", (event) => {
-    console.log(`Global Keyup: ${event.key}`);
-});
-*/
+gameLoop() // 루프 시작
+
+
 
 let mode = 'normal'
 
@@ -343,22 +226,22 @@ document.addEventListener('DOMContentLoaded', function() {
 
             switch(this.id){
                 case 'move-up':
-                    cmd = `/sport?cmd=Move&x=${multi * 1}&y=0&z=0`
+                    cmd = `/sport?cmd=Move&x=${multi}&y=0&z=0`
                     break;
                 case 'move-down':
                     cmd = `/sport?cmd=Move&x=${multi * -1}&y=0&z=0`
                     break;                                        
                 case 'move-left':
-                    cmd = `/sport?cmd=Move&x=0&y=${smooth(multi * 1)}&z=0`
+                    cmd = `/sport?cmd=Move&x=0&y=${smooth(multi)}&z=0`
                     break;
                 case 'move-right':
-                    cmd = `/sport?cmd=Move&x=0&y=${smooth(multi * -1)}&z=0`
+                    cmd = `/sport?cmd=Move&x=0&y=${smooth(multi)  * -1}&z=0`
                     break;
                 case 'rotate-left':
-                    cmd = `/sport?cmd=Move&x=0&y=0&z=${smooth(multi * 1)}`
+                    cmd = `/sport?cmd=Move&x=0&y=0&z=${smooth(multi)}`
                     break;
                 case 'rotate-right':
-                    cmd = `/sport?cmd=Move&x=0&y=0&z=${smooth(multi * -1)}`
+                    cmd = `/sport?cmd=Move&x=0&y=0&z=${smooth(multi)  * -1}`
                     break;                    
                 case 'tilt-up':
                     cmd = '/sport?cmd=BodyHeight&x=1&y=0&z=0' // get height
@@ -367,22 +250,22 @@ document.addEventListener('DOMContentLoaded', function() {
                     cmd = '/sport?cmd=BodyHeight&x=-1&y=0&z=0' // get height
                     break;        
                 case 'tts-hello':
-                    cmd = '/speech?text="안녕, 나는 파이독이야. 만나서 반가워요."&motion=Content'
+                    cmd = '/speech?text="안녕, 나는 강남독이야. 만나서 반가워요."&motion=Content'
                     break;
                 case 'tts-intro':
                     cmd = '/speech?text="안녕, 인텔과 함께하는 글로벌 챌린지에 온 것을 환영해."&motion=RiseSit'
                     break; 
                 case 'tts-follow':
-                    cmd = '/speech?text="안녕,  온 디바이스 A I를 활용하여 동작되는 로봇이야.."&motion=WiggleHips'
+                    cmd = '/v1/txt2chat?prompt="담배 피는 사람한테 공익 광고 멘트를 말해줘."'
                     break;
                 case 'tts-warn':
-                    cmd = '/speech?text="나랑 부딪칠 수 있으니 조심히 피해줘."&motion=FrontPounce'
+                    cmd = '/v1/txt2chat?prompt="사름들에게 부딪칠 수 있으니 조심해 달라는 멘트를 해줘."'
                     break;
                 case 'tts-bye':
-                    cmd = '/speech?text="다음에 다시 만나길 기대할께 안녕~!"&motion=Scrape'
+                    cmd = '/v1/txt2chat?prompt="사람들이 있는 환경에서 미래형 4족 보행로봇으로서, 하고싶은 말은?"'
                     break;
                 case 'tts-poet':
-                    cmd = '/speech?text="나는 서큘러스의 사족 보행 로봇, 파이독이라고 하지~ 사람을 물진 않아.?"&motion=FingerHeart'
+                    cmd = '/v1/txt2chat?prompt="아메리카노 아이스 1잔, 라떼 아이스 1잔 주문 멘트로 말해줘."'
                     break;    
                 case 'move-center':
                     cmd = '/speech?text="0.5배 속도로 행동합니다."&motion=WiggleHips'
@@ -393,8 +276,6 @@ document.addEventListener('DOMContentLoaded', function() {
                     multi = 3
                     break;                                            
                 case 'mode':
-                   
-       
                     if(mode == 'normal'){
                         mode = 'ai'
                         multi = 1
@@ -697,6 +578,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     
     // 마우스 이벤트 처리
+ 
     const canvas = document.querySelector(".hud-container");
 
 
@@ -717,59 +599,39 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     async function updatePosition(e) {
-      const dx = e.movementX;
-      const dy = e.movementY;
+        const dx = e.movementX;
+        const dy = e.movementY;
 
-      // 좌표 업데이트
-      posX += dx;
-      posY += dy;
+        // 좌표 업데이트
+        posX += dx;
+        posY += dy;
 
-      // 화면 경계 제한
-      posX = Math.max(0, Math.min(window.innerWidth, posX));
-      posY = Math.max(0, Math.min(window.innerHeight, posY));
+        // 화면 경계 제한
+        posX = Math.max(0, Math.min(window.innerWidth, posX));
+        posY = Math.max(0, Math.min(window.innerHeight, posY));
 
-      // 방향 감지
-      let key = '-';
-      if (Math.abs(dx) > Math.abs(dy)) {
-        // 좌우 움직임이 더 큼
+
+        keysPressed['ArrowRight'] = false
+        keysPressed['ArrowLeft'] = false
+        keysPressed['ArrowDown'] = false
+        keysPressed['ArrowUp'] = false
+        // 방향 감지
+        let key = '-';
+
         key = dx > 0 ? 'ArrowRight' : 'ArrowLeft';
-      } else if (Math.abs(dy) > 0) {
-        // 상하 움직임
-        key = dy > 0 ? 'ArrowDown' : 'ArrowUp';
-      }
 
-      console.log('Mouse',key)
-      // 방향에 따른 처리 (예시 switch)
-        switch (key) {
-            case "ArrowUp":
-                cmd = `Move&x=${multi * 1}&y=0&z=0`
-                break;
-            case "ArrowDown":
-                cmd = `Move&x=${multi * -1}&y=0&z=0`
-                break;
-            case "ArrowLeft":
-                cmd = `Move&x=0&y=${multi * 1}&z=0`
-                break;
-            case "ArrowRight":
-                cmd = `Move&x=0&y=${multi * -1}&z=0`
-                break;
-            case "PageUp":
-                cmd = `Move&x=0&y=0&z=${multi * 1}`
-                break;
-            case "PageDown":
-                cmd = `Move&x=0&y=0&z=-${multi * -1}`
-                break;
-        }
-        // 여기에 방향키 또는 페이지 업/다운에 대한 원하는 동작을 추가
-
-        const response = await fetch(`/sport?cmd=${cmd}`)
-        if (!response.ok) {
-            throw new Error(`Response status: ${response.status}`)
-        }
-
-        const json = await response.json()
-        console.log(cmd ,json)
+        if(dx > 0)
+            keysPressed['ArrowRight'] = true
+        else if(dx < 0)
+            keysPressed['ArrowLeft'] = true
         
-      }
+        key = dy > 0 ? 'ArrowDown' : 'ArrowUp';
 
-});
+        if(dy > 0)
+            keysPressed['ArrowDown'] = true
+        else if(dy < 0)
+            keysPressed['ArrowUp'] = true
+        
+    }
+    
+})
