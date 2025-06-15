@@ -612,6 +612,62 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     });
 
+
+    let rLevel = 0
+    let rHeight = 0.5
+
+    async function setLevel(){
+        if(rLevel == 0)
+            rLevel == 1
+        else 
+            rLevel == 0
+
+        const response = await fetch(`/sport?cmd=SpeedLevel&data=${rLevel}`)
+        if (!response.ok) {
+            throw new Error(`Response status: ${response.status}`)
+        }
+
+        const json = await response.json()
+        console.log(cmd ,json)
+    }
+
+    async function setHeight(){
+        if(rHeight == 0.5)
+            rHeight == 0.3
+        else
+            rHeight == 0.5
+
+        const response = await fetch(`/sport?cmd=BodyHeight&data=${rHeight}`)
+        if (!response.ok) {
+            throw new Error(`Response status: ${response.status}`)
+        }
+
+        const json = await response.json()
+        console.log(cmd ,json)            
+    }    
+
+    function setSpeed(isUp){
+        if(isUp){
+            if(multi == 0.5)
+                multi = 1
+            else if(multi == 1)
+                multi = 1.5
+            else if(multi == 1.5)
+                multi = 2
+            else
+                multi = 2
+        } else {
+            if(multi == 2)
+                multi = 1.5
+            else if(multi == 1.5)
+                multi = 1
+            else if(multi == 1)
+                multi = 0.5
+            else
+                multi = 0.5
+        }
+    }
+
     // 속도 조정 (geer)
     async function updatePosition(e) {
         const dx = e.movementX;
@@ -626,9 +682,9 @@ document.addEventListener('DOMContentLoaded', function() {
         posY = Math.max(0, Math.min(window.innerHeight, posY));
 
         if(dy > 0) // down
-            multi = 0.5
+            setSpeed(false) //multi = 0.5
         else if(dy < 0) // up
-            multi = 2
+            setSpeed(true)//multi = 2
 
         if(dx > 0) // right
             multi = 1.5

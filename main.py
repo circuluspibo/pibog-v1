@@ -51,7 +51,7 @@ from pydantic import BaseModel, Field
 from iterator import IterableStreamer
 #optimum-cli export openvino --weight-format int4 --task text-generation-with-past --model growdle/HyperCLOVAX-SEED-Text-Instruct-1.5B ./CLOVAX-1.5B-ov-int4
 #kakaocorp/kanana-1.5-2.1b-instruct-2505
-
+#https://github.com/Unitree-Go2-Robot/go2_robot
 
 hL = None
 hR = None
@@ -482,35 +482,69 @@ async def video_feed():
 
     return StreamingResponse(generate(), media_type="multipart/x-mixed-replace; boundary=frame")
 
+lastCmd = {} 
+
 @app.get("/sport")
-async def sport(cmd : str, x=0.0, y=0.0, z=0.0):
+async def sport(cmd : str, x=0.0, y=0.0, z=0.0, data=None):
   global conn
   print(cmd, f'x:{x}, y:{y}, z:{z}')
   if conn is None:
     print('Disconnected', cmd)
   elif cmd == 'Move':
-    await conn.datachannel.pub_sub.publish_request_new(
+    out = await conn.datachannel.pub_sub.publish_request_new(
         RTC_TOPIC["SPORT_MOD"], {
-          "api_id": SPORT_CMD['Move'],
+          "api_id": SPORT_CMD[cmd],
           "parameter": {"x": float(x), "y": float(y), "z": float(z)}
         }
     )
-  elif SPORT_CMD[cmd] != None:
-    await conn.datachannel.pub_sub.publish_request_new(
+  elif data != None: # SPORT_CMD[cmd] != None and
+    out = await conn.datachannel.pub_sub.publish_request_new(
       RTC_TOPIC["SPORT_MOD"], {
-          "api_id": SPORT_CMD[cmd],
-          "parameter": { "data" : True } # if possible
+          "api_id": int(cmd),
+          "parameter": { "data" : float(data) } # if possible
       }
     )
   else:
-    await conn.datachannel.pub_sub.publish_request_new(
-      RTC_TOPIC["SPORT_MOD"], {
-          "api_id": int(cmd),
-          "parameter": { "data" : True } # if possible
-      }
-    )
+    if lastCmd.get(cmd, False):
+      lastCmd[cmd] = True
+      out = await conn.datachannel.pub_sub.publish_request_new(
+        RTC_TOPIC["SPORT_MOD"], {
+            "api_id": SPORT_CMD[cmd],
+            "parameter": { "data" : True } # if possible
+        }
+      )       
+    else:
+      lastCmd[cmd] = False
+      out = await conn.datachannel.pub_sub.publish_request_new(
+        RTC_TOPIC["SPORT_MOD"], {
+            "api_id": SPORT_CMD[cmd],
+            "parameter": { "data" : False } # if possible
+        }
+      )
+
+
+  print("response", out)
             
-  return { "result" : True, "data" : True }      
+  return { "result" : True, "data" : out }      
+
+def toFloat(value):
+    try:
+        return float(value)
+    except (ValueError, TypeError):
+        return value
+
+@app.get("/manual")
+async def manual(cmd : str, data : str):
+  out = await conn.datachannel.pub_sub.publish_request_new(
+    RTC_TOPIC["SPORT_MOD"], {
+        "api_id": int(cmd),
+        "parameter": { "data" : toFloat(data) } # if possible
+    }
+  )
+
+  print("response", out)
+            
+  return { "result" : True, "data" : out }      
 
 @app.get("/arm")
 async def arm(cmd = "clamp"):
