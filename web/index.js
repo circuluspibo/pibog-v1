@@ -666,6 +666,8 @@ document.addEventListener('DOMContentLoaded', function() {
             else
                 multi = 0.5
         }
+
+        document.getElementById('object-speed').textContent = multi
     }
 
     // 속도 조정 (geer)
@@ -682,14 +684,14 @@ document.addEventListener('DOMContentLoaded', function() {
         posY = Math.max(0, Math.min(window.innerHeight, posY));
 
         if(dy > 0) // down
-            setSpeed(false) //multi = 0.5
+            multi = 0.5
         else if(dy < 0) // up
-            setSpeed(true)//multi = 2
+            multi = 2
 
         if(dx > 0) // right
-            multi = 1.5
+            multi = 1.5 //setHeight(true)
         else if(dx < 0) // left
-            multi = 1       
+            multi = 1    
 
         document.getElementById('object-speed').textContent = multi
         // 방향 감지
