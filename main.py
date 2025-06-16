@@ -49,6 +49,8 @@ from threading import Event, Thread
 from transformers import AutoTokenizer
 from pydantic import BaseModel, Field
 from iterator import IterableStreamer
+from skimage.morphology import skeletonize
+from scipy.interpolate import splprep, splev
 #optimum-cli export openvino --weight-format int4 --task text-generation-with-past --model growdle/HyperCLOVAX-SEED-Text-Instruct-1.5B ./CLOVAX-1.5B-ov-int4
 #kakaocorp/kanana-1.5-2.1b-instruct-2505
 #https://github.com/Unitree-Go2-Robot/go2_robot
@@ -482,6 +484,41 @@ async def video_feed():
                     contours, _ = cv2.findContours(colored_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
                     cv2.drawContours(frame, contours, -1, (0, 0, 255), 2)
 
+                road_mask = result.masks.data[0].cpu().numpy()  # shape: (H, W)
+
+                # === 4. YOLO - 객체 감지 후 obstacle mask 생성 ===
+                obstacle_mask = np.zeros_like(road_mask, dtype=np.uint8)
+
+                for box in results[0].boxes.xyxy.cpu().numpy():
+                    x1, y1, x2, y2 = map(int, box)
+                    obstacle_mask[y1:y2, x1:x2] = 1
+
+                # === 5. 주행 가능한 경로 마스크 생성 ===
+                safe_path_mask = np.logical_and(road_mask, np.logical_not(obstacle_mask)).astype(np.uint8)
+
+                skeleton = skeletonize(safe_path_mask).astype(np.uint8)
+
+                # 3. (x, y) 좌표 추출 (y: 행, x: 열)
+                y_coords, x_coords = np.nonzero(skeleton)
+
+                # 포인트 수가 너무 많으면 subsample (간격 조정)
+                if len(x_coords) > 100:
+                    x_coords = x_coords[::5]
+                    y_coords = y_coords[::5]
+
+                # 4. Spline 곡선 생성
+                points = [x_coords, y_coords]
+                tck, u = splprep(points, s=5.0)  # s: 부드러움 조절
+
+                # 5. Spline 포인트 평가
+                u_fine = np.linspace(0, 1, 1000)
+                x_smooth, y_smooth = splev(u_fine, tck)
+
+                # 6. 시각화
+                for i in range(1, len(x_smooth)):
+                    pt1 = (int(x_smooth[i - 1]), int(y_smooth[i - 1]))
+                    pt2 = (int(x_smooth[i]), int(y_smooth[i]))
+                    cv2.line(frame, pt1, pt2, (255, 0, 0), 2)  
 
                 processing_times.append(stop_time - start_time)
 
