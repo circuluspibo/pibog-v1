@@ -40,7 +40,7 @@ import cv2
 from openvino import Core
 from fastapi.staticfiles import StaticFiles
 from queue import Queue
-from ultralytics import YOLO
+from ultralytics import YOLO, FastSAM
 import openvino as ov
 from playsound import playsound
 from mandro import HadnControler
@@ -59,6 +59,7 @@ core = ov.Core()
 
 det_ov_model = core.read_model('yolo12m_int8_openvino_model/yolo12m.xml')
 det_model = YOLO('yolo12m_int8_openvino_model', task='detect')
+sam_model = FastSAM("./FastSAM-s_int8_openvino_model")  # or FastSAM-x.pt
 
 det_ov_model.reshape({0: [1, 3, 384, 640]})
 compiled_model = core.compile_model(det_ov_model, 'NPU')
@@ -407,6 +408,7 @@ async def video_feed():
 
                 start_time = time.time()
                 results = det_model(image, verbose=False)[0]
+                result = sam_model(image, device="NPU",retina_masks=True, imgsz=1024, conf=0.8, iou=0.9, texts=['road'])[0] 
                 stop_time = time.time()
 
 
@@ -449,8 +451,38 @@ async def video_feed():
                 state["cnt_live"] = cnt_live
                 state["cnt_object"] = cnt_object
 
-
                 frame = output#.results.plot()
+                ## road detect
+                masks = result.masks.data.cpu().numpy()  # (N, H, W)
+
+                print(result)
+
+                # 복사본 만들기 (출력용)
+                #overlay = img.copy()
+
+                # 마스크 색상 및 투명도 설정
+                mask_color = (0, 255, 0)  # 녹색 (BGR 형식)
+                alpha = 0.5               # 투명도
+
+                for mask in masks:
+                    colored_mask = (mask * 255).astype(np.uint8)
+
+                    # 컬러 마스크 생성
+                    color_layer = np.zeros_like(img, dtype=np.uint8)
+                    color_layer[:, :] = mask_color
+
+                    # 마스크 적용
+                    mask_3ch = cv2.merge([colored_mask] * 3)
+                    masked_color = cv2.bitwise_and(color_layer, mask_3ch)
+
+                    # 오버레이에 컬러 마스크 반영
+                    frame = np.where(mask_3ch > 0, cv2.addWeighted(frame, 1 - alpha, masked_color, alpha, 0), frame)
+
+                    # 윤곽선 그리기 (선택 사항)
+                    contours, _ = cv2.findContours(colored_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                    cv2.drawContours(frame, contours, -1, (0, 0, 255), 2)
+
+
                 processing_times.append(stop_time - start_time)
 
                 if len(processing_times) > 200:
