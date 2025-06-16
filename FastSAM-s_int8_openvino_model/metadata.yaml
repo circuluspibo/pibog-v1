@@ -1,0 +1,22 @@
+description: Ultralytics YOLOv8s-seg model trained on ultralytics/datasets/sa.yaml
+author: Ultralytics
+date: '2025-06-17T07:02:45.528902'
+version: 8.3.151
+license: AGPL-3.0 License (https://ultralytics.com/license)
+docs: https://docs.ultralytics.com
+stride: 32
+task: segment
+batch: 1
+imgsz:
+- 640
+- 640
+names:
+  0: object
+args:
+  batch: 1
+  fraction: 1.0
+  half: false
+  int8: true
+  dynamic: false
+  nms: false
+channels: 3
