@@ -500,7 +500,7 @@ async def sport(cmd : str, x=0.0, y=0.0, z=0.0, data=None):
   elif data != None: # SPORT_CMD[cmd] != None and
     out = await conn.datachannel.pub_sub.publish_request_new(
       RTC_TOPIC["SPORT_MOD"], {
-          "api_id": int(cmd),
+          "api_id": SPORT_CMD[cmd],
           "parameter": { "data" : float(data) } # if possible
       }
     )
