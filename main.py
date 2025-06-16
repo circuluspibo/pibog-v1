@@ -61,7 +61,7 @@ core = ov.Core()
 
 det_ov_model = core.read_model('yolo12m_int8_openvino_model/yolo12m.xml')
 det_model = YOLO('yolo12m_int8_openvino_model', task='detect')
-sam_model = FastSAM("./FastSAM-s_int8_openvino_model")  # or FastSAM-x.pt
+sam_model = FastSAM("FastSAM-s_int8_openvino_model")  # or FastSAM-x.pt
 
 det_ov_model.reshape({0: [1, 3, 384, 640]})
 compiled_model = core.compile_model(det_ov_model, 'NPU')
