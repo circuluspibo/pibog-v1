@@ -222,9 +222,26 @@ def processing_thread():
 
             masks = result.masks.data.cpu().numpy()
             for mask in masks:
-                mask = (mask * 255).astype(np.uint8)
-                contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-                cv2.drawContours(output, contours, -1, (0, 255, 0), 3)
+                #mask = (mask * 255).astype(np.uint8)
+                #contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                #cv2.drawContours(output, contours, -1, (0, 255, 0), 3)
+
+                colored_mask = (mask * 255).astype(np.uint8)
+
+                # 컬러 마스크 생성
+                color_layer = np.zeros_like(output, dtype=np.uint8)
+                color_layer[:, :] = (0, 255, 0) 
+
+                # 마스크 적용
+                mask_3ch = cv2.merge([colored_mask] * 3)
+                masked_color = cv2.bitwise_and(color_layer, mask_3ch)
+
+                # 오버레이에 컬러 마스크 반영
+                output = np.where(mask_3ch > 0, cv2.addWeighted(output, 1 - 0.3, masked_color, 0.3, 0), output)
+
+                # 윤곽선 그리기 (선택 사항)
+                #contours, _ = cv2.findContours(colored_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                #cv2.drawContours(output, contours, -1, (0, 0, 255), 2)
 
             processing_times.append(stop_time - start_time)
             if len(processing_times) > 200:
