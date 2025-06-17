@@ -74,19 +74,6 @@ if det_model.predictor is None:
 
 det_model.predictor.model.ov_compiled_model = compiled_model
 
-"""
-wrapped_model = OVWrapper(
-    "FastSAM-s_int8_openvino_model/FastSAM-s.xml",
-    device="NPU",
-    #stride=sam_model.predictor.model.stride,
-    #ov_config=ov_config,
-)
-
-print(sam_model.keys())
-
-sam_model.predictor.model.model = wrapped_model
-"""
-
 # Enable logging for debugging
 logging.basicConfig(level=logging.ERROR)
 logger = logging.getLogger(__name__)
@@ -136,6 +123,7 @@ G1_BALANCE = {
 }
 
 frame_queue = Queue(maxsize=5)
+processed_frame_queue = Queue(maxsize=5)
 
 cnt_live = 0
 cnt_object = 0
@@ -191,15 +179,78 @@ path_tts = snapshot_download(repo_id="rippertnt/on-vits2-multi-tts-v1", allow_pa
 pipe_tts = core.compile_model(core.read_model(model=f"{path_tts}/all_base_ov.xml"), device_name="CPU", config=config)
 conf_tts = utils.get_hparams_from_file(hf_hub_download(repo_id="rippertnt/on-vits2-multi-tts-v1", filename="all_base.json"))
 
-class Generator(ov_genai.Generator):
-    def __init__(self, seed, mu=0.0, sigma=1.0):
-        ov_genai.Generator.__init__(self)
-        np.random.seed(seed)
-        self.mu = mu
-        self.sigma = sigma
+def processing_thread():
+    global cnt_live, cnt_object, lastTime, state
+    processing_times = collections.deque()
 
-    def next(self):
-        return np.random.normal(self.mu, self.sigma)
+    while True:
+        if not frame_queue.empty():
+            image = np.array(frame_queue.get())
+            cnt_live = 0
+            cnt_object = 0
+
+            start_time = time.time()
+            results = det_model(image, verbose=False)[0]
+            result = sam_model(image, verbose=False, device="intel:npu", retina_masks=True, imgsz=640, conf=0.6, iou=0.9)[0]
+            stop_time = time.time()
+
+            # 결과 처리 (Bounding box, mask 등)
+            names = det_model.names
+            output = image.copy()
+
+            highlight_classes = ['person', 'dog', 'cat', 'horse', 'cow', 'sheep', 'bird', 'elephant', 'bear', 'zebra', 'giraffe','teddy bear']
+            for box in results.boxes:
+                cls_id = int(box.cls.item())
+                cls_name = names[cls_id]
+                conf = box.conf.item()
+                x1, y1, x2, y2 = map(int, box.xyxy[0].tolist())
+
+                if cls_name in highlight_classes:
+                    rgb_color = (0, 0, 255)
+                    cnt_live += 1
+                    lastTime = time.time()
+                else:
+                    rgb_color = (255, 255, 0)
+                    cnt_object += 1
+
+                cv2.rectangle(output, (x1, y1), (x2, y2), rgb_color, 2)
+                label = f'{cls_name} {conf:.2f}'
+                cv2.putText(output, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, rgb_color, 2)
+
+            state["cnt_live"] = cnt_live
+            state["cnt_object"] = cnt_object
+
+            masks = result.masks.data.cpu().numpy()
+            for mask in masks:
+                mask = (mask * 255).astype(np.uint8)
+                contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                cv2.drawContours(output, contours, -1, (0, 255, 0), 3)
+
+            processing_times.append(stop_time - start_time)
+            if len(processing_times) > 200:
+                processing_times.popleft()
+
+            _, f_width = output.shape[:2]
+            processing_time = np.mean(processing_times) * 1000
+            fps = 1000 / processing_time
+            cv2.putText(
+                output,
+                f"Inference time: {processing_time:.1f}ms ({fps:.1f} FPS)",
+                (20, 40),
+                cv2.FONT_HERSHEY_COMPLEX,
+                f_width / 1000,
+                (0, 0, 255),
+                1,
+                cv2.LINE_AA
+            )
+
+            if processed_frame_queue.full():
+              processed_frame_queue.get()  # 가장 오래된 프레임 제거   
+
+            processed_frame_queue.put(output)
+        else:
+            time.sleep(0.01)
+
 
 # for genai
 async def process_stream(streamer, isStream=True, isPlay=0):
@@ -330,7 +381,10 @@ async def connect():
   """
   conn.video.switchVideoChannel(True)
   conn.video.add_track_callback(recv_camera_stream)
-  #print(3)
+  
+  # image processer start
+  threading.Thread(target=processing_thread, daemon=True).start()
+
   def lowstate_callback(message):
     #print(message)
     msg = message['data']      
@@ -405,171 +459,19 @@ async def heartbeat():
 
 @app.get("/video_feed")
 async def video_feed():
-    global frame_queue
-    global cnt_live
-    global cnt_object
-    global lastTime 
-    global state
-    """
-    Endpoint to stream video frames as MJPEG.
-    """
-    def generate():
-        processing_times = collections.deque()
-        while True:
-            if not frame_queue.empty():
-                img = frame_queue.get()
+  def generate():
+    while True:
+        if not processed_frame_queue.empty():
+            output = processed_frame_queue.get()
+            _, img_bytes = cv2.imencode('.jpg', output)
+            frame = img_bytes.tobytes()
 
-                image = np.array(img)
+            yield (b'--frame\r\n'
+                    b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n\r\n')
+        else:
+            time.sleep(0.01)
 
-                start_time = time.time()
-                results = det_model(image, verbose=False)[0]
-                result = sam_model(image, device="intel:npu", verbose=False, retina_masks=True, imgsz=640, conf=0.6, iou=0.9)[0] # texts=['road'] 
-                stop_time = time.time()
-
-
-                # 사람이거나 동물인 클래스 이름들
-                highlight_classes = ['person', 'dog', 'cat', 'horse', 'cow', 'sheep', 'bird', 'elephant', 'bear', 'zebra', 'giraffe','teddy bear']
-
-                # 클래스 ID와 이름 매핑
-                names = det_model.names
-
-                # 결과 이미지 복사
-                output = image.copy()
-
-                cnt_live = 0
-                cnt_object = 0
-                for box in results.boxes:
-                    cls_id = int(box.cls.item())
-                    cls_name = names[cls_id]
-                    conf = box.conf.item()
-                    x1, y1, x2, y2 = map(int, box.xyxy[0].tolist())
-
-                    # 색상 결정: 붉은색 or 파란색
-                    if cls_name in highlight_classes:
-                        rgb_color = (0, 0, 255)  # 붉은색 (BGR)
-                        cnt_live = cnt_live + 1
-                        lastTime = time.time()
-                    else:
-                        rgb_color = (255, 255, 0)  # 다른 색 (예: 노란색)
-                        cnt_object = cnt_object + 1
-
-                    # 바운딩 박스 그리기
-                    cv2.rectangle(output, (x1, y1), (x2, y2), rgb_color, 2)
-                    label = f'{cls_name} {conf:.2f}'
-                    cv2.putText(output, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, rgb_color, 2)
-
-                #if cnt_live > 0:
-                #  await color('red',True)
-                #else:
-                #  await color('cyan')
-
-                state["cnt_live"] = cnt_live
-                state["cnt_object"] = cnt_object
-
-                #frame = output#.results.plot()
-                ## road detect
-                masks = result.masks.data.cpu().numpy()  # (N, H, W)
-
-                #print(result)
-
-                # 복사본 만들기 (출력용)
-                #overlay = img.copy()
-
-                # 마스크 색상 및 투명도 설정
-                mask_color = (0, 255, 0)  # 녹색 (BGR 형식)
-                alpha = 0.5               # 투명도
-
-                for mask in masks:
-                    colored_mask = (mask * 255).astype(np.uint8) * 255
-                    # 윤곽선 그리기 (선택 사항)
-                    contours, _ = cv2.findContours(colored_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-                    cv2.drawContours(output, contours, -1, (0, 255, 0), 3)                    
-
-                    """
-                    colored_mask = (mask * 255).astype(np.uint8)
-
-                    # 컬러 마스크 생성
-                    color_layer = np.zeros_like(img, dtype=np.uint8)
-                    color_layer[:, :] = mask_color
-
-                    # 마스크 적용
-                    mask_3ch = cv2.merge([colored_mask] * 3)
-                    masked_color = cv2.bitwise_and(color_layer, mask_3ch)
-
-                    # 오버레이에 컬러 마스크 반영
-                    frame = np.where(mask_3ch > 0, cv2.addWeighted(frame, 1 - alpha, masked_color, alpha, 0), frame)
-
-                    # 윤곽선 그리기 (선택 사항)
-                    contours, _ = cv2.findContours(colored_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-                    cv2.drawContours(frame, contours, -1, (0, 0, 255), 2)
-                    """
-                """
-                road_mask = result.masks.data[0].cpu().numpy()  # shape: (H, W)
-
-                # === 4. YOLO - 객체 감지 후 obstacle mask 생성 ===
-                obstacle_mask = np.zeros_like(road_mask, dtype=np.uint8)
-
-                for box in results[0].boxes.xyxy.cpu().numpy():
-                    x1, y1, x2, y2 = map(int, box)
-                    obstacle_mask[y1:y2, x1:x2] = 1
-
-                # === 5. 주행 가능한 경로 마스크 생성 ===
-                safe_path_mask = np.logical_and(road_mask, np.logical_not(obstacle_mask)).astype(np.uint8)
-
-                skeleton = skeletonize(safe_path_mask).astype(np.uint8)
-
-                # 3. (x, y) 좌표 추출 (y: 행, x: 열)
-                y_coords, x_coords = np.nonzero(skeleton)
-
-                # 포인트 수가 너무 많으면 subsample (간격 조정)
-                if len(x_coords) > 100:
-                    x_coords = x_coords[::5]
-                    y_coords = y_coords[::5]
-
-                # 4. Spline 곡선 생성
-                points = [x_coords, y_coords]
-                tck, u = splprep(points, s=5.0)  # s: 부드러움 조절
-
-                # 5. Spline 포인트 평가
-                u_fine = np.linspace(0, 1, 1000)
-                x_smooth, y_smooth = splev(u_fine, tck)
-
-                # 6. 시각화
-                for i in range(1, len(x_smooth)):
-                    pt1 = (int(x_smooth[i - 1]), int(y_smooth[i - 1]))
-                    pt2 = (int(x_smooth[i]), int(y_smooth[i]))
-                    cv2.line(frame, pt1, pt2, (255, 0, 0), 2)  
-                """
-                processing_times.append(stop_time - start_time)
-
-                if len(processing_times) > 200:
-                    #print(detections)
-                    processing_times.popleft()                
-                    
-                _, f_width = frame.shape[:2]
-                processing_time = np.mean(processing_times) * 1000
-                fps = 1000 / processing_time
-                
-                cv2.putText(
-                  img=output,
-                  text=f"Inference time: {processing_time:.1f}ms ({fps:.1f} FPS)",
-                  org=(20, 40),
-                  fontFace=cv2.FONT_HERSHEY_COMPLEX,
-                  fontScale=f_width / 1000,
-                  color=(0, 0, 255),
-                  thickness=1,
-                  lineType=cv2.LINE_AA,
-                )
-
-                _, img_bytes = cv2.imencode('.jpg', frame)
-                frame = img_bytes.tobytes()
-
-                yield (b'--frame\r\n'
-                       b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n\r\n')
-            else:
-                time.sleep(0.01)
-
-    return StreamingResponse(generate(), media_type="multipart/x-mixed-replace; boundary=frame")
+  return StreamingResponse(generate(), media_type="multipart/x-mixed-replace; boundary=frame")
 
 lastCmd = {} 
 

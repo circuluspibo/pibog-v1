@@ -404,13 +404,15 @@ async def video_feed():
         processing_times = collections.deque()
         while True:
             if not frame_queue.empty():
-                img = frame_queue.get()
+                cnt_live = 0
+                cnt_object = 0
 
-                image = np.array(img)
+                image = np.array(frame_queue.get())
 
                 start_time = time.time()
                 results = det_model(image, verbose=False)[0]
-                result = sam_model(image, device="NPU",retina_masks=True, imgsz=1024, conf=0.8, iou=0.9, texts=['road'])[0] 
+                result = sam_model(image, verbose=False, device="intel:npu", retina_masks=True, imgsz=640, conf=0.6, iou=0.9)[0] # texts=['road'] 
+
                 stop_time = time.time()
 
 
@@ -423,8 +425,6 @@ async def video_feed():
                 # 결과 이미지 복사
                 output = image.copy()
 
-                cnt_live = 0
-                cnt_object = 0
                 for box in results.boxes:
                     cls_id = int(box.cls.item())
                     cls_name = names[cls_id]
@@ -445,28 +445,22 @@ async def video_feed():
                     label = f'{cls_name} {conf:.2f}'
                     cv2.putText(output, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, rgb_color, 2)
 
-                #if cnt_live > 0:
-                #  await color('red',True)
-                #else:
-                #  await color('cyan')
-
                 state["cnt_live"] = cnt_live
                 state["cnt_object"] = cnt_object
 
-                frame = output#.results.plot()
-                ## road detect
+
                 masks = result.masks.data.cpu().numpy()  # (N, H, W)
 
-                print(result)
-
-                # 복사본 만들기 (출력용)
-                #overlay = img.copy()
-
-                # 마스크 색상 및 투명도 설정
                 mask_color = (0, 255, 0)  # 녹색 (BGR 형식)
                 alpha = 0.5               # 투명도
 
                 for mask in masks:
+                    colored_mask = (mask * 255).astype(np.uint8) * 255
+                    # 윤곽선 그리기 (선택 사항)
+                    contours, _ = cv2.findContours(colored_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                    cv2.drawContours(output, contours, -1, (0, 255, 0), 3)                    
+
+                    """
                     colored_mask = (mask * 255).astype(np.uint8)
 
                     # 컬러 마스크 생성
@@ -483,7 +477,8 @@ async def video_feed():
                     # 윤곽선 그리기 (선택 사항)
                     contours, _ = cv2.findContours(colored_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
                     cv2.drawContours(frame, contours, -1, (0, 0, 255), 2)
-
+                    """
+                """
                 road_mask = result.masks.data[0].cpu().numpy()  # shape: (H, W)
 
                 # === 4. YOLO - 객체 감지 후 obstacle mask 생성 ===
@@ -519,19 +514,19 @@ async def video_feed():
                     pt1 = (int(x_smooth[i - 1]), int(y_smooth[i - 1]))
                     pt2 = (int(x_smooth[i]), int(y_smooth[i]))
                     cv2.line(frame, pt1, pt2, (255, 0, 0), 2)  
-
+                """
                 processing_times.append(stop_time - start_time)
 
                 if len(processing_times) > 200:
                     #print(detections)
                     processing_times.popleft()                
                     
-                _, f_width = frame.shape[:2]
+                _, f_width = output.shape[:2]
                 processing_time = np.mean(processing_times) * 1000
                 fps = 1000 / processing_time
                 
                 cv2.putText(
-                  img=frame,
+                  img=output,
                   text=f"Inference time: {processing_time:.1f}ms ({fps:.1f} FPS)",
                   org=(20, 40),
                   fontFace=cv2.FONT_HERSHEY_COMPLEX,
@@ -541,7 +536,7 @@ async def video_feed():
                   lineType=cv2.LINE_AA,
                 )
 
-                _, img_bytes = cv2.imencode('.jpg', frame)
+                _, img_bytes = cv2.imencode('.jpg', output)
                 frame = img_bytes.tobytes()
 
                 yield (b'--frame\r\n'
@@ -569,7 +564,7 @@ async def sport(cmd : str, x=0.0, y=0.0, z=0.0, data=None):
   elif data != None: # SPORT_CMD[cmd] != None and
     out = await conn.datachannel.pub_sub.publish_request_new(
       RTC_TOPIC["SPORT_MOD"], {
-          "api_id": int(cmd),
+          "api_id": SPORT_CMD[cmd],
           "parameter": { "data" : float(data) } # if possible
       }
     )
