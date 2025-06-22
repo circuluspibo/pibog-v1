@@ -123,8 +123,6 @@ function getDirection() {
     const rt_left = keysPressed['PageUp'];
     const rt_right = keysPressed['PageDown'];
 
-    cmd = ''
-
     if( lastPressed['ArrowUp'] != keysPressed['ArrowUp'] ||lastPressed['ArrowDown'] != keysPressed['ArrowDown'] || 
         lastPressed['ArrowLeft'] != keysPressed['ArrowLeft'] ||lastPressed['ArrowRight'] != keysPressed['ArrowRight'] ||
         lastPressed['PageUp'] != keysPressed['PageUp'] ||lastPressed['PageDown'] != keysPressed['PageDown']){
@@ -160,19 +158,24 @@ function getDirection() {
     else if (rt_right)
         rx = -1 * smooth(multi)
     
-    // 명령어 생성
-    if(lx || rx || ly || ry){
-        cmd = `lx=${lx}&rx=${rx}&ly=${ly}&ry=${ry}`
-        if(lastCmd != cmd){
-            console.log('cmd',cmd)    
-            lastCmd = cmd
-        }
+    // 명령어 생성 // pion 은 정지 명령도 필요하여 무조건 전송 - 다만 기존과 다를때만
+    const cmd = `lx=${lx}&rx=${rx}&ly=${ly}&ry=${ry}`
+
+    if(lastCmd != cmd){
+        console.log('cmd',cmd)    
+        lastCmd = cmd
         
         fetch(`/walkG1?${cmd}`)
     }
-    
 }
 
+
+function gameLoop() {
+  getDirection()
+  requestAnimationFrame(gameLoop)
+}
+
+gameLoop() // 루프 시작
 
 // 글로벌 키 입력 감지
 /*
