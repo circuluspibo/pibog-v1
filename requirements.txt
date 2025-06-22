@@ -21,3 +21,8 @@ eng-to-ipa
 cn2an
 unidecode
 python-multipart
+pydub
+ultralytics
+playsound==1.2.2
+pyserial
+scikit-image

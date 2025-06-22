@@ -5,7 +5,7 @@ var gumStream;              //stream from getUserMedia()
 var rec;                    //Recorder.js object
 var input;                  //MediaStreamAudioSourceNode we'll be recording
 
-let multi = 1
+let multi = 0.5
 
 // shim for AudioContext when it's not avb.
 var AudioContext = window.AudioContext || window.webkitAudioContext;
@@ -192,19 +192,19 @@ function startKeyRepeat(key) {
         }
         switch (key) {
             case "ArrowUp":
-                cmd = `/walkG1?lx=0&rx=0&ly=${0.5 * multi}&ry=${0.5 * multi}`
+                cmd = `/walkG1?lx=0&rx=0&ly=${multi}&ry=${multi}`
                 break;
             case "ArrowDown":
-                cmd = `/walkG1?lx=0&rx=0&ly=${-0.5 * multi}&ry=${-0.5 * multi}`
+                cmd = `/walkG1?lx=0&rx=0&ly=${-1 * multi}&ry=${-1 * multi}`
                 break;
             case "ArrowLeft":
-                cmd = `/walkG1?lx=${-0.5 * multi}&rx=0&ly=0&ry=0`
+                cmd = `/walkG1?lx=${-1 * multi}&rx=0&ly=0&ry=0`
                 break;
             case "ArrowRight":
-                cmd = `/walkG1?lx=0&rx=${0.5 * multi}&ly=0&ry=0`
+                cmd = `/walkG1?lx=0&rx=${multi}&ly=0&ry=0`
                 break;
             case "PageUp":
-                cmd = `/walkG1?lx=0&rx=0&ly=${1 * multi}&ry=${1 * multi}`
+                cmd = `/walkG1?lx=0&rx=0&ly=${multi}&ry=${multi}`
                 break;
             case "PageDown":
                 cmd = `/walkG1?lx=0&rx=0&ly=${-1 * multi}&ry=${-1 * multi}`
@@ -238,6 +238,7 @@ document.addEventListener("keyup", (event) => {
 let mode = 'normal'
 
 document.addEventListener('DOMContentLoaded', function() {
+    document.getElementById('object-speed').textContent = multi
     // 모든 기능 버튼에 클릭 이벤트 추가
     const allButtons = document.querySelectorAll('.function-button, .pad-button, .rotation-button, .mic-button');
     
@@ -615,4 +616,136 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // 주기적으로 카운트 업데이트 (3초마다)
     setInterval(updateCounts, 3000);
+
+   // 마우스 이벤트 처리
+ 
+    const canvas = document.querySelector(".hud-container");
+
+    let posX = window.innerWidth / 2;
+    let posY = window.innerHeight / 2;
+
+    // 포인터 잠금 요청
+    canvas.addEventListener('click', () => {
+
+        if (document.documentElement.requestFullscreen) 
+            document.documentElement.requestFullscreen()
+
+        canvas.requestPointerLock()
+    })
+
+    document.addEventListener('pointerlockchange', () => {
+      if (document.pointerLockElement === canvas) {
+        document.addEventListener("mousemove", updatePosition, false);
+      } else {
+        document.removeEventListener("mousemove", updatePosition, false);
+      }
+    });
+
+
+    let rLevel = 0
+    let rHeight = 0.5
+
+    async function setLevel(){
+        if(rLevel == 0)
+            rLevel == 1
+        else 
+            rLevel == 0
+
+        const response = await fetch(`/sport?cmd=SpeedLevel&data=${rLevel}`)
+        if (!response.ok) {
+            throw new Error(`Response status: ${response.status}`)
+        }
+
+        const json = await response.json()
+        console.log(cmd ,json)
+    }
+
+    async function setHeight(){
+        if(rHeight == 0.5)
+            rHeight == 0.3
+        else
+            rHeight == 0.5
+
+        const response = await fetch(`/sport?cmd=BodyHeight&data=${rHeight}`)
+        if (!response.ok) {
+            throw new Error(`Response status: ${response.status}`)
+        }
+
+        const json = await response.json()
+        console.log(cmd ,json)            
+    }    
+
+    function setSpeed(isUp){
+        if(isUp){
+            if(multi == 0.5)
+                multi = 1
+            else if(multi == 1)
+                multi = 1.5
+            else if(multi == 1.5)
+                multi = 2
+            else
+                multi = 2
+        } else {
+            if(multi == 2)
+                multi = 1.5
+            else if(multi == 1.5)
+                multi = 1
+            else if(multi == 1)
+                multi = 0.5
+            else
+                multi = 0.5
+        }
+
+        document.getElementById('object-speed').textContent = multi
+    }
+
+    // 속도 조정 (geer)
+    async function updatePosition(e) {
+        const dx = e.movementX;
+        const dy = e.movementY;
+
+        // 좌표 업데이트
+        posX += dx;
+        posY += dy;
+
+        // 화면 경계 제한
+        posX = Math.max(0, Math.min(window.innerWidth, posX));
+        posY = Math.max(0, Math.min(window.innerHeight, posY));
+
+        if(dy > 0) // down
+            multi = 0.5
+        else if(dy < 0) // up
+            multi = 2
+
+        if(dx > 0) // right
+            multi = 1.5 //setHeight(true)
+        else if(dx < 0) // left
+            multi = 1    
+
+        document.getElementById('object-speed').textContent = multi
+        // 방향 감지
+
+        /*
+        keysPressed['ArrowRight'] = false
+        keysPressed['ArrowLeft'] = false
+        keysPressed['ArrowDown'] = false
+        keysPressed['ArrowUp'] = false        
+        let key = '-';
+        key = dx > 0 ? 'ArrowRight' : 'ArrowLeft';
+
+        if(dx > 0)
+            keysPressed['ArrowRight'] = true
+        else if(dx < 0)
+            keysPressed['ArrowLeft'] = true
+        
+        key = dy > 0 ? 'ArrowDown' : 'ArrowUp';
+
+        if(dy > 0)
+            keysPressed['ArrowDown'] = true
+        else if(dy < 0)
+            keysPressed['ArrowUp'] = true
+        */        
+    }
+
+
 });

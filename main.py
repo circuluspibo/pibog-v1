@@ -16,7 +16,6 @@ from transformers import AutoTokenizer
 from pydantic import BaseModel, Field
 import numpy as np
 import openvino_genai as ov_genai
-import onnxruntime as rt
 import utils
 import commons
 from scipy.io.wavfile import write
@@ -25,6 +24,7 @@ import torch
 import json
 from pydub import AudioSegment
 from serverinfo import si
+#import onnxruntime as rt
 #import onnxruntime_genai as og
 #from llama_cpp import Llama
 import asyncio
@@ -51,6 +51,7 @@ from pydantic import BaseModel, Field
 from iterator import IterableStreamer
 from skimage.morphology import skeletonize
 from scipy.interpolate import splprep, splev
+from fastapi.middleware.cors import CORSMiddleware
 #optimum-cli export openvino --weight-format int4 --task text-generation-with-past --model growdle/HyperCLOVAX-SEED-Text-Instruct-1.5B ./CLOVAX-1.5B-ov-int4
 #kakaocorp/kanana-1.5-2.1b-instruct-2505
 #https://github.com/Unitree-Go2-Robot/go2_robot
@@ -133,6 +134,15 @@ app = FastAPI()
 
 app.mount("/web", StaticFiles(directory="web"), name="web")
 app.mount("/webfonts", StaticFiles(directory="webfonts"), name="webfonts")
+
+# 모든 도메인 허용 (allow_origins에 '*' 설정)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # 모든 도메인 허용
+    allow_credentials=True,  # 쿠키나 자격 증명 허용
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],  # 허용할 HTTP 메소드
+    allow_headers=["*"],  # 모든 헤더 허용
+)
 
 class Param (BaseModel):
   text : str
