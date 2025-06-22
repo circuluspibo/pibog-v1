@@ -87,142 +87,92 @@ function stt(blob){
 
 }
 
-let keyStatus = {
-    ArrowUp: false,
-    ArrowDown: false,
-    ArrowLeft: false,
-    ArrowRight: false,
-    PageUp: false,
-    PageDown: false,
-    Escape : false
-};
 
-const intervalTime = 100; // 키가 눌린 상태에서 반복하는 간격 (ms)
+window.addEventListener('keydown', async (e) => {
+    console.log(e.key)
+    keysPressed[e.key] = true;
 
-// 키가 눌렸을 때
-document.addEventListener("keydown", (event) => {
-    switch (event.key) {
-        case "ArrowUp":
-            if (!keyStatus.ArrowUp) {
-                keyStatus.ArrowUp = true;
-                startKeyRepeat("ArrowUp");
-            }
-            break;
-        case "ArrowDown":
-            if (!keyStatus.ArrowDown) {
-                keyStatus.ArrowDown = true;
-                startKeyRepeat("ArrowDown");
-            }
-            break;
-        case "ArrowLeft":
-            if (!keyStatus.ArrowLeft) {
-                keyStatus.ArrowLeft = true;
-                startKeyRepeat("ArrowLeft");
-            }
-            break;
-        case "ArrowRight":
-            if (!keyStatus.ArrowRight) {
-                keyStatus.ArrowRight = true;
-                startKeyRepeat("ArrowRight");
-            }
-            break;
-        case "PageUp":
-            if (!keyStatus.PageUp) {
-                keyStatus.PageUp = true;
-                startKeyRepeat("PageUp");
-            }
-            break;
-        case "PageDown":
-            if (!keyStatus.PageDown) {
-                keyStatus.PageDown = true;
-                startKeyRepeat("PageDown");
-            }
-            break;
+    /*
+    if(e.key == 'Escape'){
+        const response = await fetch(`/sport?cmd=Hello`)
+        if (!response.ok) {
+            throw new Error(`Response status: ${response.status}`)
+        }
+
+        const json = await response.json()
+        console.log(cmd ,json)
     }
+    */
 });
 
-// 키가 떼어졌을 때
-document.addEventListener("keyup", async (event) => {
+window.addEventListener('keyup', (e) => {
+    keysPressed[e.key] = false;
+});
+
+
+const lastPressed = {}
+let lastCmd = ''
+
+function getDirection() {
+
+    const up = keysPressed['ArrowUp'];
+    const down = keysPressed['ArrowDown'];
+    const left = keysPressed['ArrowLeft'];
+    const right = keysPressed['ArrowRight'];
+
+    const rt_left = keysPressed['PageUp'];
+    const rt_right = keysPressed['PageDown'];
 
     cmd = ''
 
-    switch (event.key) {
-        case "ArrowUp":
-            keyStatus.ArrowUp = false;
-            cmd = '/walkG1?lx=0&rx=0&ly=0&ry=0'
-            break;
-        case "ArrowDown":
-            keyStatus.ArrowDown = false;
-            cmd = '/walkG1?lx=0&rx=0&ly=0&ry=0'
-            break;
-        case "ArrowLeft":
-            keyStatus.ArrowLeft = false;
-            cmd = '/walkG1?lx=0&rx=0&ly=0&ry=0'
-            break;
-        case "ArrowRight":
-            keyStatus.ArrowRight = false;
-            cmd = '/walkG1?lx=0&rx=0&ly=0&ry=0'
-            break;
-        case "PageUp":
-            keyStatus.PageUp = false;
-            cmd = '/walkG1?lx=0&rx=0&ly=0&ry=0'
-            break;
-        case "PageDown":
-            keyStatus.PageDown = false;
-            cmd = '/walkG1?lx=0&rx=0&ly=0&ry=0'
-            break;
+    if( lastPressed['ArrowUp'] != keysPressed['ArrowUp'] ||lastPressed['ArrowDown'] != keysPressed['ArrowDown'] || 
+        lastPressed['ArrowLeft'] != keysPressed['ArrowLeft'] ||lastPressed['ArrowRight'] != keysPressed['ArrowRight'] ||
+        lastPressed['PageUp'] != keysPressed['PageUp'] ||lastPressed['PageDown'] != keysPressed['PageDown']){
+
+        console.log('control',`/up ${up} /down ${down} /left ${left} /right ${right} / rt_left ${rt_left} /rt_right ${rt_right}`)
+        lastPressed['ArrowUp'] = keysPressed['ArrowUp']
+        lastPressed['ArrowDown'] = keysPressed['ArrowDown']
+        lastPressed['ArrowLeft'] = keysPressed['ArrowLeft']
+        lastPressed['ArrowRight'] = keysPressed['ArrowRight']
+        lastPressed['PageUp'] = keysPressed['PageUp']
+        lastPressed['PageDown'] = keysPressed['PageDown']
     }
+        
+    let lx = 0, ly = 0, rx = 0, ry=0
 
-    if(cmd){
-        const response = await fetch(`/walkG1?${cmd}`)
-        if (!response.ok) {
-            throw new Error(`Response status: ${response.status}`)
-        }
-    
-        const json = await response.json()
-        console.log(cmd ,json)
+    // 방향 이동 처리
+    if (up) { // ⬆ 북쪽
+        ly = multi
+        ry = multi
+    } else if (down) { // ⬇ 남쪽
+        ly = -1 * multi
+        ry = -1 * multi
     }
-});
-
-// 키가 반복적으로 눌릴 때 실행될 함수
-function startKeyRepeat(key) {
-    const interval = setInterval(async () => {
-        if (!keyStatus[key]) {
-            clearInterval(interval); // 키가 떼어졌으면 반복 멈춤
-        }
-        switch (key) {
-            case "ArrowUp":
-                cmd = `/walkG1?lx=0&rx=0&ly=${multi}&ry=${multi}`
-                break;
-            case "ArrowDown":
-                cmd = `/walkG1?lx=0&rx=0&ly=${-1 * multi}&ry=${-1 * multi}`
-                break;
-            case "ArrowLeft":
-                cmd = `/walkG1?lx=${-1 * multi}&rx=0&ly=0&ry=0`
-                break;
-            case "ArrowRight":
-                cmd = `/walkG1?lx=0&rx=${multi}&ly=0&ry=0`
-                break;
-            case "PageUp":
-                cmd = `/walkG1?lx=0&rx=0&ly=${multi}&ry=${multi}`
-                break;
-            case "PageDown":
-                cmd = `/walkG1?lx=0&rx=0&ly=${-1 * multi}&ry=${-1 * multi}`
-                break;
-        }
-        // 여기에 방향키 또는 페이지 업/다운에 대한 원하는 동작을 추가
-
-        const response = await fetch(cmd)
-        if (!response.ok) {
-            throw new Error(`Response status: ${response.status}`)
-        }
     
-        const json = await response.json()
-        console.log(cmd ,json)
+    if (left)  // ⬅ 서쪽
+        lx = - 1 * smooth(multi)
+    else if (right) // ➡ 동쪽
+        lx = smooth(multi)
 
-    }, intervalTime);
+    // 회전 처리
+    if (rt_left)
+        rx = smooth(multi)
+    else if (rt_right)
+        rx = -1 * smooth(multi)
+    
+    // 명령어 생성
+    if(lx || rx || ly || ry){
+        cmd = `lx=${lx}&rx=${rx}&ly=${ly}&ry=${ry}`
+        if(lastCmd != cmd){
+            console.log('cmd',cmd)    
+            lastCmd = cmd
+        }
+        
+        fetch(`/walkG1?${cmd}`)
+    }
     
 }
+
 
 // 글로벌 키 입력 감지
 /*
@@ -270,23 +220,23 @@ document.addEventListener('DOMContentLoaded', function() {
                     cmd = '/walkG1?lx=0&rx=0&ly=0&ry=0'
                     break;                
                 case 'move-up':
-                    cmd = `/walkG1?lx=0&rx=0&ly=${0.5 * multi}&ry=${0.5 * multi}`
+                    cmd = `/walkG1?lx=0&rx=0&ly=${1 * multi}&ry=${1 * multi}`
                     break;
                 case 'move-down':
-                    cmd = `/walkG1?lx=0&rx=0&ly=${-0.5 * multi}&ry=${-0.5 * multi}`
+                    cmd = `/walkG1?lx=0&rx=0&ly=${-1 * multi}&ry=${-1 * multi}`
                     break;                                        
                 case 'move-left':
-                    cmd = `/walkG1?lx=${-0.5 * multi}&rx=0&ly=0&ry=0`
+                    cmd = `/walkG1?lx=${-1 * multi}&rx=0&ly=0&ry=0`
                     break;
                 case 'move-right':
-                    cmd = `/walkG1?lx=${0.5 * multi}&rx=0&ly=0&ry=0`
+                    cmd = `/walkG1?lx=${1 * multi}&rx=0&ly=0&ry=0`
                     break;
                 case 'rotate-left':
-                    cmd = `/walkG1?lx=0&rx=${-0.5 * multi}&ly=0&ry=0`
+                    cmd = `/walkG1?lx=0&rx=${-1 * multi}&ly=0&ry=0`
                     //cmd = `/walkG1?lx=${-0.5 * multi}&rx=${-0.5 * multi}&ly=0&ry=0`
                     break;
                 case 'rotate-right':
-                    cmd = `/walkG1?lx=0&rx=${0.5 * multi}&ly=0&ry=0`
+                    cmd = `/walkG1?lx=0&rx=${1 * multi}&ly=0&ry=0`
                     //cmd = `/walkG1?lx=${0.5 * multi}&rx=${0.5 * multi}&ly=0&ry=0`
                     break;                    
                 case 'tilt-up':
