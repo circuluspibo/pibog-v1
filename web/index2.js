@@ -6,6 +6,7 @@ var rec;                    //Recorder.js object
 var input;                  //MediaStreamAudioSourceNode we'll be recording
 
 let multi = 0.5
+let state = 'Walk_G1'
 
 // shim for AudioContext when it's not avb.
 var AudioContext = window.AudioContext || window.webkitAudioContext;
@@ -87,6 +88,16 @@ function stt(blob){
 
 }
 
+function smooth(value){
+    if(value < 0.5)
+        return 0.5
+    else if (value > 1)
+        return 0.75
+    else    
+        return value
+}
+
+const keysPressed ={}
 
 window.addEventListener('keydown', async (e) => {
     console.log(e.key)
@@ -109,9 +120,10 @@ window.addEventListener('keyup', (e) => {
     keysPressed[e.key] = false;
 });
 
-
+let intv = 0
 const lastPressed = {}
 let lastCmd = ''
+let lastState = 'stop'
 
 function getDirection() {
 
@@ -137,12 +149,15 @@ function getDirection() {
     }
         
     let lx = 0, ly = 0, rx = 0, ry=0
+ 
 
     // 방향 이동 처리
     if (up) { // ⬆ 북쪽
         ly = multi
         ry = multi
+        lastState = 'up'
     } else if (down) { // ⬇ 남쪽
+        lastState = 'down'        
         ly = -1 * multi
         ry = -1 * multi
     }
@@ -154,18 +169,32 @@ function getDirection() {
 
     // 회전 처리
     if (rt_left)
-        rx = smooth(multi)
-    else if (rt_right)
         rx = -1 * smooth(multi)
+    else if (rt_right)
+        rx = smooth(multi)
     
     // 명령어 생성 // pion 은 정지 명령도 필요하여 무조건 전송 - 다만 기존과 다를때만
     const cmd = `lx=${lx}&rx=${rx}&ly=${ly}&ry=${ry}`
+
+    document.getElementById('log').value = cmd
+
+    clearInterval(intv)
 
     if(lastCmd != cmd){
         console.log('cmd',cmd)    
         lastCmd = cmd
         
-        fetch(`/walkG1?${cmd}`)
+        if(cmd == 'lx=0&rx=0&ly=0&ry=0' && lastState == 'up'){
+            lastState = 'stop'
+            fetch(`/walkG1?lx=0&rx=0&ly=0.5&ry=0.5`)
+
+            intv = setTimeout(function(){
+                console.log('smooth stop....')
+                fetch(`/walkG1?lx=0&rx=0&ly=0&ry=0`)
+            },1000)
+            
+        } else
+            fetch(`/walkG1?${cmd}`)
     }
 }
 
@@ -299,11 +328,16 @@ document.addEventListener('DOMContentLoaded', function() {
                 default:
                     if(this.classList.contains('hands'))
                         cmd = `/hand?cmd=${this.id}`
-                    else if(this.classList.contains('states'))
+                    else if(this.classList.contains('states')){
+                        state = this.id
                         cmd = `/stateG1?cmd=${this.id}`                    
-                    else
+                    } else
                         cmd = `/arm?cmd=${this.id}`
             }
+
+
+            document.getElementById('log').value = cmd
+
             const response = await fetch(cmd)
             if (!response.ok) {
                 throw new Error(`Response status: ${response.status}`)
@@ -597,6 +631,16 @@ document.addEventListener('DOMContentLoaded', function() {
 
     let rLevel = 0
     let rHeight = 0.5
+
+
+    function smooth(value){
+        if(value < 0.5)
+            return 0.5
+        else if (value > 1)
+            return 1
+        else    
+            return value
+    }
 
     async function setLevel(){
         if(rLevel == 0)

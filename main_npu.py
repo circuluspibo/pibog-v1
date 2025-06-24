@@ -52,9 +52,16 @@ from iterator import IterableStreamer
 from skimage.morphology import skeletonize
 from scipy.interpolate import splprep, splev
 from fastapi.middleware.cors import CORSMiddleware
+import hashlib
 #optimum-cli export openvino --weight-format int4 --task text-generation-with-past --model growdle/HyperCLOVAX-SEED-Text-Instruct-1.5B ./CLOVAX-1.5B-ov-int4
 #kakaocorp/kanana-1.5-2.1b-instruct-2505
 #https://github.com/Unitree-Go2-Robot/go2_robot
+
+
+def getHash(text):
+  hash_func = hashlib.new('md5')
+  hash_func.update(text.encode('utf-8'))
+  return hash_func.hexdigest()
 
 hL = None
 hR = None
@@ -135,7 +142,6 @@ app = FastAPI()
 app.mount("/web", StaticFiles(directory="web"), name="web")
 app.mount("/webfonts", StaticFiles(directory="webfonts"), name="webfonts")
 
-# 모든 도메인 허용 (allow_origins에 '*' 설정)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # 모든 도메인 허용
@@ -144,44 +150,6 @@ app.add_middleware(
     allow_headers=["*"],  # 모든 헤더 허용
 )
 
-class Param (BaseModel):
-  text : str
-  hash : str = Field(default='')
-  voice : str = Field(default='main') 
-  lang : str = Field(default='ko')
-  type : str = Field(default='mp3')
-  pitch : str = Field(default='medium')
-  rate : str = Field(default='medium')
-  volume : str = Field(default='medium')
-
-
-#path_model_tts = hf_hub_download(repo_id="rippertnt/on-vits2-multi-tts-v1", filename="ko_base_f16.onnx")
-#path_conf_tts = hf_hub_download(repo_id="rippertnt/on-vits2-multi-tts-v1", filename="ko_base.json")
-#path_stt = snapshot_download(repo_id="circulus/whisper-large-v3-turbo-ov-int4")
-#path_text = snapshot_download(repo_id="circulus/gemma-3-1b-it-gguf")
-
-_SYSTEM = "당신은 서큘러스에서 만든 파이봇 이라고 하는 강아지 로봇 인공지능 입니다. 젊은 톤의 대화체로 입력된 언어로 사람 같이 짧게 응답하세요."
-
-class Chat(BaseModel):
-  prompt : str = ''
-  lang : str = 'auto'
-  type : str =  "당신은 서큘러스에서 만든 파이봇 이라고 하는 강아지 로봇 인공지능 입니다. 젊은 톤의 대화체로 입력된 언어로 사람 같이 짧게 응답하세요." #" "당신은 데이비드라고 하는 10살 남자아이 성향의 유쾌하고 즐거운 인공지능입니다. 이모티콘도 잘 활용해서 젊은 말투로 대답하세요."
-  rag :  str = ''  
-  temp : float = 0.5
-  top_p : float = 0.92
-  top_k : int = 50
-  max : int = 256 #16384
-
-# gemma-3-1b-it-Q4_K_M.gguf
-#model_txt = Llama("../models/txt/hyperclovax-seed-text-instruct-1.5b-q4_k_m.gguf", n_threads=4, verbose=False) #from_pretrained
-
-token_txt = AutoTokenizer.from_pretrained("../models/CLOVAX-1.5B-ov-int4")
-pipe_txt = ov_genai.LLMPipeline("../models/CLOVAX-1.5B-ov-int4", device="GPU")
-
-pipe_stt = ov_genai.WhisperPipeline('../models/stt',device="GPU")
-
-#pipe_tts = rt.InferenceSession('../models/tts/ko_base_f16.onnx', sess_options=rt.SessionOptions(), providers=["OpenVINOExecutionProvider"], provider_options=[{"device_type" : "CPU" }]) #, "precision" : "FP16"
-#conf_tts = utils.get_hparams_from_file('../models/tts/ko_base.json')
 
 core = Core()
 config = {"PERFORMANCE_HINT": "LATENCY"}
@@ -276,100 +244,8 @@ def processing_thread():
 
             processed_frame_queue.put(output)
         else:
-            time.sleep(0.01)
+            time.sleep(0.001)
 
-
-# for genai
-async def process_stream(streamer, isStream=True, isPlay=0):
-  cnt = 0
-  sentence = ""
-  print("streaming start...")
-  for new_token in streamer:
-    if "assistant" in new_token:
-      cnt += 1
-      if cnt == 1:
-          continue  # Skip the first one (don't yield)
-      elif cnt == 2:
-          break  # Stop stream (don't yield)
-        
-    if isStream:
-      #print(new_token)
-      yield new_token
-      #await asyncio.sleep(0) 
-    elif "." in new_token or "\n" in new_token:
-      sentence = sentence + new_token
-      if len(sentence) > 3:      
-        sentence = sentence.strip()
-        print(sentence)
-        if int(isPlay) > 0:
-          file = tts(sentence,31,"ko",0,0)
-        else:
-          await speech(sentence, 'Content', 0, 'ko')
-
-        yield sentence
-        await asyncio.sleep(0.01) # thread 처리
-        sentence = ""
-    else:
-      sentence = sentence + new_token
-  if len(sentence) > 3:
-    yield sentence
-
-# llama cpp verion
-async def generate_text_stream(chat : Chat, isStream=True, isPlay=0):
-    
-    if chat.rag is not None and len(chat.rag) > 10: 
-      chat.type=  f"{chat.type} 그리고, 다음 내용을 참고하여 대답을 하되 잘 모르는 내용이면 모른다고 솔직하게 대답하세요.\n<|context|>\n{chat.rag}"    
-
-    prompt = token_txt.apply_chat_template([
-      {"role": "system", "content": chat.type},
-      {"role": "user", "content": chat.prompt}
-    ], tokenize=False,add_generation_prompt=True)
-	
-    response = model_txt.create_completion(prompt, max_tokens=chat.max, temperature=chat.temp, top_k=chat.top_k,top_p=chat.top_p,repeat_penalty=1.1, stream=True)
-    sentence = ""
-    for chunk in response:
-        if "choices" in chunk and chunk["choices"]:
-            new_token =  chunk["choices"][0]["text"]
-            if isStream:
-              #print(new_token)
-              yield new_token
-              #await asyncio.sleep(0) 
-            elif "." in new_token or "\n" in new_token:
-              sentence = sentence + new_token
-              if len(sentence) > 3:
-                
-                sentence = sentence.strip()
-                print(sentence)
-                if int(isPlay) > 0:
-                  file = tts(sentence)
-                  print('playing', file)
-                  playsound(file)
-                else:
-                  await speech(sentence, 'Content', 0, 'ko')
-
-                yield sentence
-                #await asyncio.sleep(0) 
-                sentence = ""
-            else:
-              sentence = sentence + new_token
-    if len(sentence) > 3:
-      yield sentence
-      #await asyncio.sleep(0.01)  # 비동기 처리를 위한 작은 딜레이
-
-origins = [
-    "http://canvers.net",
-    "https://canvers.net",   
-    "http://www.canvers.net",
-    "https://www.canvers.net",
-]
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],#origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 @app.get("/")
 def main():
@@ -379,7 +255,6 @@ def main():
 async def recv_camera_stream(track: MediaStreamTrack):
     while True:
         frame = await track.recv()
-        # Convert the frame to a NumPy array
         img = frame.to_ndarray(format="bgr24")
 
         if frame_queue.full():
@@ -754,119 +629,6 @@ async def volume(value = 10):
 def monitor():
   return si.getAll()
 
-@app.get("/v1/txt2chat", summary="문장 기반의 chatgpt 스타일 구현")
-def txt2chat(prompt : str , isPlay = 0): # gen or med
-  streamer = IterableStreamer(pipe_txt.get_tokenizer())
-
-  messages = [
-    {"role": "system", "content": _SYSTEM},
-    {"role": "user", "content": prompt}
-  ] 
-  prompt = token_txt.apply_chat_template(
-    messages,
-    tokenize=False,
-    add_generation_prompt=True
-  )
-
-  print(prompt)
-
-  generate_kwargs = dict(
-      inputs = prompt,
-      max_new_tokens= 256,
-      temperature= 0.5,
-      #do_sample=True,
-      repetition_penalty=1.1,
-      top_k=50,
-      top_p=0.9,
-      streamer=streamer, # !do_sample || top_k > 0
-  )
-
-  t1 = Thread(target=pipe_txt.generate, kwargs=generate_kwargs)
-  t1.start()
-
-  out = process_stream(streamer, False, isPlay)
-  return StreamingResponse(out, media_type='text/event-stream')
-
-"""
-@app.post("/v1/txt2chat", summary="문장 기반의 chatgpt 스타일 구현 / batch ")
-def txt2chat(chat : Chat, isPlay = 0): # gen or med
-  print(chat)
-  return StreamingResponse(generate_text_stream(chat, False, isPlay), media_type="text/plain")
-
-@app.post("/v2/txt2chat", summary="문장 기반의 chatgpt 스타일 구현 / stream")
-def txt2chat2(chat : Chat, isPlay = 0): # gen or med
-  print(chat)
-  return StreamingResponse(generate_text_stream(chat, True, isPlay), media_type="text/plain")
-"""
-
-@app.post("/v1/stt", summary="음성을 인식합니다.")
-def stt(file : UploadFile = File(...), lang="ko", isPlay=0):
-  start = t.time()
-  location = f"uploads/{file.filename}"
-
-  with open(location,"wb+") as file_object:
-    file_object.write(file.file.read())
-  
-  raw_speech, samplerate = librosa.load(location, sr=16000)
-  print('length',librosa.get_duration(y=raw_speech, sr=samplerate))
-  raw =  raw_speech.tolist()
-
-  out = pipe_stt.generate(
-    raw,
-    max_new_tokens=100,
-    # 'task' and 'language' parameters are supported for multilingual models only
-    language=f"<|{lang}|>",
-    task="transcribe",
-    #return_timestamps=True
-    #streamer=streamer,
-  )
-
-  print(t.time()-start)
-
-
-  chat = Chat()
-  chat.prompt = str(out)
-
-  return txt2chat(chat, isPlay)
-
-  #return { "result" : True, "data" : str(out) }
-
-import hashlib
-
-def getHash(text):
-  hash_func = hashlib.new('md5')
-  hash_func.update(text.encode('utf-8'))
-  return hash_func.hexdigest()
-
-"""
-    start = t.time()
-    print(text, static)
-
-    #phoneme_ids = text_to_sequence(text, conf_tts.data.text_cleaners)
-    phoneme_ids = text_to_sequence(text, [f'canvers_{lang}_cleaners'])
-    text = np.expand_dims(np.array(phoneme_ids, dtype=np.int64), 0)
-
-    inputs = {
-        "input": text,
-        "input_lengths":  np.array([text.shape[1]], dtype=np.int64),
-        "scales": np.array([0.667, 1.0, 0.8], dtype=np.float16),
-        "sid" : np.array([int(voice)], dtype=np.int64) if voice is not None else None
-    }
-
-    start_time = t.time()
-    result = pipe_tts(inputs)
-    print(f"Inference time: {t.time() - start_time:.4f} seconds")
-
-    audio = list(result.values())[0].squeeze((0, 1))  
-
-    if int(static) > 0:
-      write(data=audio, rate=conf_tts.data.sampling_rate, filename=f"human.wav")
-      return f"human.wav"
-    else:
-      write(data=audio, rate=conf_tts.data.sampling_rate, filename=f"output/{str(start)}.wav")
-      return f"output/{str(start)}.wav"
-"""
-
 @app.get("/v1/tts", response_class=FileResponse, summary="입력한 문장으로 부터 음성을 생성합니다.")
 def tts(text = "", voice=31, lang='ko', static=0, isPlay=0):
     #org_text = parse.quote(text, safe='', encoding="cp949")
@@ -910,4 +672,4 @@ def tts(text = "", voice=31, lang='ko', static=0, isPlay=0):
 
       return f"output/{filename}.wav"
 
-print("Loading Complete!")
+print("Loading Complete","NPU")
