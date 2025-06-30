@@ -1,9 +1,12 @@
-alert("Nice to meet you again! 2506142130")
+alert("Nice to meet you again! 2507010500")
 // 버튼 클릭 효과 및 상태 변화 시뮬레이션
 let isRecord = false
 var gumStream;              //stream from getUserMedia()
 var rec;                    //Recorder.js object
 var input;                  //MediaStreamAudioSourceNode we'll be recording
+let pose = ''
+const poses = ['Hello','WiggleHips','Content','Wallow','Stretch']
+const list_tts = []
 
 // shim for AudioContext when it's not avb.
 var AudioContext = window.AudioContext || window.webkitAudioContext;
@@ -20,9 +23,39 @@ function smooth(value){
         return value
 }
 
+
+function play(text){
+    if(audio)
+        audio.pause()
+
+    audio = new Audio(`/speech?voice=31&lang=ko&static=0&isPlay=0&text=${text}`);
+    audio.play()
+}
+
+function playNext(chunk) {
+
+    let cmd = ''
+
+    if(chunk)
+        list_tts.push(chunk)
+
+    if(audio == 0 && list_tts.length > 0){
+        
+        pose = poses[Math.floor(Math.random() * poses.length)]
+        fetch(`/sport?cmd=${pose}`)
+
+        const text = list_tts.shift()
+        audio = new Audio(`/speech?voice=31&lang=ko&static=0&isPlay=0&text=${text}`);
+        audio.play()
+
+        audio.addEventListener('ended', () => {
+            audio = 0
+            playNext()  // Play next audio when current one ends
+        })
+    } 
+}
+
 function listen(){
-
-
 
   if(!isRecord){
     
@@ -77,20 +110,56 @@ function listen(){
   }
 }
 
+async function generate(prompt) {
+  const response = await fetch(`http://127.0.0.1:59532/v1/txt2chat?prompt=${prompt}&isPlay=0`, {
+    method: 'GET',
+    headers: {
+      'Accept': 'application/json'
+    }
+  });
+
+  if (!response.ok) {
+    console.error("HTTP error", response.status);
+    return;
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder("utf-8");
+  let result = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    const chunk = decoder.decode(value, { stream: true });
+    result += chunk;
+
+    // Update your UI with the streamed text here
+    console.log(chunk); // for demo
+    playNext(chunk)
+    //document.getElementById("output").textContent += chunk;
+  }
+
+  console.log("Final result:", result);
+}
+
 function stt(blob){
   var fd = new FormData();
   fd.append("file", blob, 'voice.wav')
 
-  fetch(`/v1/stt`,{ //?prompt=${query}&temp=${temp}&lang=en
+  fetch(`http://127.0.0.1:59532/v1/stt`,{ //?prompt=${query}&temp=${temp}&lang=en
     method: 'POST',
     body: fd
   }).then(async res=>{
     const result = await res.json()
     console.log('end---',result)
-    $.query('[name=prompt]').value = result.data.text
-    if($.query('[name=prompt]').value.length > 0)
-      generate()    
+    const prompt = result.data
+    if(prompt.length > 0)
+      generate(prompt)    
+  }).catch(e=>{
+    console.error('err',e)
   })
+
 }
 
 const keysPressed = {
@@ -260,23 +329,26 @@ document.addEventListener('DOMContentLoaded', function() {
                     cmd = '/sport?cmd=BodyHeight&x=-1&y=0&z=0' // get height
                     break;        
                 case 'tts-hello':
-                    cmd = '/speech?text="안녕, 나는 강남독이야. 만나서 반가워요."&motion=Content'
+                    cmd = '/speech?text="안녕, 나는 파이독이야. 만나서 반가워요."&motion=Hello'
                     break;
                 case 'tts-intro':
-                    cmd = '/speech?text="안녕, 인텔과 함께하는 글로벌 챌린지에 온 것을 환영해."&motion=RiseSit'
+                    cmd = '/speech?text="안녕, 인텔과 함께하는 글로벌 챌린지에 온 것을 환영해."&motion=Content'
                     break; 
                 case 'tts-follow':
-                    cmd = '/v1/txt2chat?prompt="담배 피는 사람한테 공익 광고 멘트를 말해줘."'
+                    cmd = '/speech?text="인텔의 코어 울트라를 활용한 온 디바이스 AI 기업, 서큘러스를 소개합니다."&motion=Pose'
                     break;
                 case 'tts-warn':
-                    cmd = '/v1/txt2chat?prompt="사름들에게 부딪칠 수 있으니 조심해 달라는 멘트를 해줘."'
-                    break;
+                    generate("사람들에게 부딪칠 수 있으니 조심해 달라는 멘트를 해줘.")
+                    return
+                    //break;
                 case 'tts-bye':
-                    cmd = '/v1/txt2chat?prompt="사람들이 있는 환경에서 미래형 4족 보행로봇으로서, 하고싶은 말은?"'
+                    generate("사람들이 있는 환경에서 미래형 4족 보행로봇으로서, 하고싶은 말은?")
+                    //return
                     break;
                 case 'tts-poet':
-                    cmd = '/v1/txt2chat?prompt="아메리카노 아이스 1잔, 라떼 아이스 1잔 주문 멘트로 말해줘."'
-                    break;    
+                    generate("인공지능의 미래에 대해 어떻게 생각해?")
+                    return
+                    //break;  
                 case 'move-center':
                     cmd = '/speech?text="0.5배 속도로 행동합니다."&motion=WiggleHips'
                     multi = 0.5

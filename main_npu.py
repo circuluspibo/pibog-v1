@@ -380,6 +380,7 @@ lastCmd = {}
 @app.get("/sport")
 async def sport(cmd : str, x=0.0, y=0.0, z=0.0, data=None):
   global conn
+  out = 0
   print(cmd, f'x:{x}, y:{y}, z:{z}')
   if conn is None:
     print('Disconnected', cmd)

@@ -114,9 +114,9 @@ class Chat(BaseModel):
 # gemma-3-1b-it-Q4_K_M.gguf
 #model_txt = Llama("../models/txt/hyperclovax-seed-text-instruct-1.5b-q4_k_m.gguf", n_threads=4, verbose=False) #from_pretrained
 
-#model_name = '../models/CLOVAX-1.5B-ov-int4'
+model_name = '../models/CLOVAX-1.5B-ov-int4'
 #model_name = snapshot_download(repo_id='circulus/Gemma-3-1b-it-ov-int4')
-model_name = '../models/gemma-3-1b-int4-ov'
+#model_name = '../models/gemma-3-1b-int4-ov'
 #model_name = '../models/Qwen-3-1.7B-int4-ov'
 
 token_txt = AutoTokenizer.from_pretrained(model_name)
@@ -240,12 +240,12 @@ def stt(file : UploadFile = File(...), lang="ko", isPlay=0):
     #streamer=streamer,
   )
 
-  print(t.time()-start)
+  print(t.time()-start, str(out))
 
 
-  chat = Chat()
-  chat.prompt = str(out)
+  #chat = Chat()
+  #chat.prompt = str(out)
 
-  return txt2chat(chat, isPlay)
+  return { "result" : True, "data" : str(out) } #txt2chat(chat, isPlay)
 
 print("Loading Complete","GPU")

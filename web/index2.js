@@ -1,11 +1,16 @@
-alert("Nice to meet you again! 2504162100")
+alert("Nice to meet you again! 2506260700")
 // 버튼 클릭 효과 및 상태 변화 시뮬레이션
+const list_tts = []
+let audio = 0
+let pose = ''
+const poses = ['clamp','highFive','shakeHands_1','hug','lowWave','singleHandsUp','bothHandsUp']
+
 let isRecord = false
 var gumStream;              //stream from getUserMedia()
 var rec;                    //Recorder.js object
 var input;                  //MediaStreamAudioSourceNode we'll be recording
 
-let multi = 0.5
+let multi = 1
 let state = 'Walk_G1'
 
 // shim for AudioContext when it's not avb.
@@ -14,8 +19,8 @@ var audioContext //new audio context to help us record
 let lastTime = 0
 
 function listen(){
-  if (document.documentElement.requestFullscreen) 
-    document.documentElement.requestFullscreen()
+  //if (document.documentElement.requestFullscreen) 
+  // document.documentElement.requestFullscreen()
 
 
   if(!isRecord){
@@ -71,19 +76,94 @@ function listen(){
   }
 }
 
+function play(text){
+    if(audio)
+        audio.pause()
+
+    audio = new Audio(`/v1/tts?voice=31&lang=ko&static=0&isPlay=0&text=${text}`);
+    audio.play()
+}
+
+function playNext(chunk) {
+
+    let cmd = ''
+
+    if(chunk)
+        list_tts.push(chunk)
+
+    if(audio == 0 && list_tts.length > 0){
+        if(pose == 'Release Arm'){
+            pose = poses[Math.floor(Math.random() * poses.length)]
+            fetch(`/arm?cmd=${pose}`)
+        } else {
+            pose = 'Release Arm'
+            fetch(`/arm?cmd=${pose}`)
+        }
+
+        fetch(cmd)
+
+        const text = list_tts.shift()
+        audio = new Audio(`/v1/tts?voice=31&lang=ko&static=0&isPlay=0&text=${text}`);
+        audio.play()
+
+        audio.addEventListener('ended', () => {
+            audio = 0
+            playNext()  // Play next audio when current one ends
+        })
+    } 
+}
+
+  // Start playing the list
+  playNext();
+
+async function generate(prompt) {
+  const response = await fetch(`http://127.0.0.1:59532/v1/txt2chat?prompt=${prompt}&isPlay=0`, {
+    method: 'GET',
+    headers: {
+      'Accept': 'application/json'
+    }
+  });
+
+  if (!response.ok) {
+    console.error("HTTP error", response.status);
+    return;
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder("utf-8");
+  let result = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    const chunk = decoder.decode(value, { stream: true });
+    result += chunk;
+
+    // Update your UI with the streamed text here
+    console.log(chunk); // for demo
+    playNext(chunk)
+    //document.getElementById("output").textContent += chunk;
+  }
+
+  console.log("Final result:", result);
+}
+
 function stt(blob){
   var fd = new FormData();
   fd.append("file", blob, 'voice.wav')
 
-  fetch(`/v1/stt?isPlay=1`,{ //?prompt=${query}&temp=${temp}&lang=en
+  fetch(`http://127.0.0.1:59532/v1/stt`,{ //?prompt=${query}&temp=${temp}&lang=en
     method: 'POST',
     body: fd
   }).then(async res=>{
     const result = await res.json()
     console.log('end---',result)
-    $.query('[name=prompt]').value = result.data.text
-    if($.query('[name=prompt]').value.length > 0)
-      generate()    
+    const prompt = result.data
+    if(prompt.length > 0)
+      generate(prompt)    
+  }).catch(e=>{
+    console.error('err',e)
   })
 
 }
@@ -178,13 +258,13 @@ function getDirection() {
 
     document.getElementById('log').value = cmd
 
-    clearInterval(intv)
-
     if(lastCmd != cmd){
         console.log('cmd',cmd)    
         lastCmd = cmd
         
-        if(cmd == 'lx=0&rx=0&ly=0&ry=0' && lastState == 'up'){
+        clearInterval(intv)
+        
+        if(cmd == 'lx=0&rx=0&ly=0&ry=0' && lastState == 'up' && multi > 1){
             lastState = 'stop'
             fetch(`/walkG1?lx=0&rx=0&ly=0.5&ry=0.5`)
 
@@ -278,22 +358,28 @@ document.addEventListener('DOMContentLoaded', function() {
                     cmd = `/walkG1?lx=0&rx=0&ly=${-1.5 * multi}&ry=${-1.5 * multi}`
                     break;        
                 case 'tts-hello':
-                    cmd = '/v1/tts?text="안녕? 나는 서큘러스의 파이온이라고 해. 만나서 반가워."&isPlay=1'
+                    cmd = `/arm?cmd=shakeHands_1`
+                    play("안녕? 나는 서큘러스의 파이온이라고 해. 만나서 반가워.")
                     break;
                 case 'tts-intro':
-                    cmd = '/v1/tts?text="박스 운반을 시작할까요?"&isPlay=1'
+                    cmd = `/arm?cmd=clamp`
+                    play("서큘러스의 휴먼 인공지능기술과 만드로의 로봇 손 기술이 결합되었어.")
                     break; 
                 case 'tts-follow':
-                    cmd = '/v1/tts?text="물건 카트를 이동해 보겠습니다."&isPlay=1'
+                    cmd = `/arm?cmd=lowWave`
+                    play("자 저를 따라 오세요!")
                     break;
                 case 'tts-warn':
-                    cmd = '/v1/tts?text="안녕하세요. 저와 함께 사진좀 찍어보실래요?"&isPlay=1'
+                    cmd = `/arm?cmd=highFive`
+                    play("안녕하세요. 저와 함께 사진좀 찍어보실래요?")
                     break;
                 case 'tts-bye':
-                    cmd = '/v1/tts?text="환영합니다. 저는 휴머노이드 로봇 파이온입니다."&isPlay=1'
+                    cmd = `/arm?cmd=lowWave`
+                    play("환영합니다. 저는 휴머노이드 로봇 파이온입니다.")
                     break;
                 case 'tts-poet':
-                    cmd = '/v1/tts?text="저는 업무를 처리중이므로, 가까이 오시면 위험합니다."&isPlay=1'
+                    cmd = `/arm?cmd=Refuse`
+                    play("저는 업무를 처리중이므로, 가까이 오시면 위험합니다.")
                     break;    
                 case 'mode':
                     if(mode == 'Step_G1'){
@@ -330,6 +416,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         cmd = `/hand?cmd=${this.id}`
                     else if(this.classList.contains('states')){
                         state = this.id
+                        multi = 0.5
                         cmd = `/stateG1?cmd=${this.id}`                    
                     } else
                         cmd = `/arm?cmd=${this.id}`
@@ -673,24 +760,47 @@ document.addEventListener('DOMContentLoaded', function() {
     }    
 
     function setSpeed(isUp){
-        if(isUp){
-            if(multi == 0.5)
-                multi = 1
-            else if(multi == 1)
-                multi = 1.5
-            else if(multi == 1.5)
-                multi = 2
-            else
-                multi = 2
+
+        if(state = 'Walk_G1'){
+            if(isUp){
+                if(multi == 0.5)
+                    multi = 1
+                else if(multi == 1)
+                    multi = 1.5
+                else if(multi == 1.5)
+                    multi = 2
+                else
+                    multi = 2
+            } else {
+                if(multi == 2)
+                    multi = 1.5
+                else if(multi == 1.5)
+                    multi = 1
+                else if(multi == 1)
+                    multi = 0.5
+                else
+                    multi = 0.5
+            }
         } else {
-            if(multi == 2)
-                multi = 1.5
-            else if(multi == 1.5)
-                multi = 1
-            else if(multi == 1)
-                multi = 0.5
-            else
-                multi = 0.5
+            if(isUp){
+                if(multi < 1)
+                    multi = 1
+                else if(multi < 1.5)
+                    multi = 1.5
+                else if(multi < 2)
+                    multi = 2.5
+                else
+                    multi = 3
+            } else {
+                if(multi < 1.5)
+                    multi = 1
+                else if(multi < 2)
+                    multi = 1.5
+                else if(multi < 3)
+                    multi = 2
+                else
+                    multi = 1
+            }            
         }
 
         document.getElementById('object-speed').textContent = multi
