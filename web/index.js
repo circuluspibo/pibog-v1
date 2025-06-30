@@ -1,6 +1,7 @@
 alert("Nice to meet you again! 2507010500")
 // 버튼 클릭 효과 및 상태 변화 시뮬레이션
 let isRecord = false
+let audio = 0
 var gumStream;              //stream from getUserMedia()
 var rec;                    //Recorder.js object
 var input;                  //MediaStreamAudioSourceNode we'll be recording
