@@ -258,7 +258,7 @@ def processing_thread():
 def main():
   return { "result" : True, "data" : "AI-CPU-V2", "ip" : _IP, "port" : _PORT }      
 
-
+"""
 def fetch_frames():
     print("streaming start......")
     with requests.get("http://127.0.0.1:59521/video_feed", stream=True) as response:
@@ -285,7 +285,7 @@ def fetch_frames():
 # 비디오 프레임을 가져오는 스레드를 시작
 thread = Thread(target=fetch_frames, daemon=True)
 thread.start()
-
+"""
 
 # Async function to receive video frames and put them in the queue
 async def recv_camera_stream(track: MediaStreamTrack):
