@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=pidog-air-server
+Comment=Run Python script in terminal
+Exec=gnome-terminal -- bash -c "source /home/circulus/VENV/pibog/bin/activate && cd /home/circulus/project/pibog-v1 && python3 index.py; echo '--- 스크립트가 종료되었습니다. 오류가 없는지 확인하고 Enter를 누르면 창이 닫힙니다. ---'; read"
+Icon=utilities-terminal
+Terminal=false
+Type=Application
+Encoding=UTF-8

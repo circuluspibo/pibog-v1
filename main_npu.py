@@ -53,6 +53,9 @@ from skimage.morphology import skeletonize
 from scipy.interpolate import splprep, splev
 from fastapi.middleware.cors import CORSMiddleware
 import hashlib
+import aiohttp
+import asyncio
+import requests
 #optimum-cli export openvino --weight-format int4 --task text-generation-with-past --model growdle/HyperCLOVAX-SEED-Text-Instruct-1.5B ./CLOVAX-1.5B-ov-int4
 #kakaocorp/kanana-1.5-2.1b-instruct-2505
 #https://github.com/Unitree-Go2-Robot/go2_robot
@@ -72,6 +75,8 @@ det_model = YOLO('yolo12m_int8_openvino_model', task='detect')
 sam_model = FastSAM("./FastSAM-s_int8_openvino_model")  # or FastSAM-x.pt
 
 det_ov_model.reshape({0: [1, 3, 384, 640]})
+#det_ov_model.reshape({0: [1, 3, 480, 640]})
+
 compiled_model = core.compile_model(det_ov_model, 'NPU')
 
 if det_model.predictor is None:
@@ -160,6 +165,8 @@ conf_tts = utils.get_hparams_from_file(hf_hub_download(repo_id="rippertnt/on-vit
 def processing_thread():
     global cnt_live, cnt_object, lastTime, state
     processing_times = collections.deque()
+
+    print("============= processing....")
 
     while True:
         if not frame_queue.empty():
@@ -251,6 +258,35 @@ def processing_thread():
 def main():
   return { "result" : True, "data" : "AI-CPU-V2", "ip" : _IP, "port" : _PORT }      
 
+
+def fetch_frames():
+    print("streaming start......")
+    with requests.get("http://127.0.0.1:59521/video_feed", stream=True) as response:
+        if response.status_code == 200:
+            # 서버 A에서 오는 스트리밍을 하나씩 받아 큐에 넣음
+            frame_buffer = b''  # 비디오 프레임을 이어서 받기 위한 버퍼
+            for chunk in response.iter_content(chunk_size=1024):
+                frame_buffer += chunk
+                # JPEG 데이터가 하나의 프레임을 완성한 경우
+                if b'\xff\xd9' in frame_buffer:  # JPEG의 끝 마커
+                    try:
+                        # 받은 데이터를 디코딩하여 이미지로 변환
+                        image = cv2.imdecode(np.frombuffer(frame_buffer, dtype=np.uint8), cv2.IMREAD_COLOR)
+                        if image is not None:
+                            # 큐에 디코딩된 이미지를 넣음
+
+                            if frame_queue.full():
+                              frame_queue.get()  # 가장 오래된 프레임 제거  
+                            print('............ frame input')
+                            frame_queue.put(image)
+                    except Exception as e:
+                        print(f"Error decoding image: {e}")
+                    frame_buffer = b''  # 다음 프레임을 받기 위해 버퍼 초기화
+# 비디오 프레임을 가져오는 스레드를 시작
+thread = Thread(target=fetch_frames, daemon=True)
+thread.start()
+
+
 # Async function to receive video frames and put them in the queue
 async def recv_camera_stream(track: MediaStreamTrack):
     while True:
@@ -319,7 +355,14 @@ async def connect2():
 
   conn.datachannel.pub_sub.subscribe(RTC_TOPIC['LOW_STATE'], lowstate_callback)
 
-  return { "result" : True, "data" : True }        
+  return { "result" : True, "data" : True }     
+
+@app.get("/connect3")
+async def connect3():
+    print("connecting 3....")
+    url = "http://127.0.0.1:59521/video_feed"
+    #await recv_mjpeg_stream(url)
+
 
 @app.get("/prepare")
 async def prepare():
@@ -672,5 +715,248 @@ def tts(text = "", voice=31, lang='ko', static=0, isPlay=0):
         playsound(f"output/{filename}.wav")
 
       return f"output/{filename}.wav"
+
+
+
+import httpx  # httpx를 사용하여 비동기 HTTP 요청을 처리합니다.
+
+# 원본 비디오 스트림 URL
+SOURCE_VIDEO_URL = "http://127.0.0.1:59521/video_feed"
+
+async def proxy_video_stream():
+    """원본 서버에서 비디오 스트림을 받아서 다시 스트리밍"""
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        try:
+            async with client.stream("GET", SOURCE_VIDEO_URL) as response:
+                response.raise_for_status()
+                async for chunk in response.aiter_bytes(chunk_size=1024):
+                    yield chunk
+        except httpx.RequestError as e:
+            print(f"비디오 스트림 연결 오류: {e}")
+            # 연결 오류 시 빈 프레임이나 오류 메시지를 반환할 수 있습니다
+            yield b""
+        except Exception as e:
+            print(f"예상치 못한 오류: {e}")
+            yield b""
+
+@app.get("/video_feed2")
+async def video_feed():
+    """비디오 스트림을 프록시하여 제공"""
+    return StreamingResponse(
+        proxy_video_stream(),
+        media_type="multipart/x-mixed-replace; boundary=frame"
+    )
+# 서버 B에서 비디오 스트리밍 시작
+
+is_collecting = False
+collection_task = None
+
+def parse_mjpeg_boundary(buffer):
+    """boundary=frame 형식의 MJPEG 스트림 파싱"""
+    frames = []
+    remaining_buffer = buffer
+    
+    # boundary 패턴들
+    boundary_patterns = [
+        b'--frame\r\n',
+        b'--frame\n', 
+        b'\r\n--frame\r\n',
+        b'\n--frame\n'
+    ]
+    
+    while True:
+        # boundary 찾기
+        boundary_pos = -1
+        next_boundary_pos = -1
+        
+        for pattern in boundary_patterns:
+            pos = remaining_buffer.find(pattern)
+            if pos != -1:
+                boundary_pos = pos
+                # 다음 boundary 찾기
+                next_pos = remaining_buffer.find(pattern, pos + len(pattern))
+                if next_pos != -1:
+                    next_boundary_pos = next_pos
+                    break
+        
+        if boundary_pos == -1 or next_boundary_pos == -1:
+            break
+            
+        # 현재 프레임 데이터 추출
+        frame_data = remaining_buffer[boundary_pos:next_boundary_pos]
+        
+        # Content-Type과 Content-Length 헤더 건너뛰기
+        header_end = frame_data.find(b'\r\n\r\n')
+        if header_end == -1:
+            header_end = frame_data.find(b'\n\n')
+        
+        if header_end != -1:
+            jpeg_data = frame_data[header_end + 4:]  # 헤더 이후 데이터
+            
+            # JPEG 시작 마커 확인
+            jpeg_start = jpeg_data.find(b'\xff\xd8')
+            if jpeg_start != -1:
+                jpeg_data = jpeg_data[jpeg_start:]
+                
+                # JPEG 끝 마커 찾기
+                jpeg_end = jpeg_data.find(b'\xff\xd9')
+                if jpeg_end != -1:
+                    complete_jpeg = jpeg_data[:jpeg_end + 2]
+                    
+                    try:
+                        # OpenCV로 디코딩
+                        nparr = np.frombuffer(complete_jpeg, np.uint8)
+                        frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+                        
+                        if frame is not None:
+                            # BGR을 RGB로 변환
+                            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                            frames.append(frame)
+                            #print(f"✓ 프레임 추출 성공: {frame.shape}")
+                        else:
+                            print("프레임 디코딩 실패")
+                            
+                    except Exception as e:
+                        print(f"프레임 디코딩 오류: {e}")
+        
+        # 처리된 부분 제거
+        remaining_buffer = remaining_buffer[next_boundary_pos:]
+    
+    return frames, remaining_buffer
+
+async def collect_frames():
+    """원본 서버에서 프레임을 수집하여 큐에 저장"""
+    global is_collecting
+    
+    buffer = b""
+    frame_count = 0
+    chunk_count = 0
+    
+    try:
+        print("비디오 스트림 연결 시작...")
+        
+        # 더 긴 타임아웃 설정
+        timeout = httpx.Timeout(connect=10.0, read=60.0, write=10.0, pool=10.0)
+        
+        async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
+            print(f"연결 시도: {SOURCE_VIDEO_URL}")
+            
+            async with client.stream("GET", SOURCE_VIDEO_URL) as response:
+                print(f"응답 상태: {response.status_code}")
+                print(f"응답 헤더: {dict(response.headers)}")
+                
+                if response.status_code != 200:
+                    print(f"HTTP 오류: {response.status_code}")
+                    return
+                
+                response.raise_for_status()
+                
+                print("스트림 읽기 시작...")
+                
+                async for chunk in response.aiter_bytes(chunk_size=4096):
+                    if not is_collecting:
+                        print("수집 중지 요청")
+                        break
+                    
+                    chunk_count += 1
+                    buffer += chunk
+                    
+                    # 5초마다 상태 출력
+                    if chunk_count % 100 == 0:
+                        #print(f"청크 {chunk_count}개 수신, 버퍼 크기: {len(buffer)} bytes")
+                        
+                        # 버퍼에서 boundary 패턴 확인 (디버깅용)
+                        if b'--frame' in buffer:
+                            boundary_count = buffer.count(b'--frame')
+                            #print(f"발견된 boundary 개수: {boundary_count}")
+                        
+                        # 버퍼의 처음 200바이트 출력 (디버깅용)
+                        if len(buffer) > 200:
+                            sample = buffer[:200]
+                            #print(f"버퍼 샘플: {sample[:100]}")
+                            #if b'Content-Type' in sample:
+                            #    print("Content-Type 헤더 발견")
+                    
+                    # 버퍼가 너무 커지지 않도록 제한
+                    if len(buffer) > 2 * 1024 * 1024:  # 2MB 제한
+                        #print("버퍼 크기 제한, 일부 제거")
+                        # 버퍼의 앞쪽 절반 제거
+                        buffer = buffer[len(buffer)//2:]
+                    
+                    # 최소 버퍼 크기에 도달했을 때만 파싱 시도
+                    if len(buffer) > 1000:  # 최소 1KB
+                        try:
+                            frames, buffer = parse_mjpeg_boundary(buffer)
+                            
+                            for frame in frames:
+                                frame_count += 1
+                                
+                                # 큐가 꽉 찬 경우 오래된 프레임 제거
+                                while frame_queue.full():
+                                    try:
+                                        dropped = frame_queue.get_nowait()
+                                        #print("오래된 프레임 드랍")
+                                    except frame_queue.Empty:
+                                        break
+                                
+                                try:
+                                    frame = cv2.resize(frame, (640, 384)) 
+                                    frame_queue.put_nowait(frame)
+                                    #print(f"✓ 프레임 #{frame_count} 큐에 추가 (크기: {frame_queue.qsize()}/{frame_queue.maxsize})")
+                                except frame_queue.Full:
+                                    print("큐 풀 - 프레임 스킵")
+                        
+                        except Exception as e:
+                            print(f"프레임 파싱 오류: {e}")
+                            # 파싱 오류시 버퍼 일부 제거
+                            if len(buffer) > 5000:
+                                buffer = buffer[1000:]
+                    
+                    # CPU 사용률 조절
+                    if chunk_count % 50 == 0:
+                        await asyncio.sleep(0.01)
+                        
+                print("스트림 종료")
+                    
+    except httpx.TimeoutException as e:
+        print(f"타임아웃 오류: {e}")
+    except httpx.ConnectError as e:
+        print(f"연결 오류: {e}")
+    except httpx.RequestError as e:
+        print(f"요청 오류: {e}")
+    except Exception as e:
+        print(f"예상치 못한 오류: {e}")
+        import traceback
+        print(traceback.format_exc())
+    finally:
+        is_collecting = False
+        print(f"프레임 수집 종료. 총 {frame_count}개 프레임 처리됨")
+
+@app.get("/start_collection")
+async def start_frame_collection():
+    """프레임 수집 시작"""
+    global is_collecting, collection_task
+    
+    if is_collecting:
+        return {"message": "이미 프레임 수집이 진행 중입니다"}
+    
+    # 기존 큐 비우기
+    cleared = 0
+    while not frame_queue.empty():
+        try:
+            frame_queue.get_nowait()
+            cleared += 1
+        except frame_queue.Empty:
+            break
+    
+    print(f"큐 초기화: {cleared}개 프레임 제거")
+    
+    is_collecting = True
+    task1 = asyncio.create_task(collect_frames())
+    threading.Thread(target=processing_thread, daemon=True).start()
+    
+    return {"message": "프레임 수집을 시작했습니다"}
+
+
 
 print("Loading Complete","NPU")
