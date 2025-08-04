@@ -292,8 +292,7 @@ function getDirection() {
     const cmd = `${vx} ${vy} ${omega}`
 
     document.getElementById('log').value = cmd
-
-    console.log('cmd',cmd)    
+ 
     lastCmd = cmd
     
     clearInterval(intv)
@@ -304,10 +303,10 @@ function getDirection() {
 
         intv = setTimeout(function(){
             console.log('smooth stop....')
-            fetch(`http://10.42.0.1:59521/cmd?key=move&value="0.5 0 0"`)
-        },1000)
+            fetch(`http://10.42.0.1:59521/cmd?key=move&value="0 0 0"`)
+        },1500)
         
-    } else
+    } else if(cmd != '0.0 0.0 0.0')
         fetch(`http://10.42.0.1:59521/cmd?key=move&value=${cmd}`)
     
 }
