@@ -52,6 +52,11 @@ from iterator import IterableStreamer
 from skimage.morphology import skeletonize
 from scipy.interpolate import splprep, splev
 from fastapi.middleware.cors import CORSMiddleware
+from PIL import Image
+from openvino import Tensor
+from pathlib import Path
+from openvino_genai import GenerationConfig
+
 #optimum-cli export openvino --weight-format int4 --task text-generation-with-past --model growdle/HyperCLOVAX-SEED-Text-Instruct-1.5B ./CLOVAX-1.5B-ov-int4
 #kakaocorp/kanana-1.5-2.1b-instruct-2505
 #https://github.com/Unitree-Go2-Robot/go2_robot
@@ -101,6 +106,18 @@ clamp, highFive, shakeHands_1, blowKiss, hug, hightWave, lowWave, ultramanRay, b
 """
 _SYSTEM = "당신은 서큘러스에서 만든 파이봇 이라고 하는 강아지 로봇 인공지능 입니다. 젊은 톤의 대화체로 입력된 언어로 사람 같이 짧게 응답하세요."
 
+def read_image(path: str) -> Tensor:
+    pic = Image.open(path).convert("RGB")
+    image_data = np.array(pic)
+    return Tensor(image_data)
+
+def read_images(path: str) -> list[Tensor]:
+    entry = Path(path)
+    if entry.is_dir():
+        return [read_image(str(file)) for file in sorted(entry.iterdir())]
+    return [read_image(path)]
+
+
 class Chat(BaseModel):
   prompt : str = ''
   lang : str = 'auto'
@@ -115,15 +132,17 @@ class Chat(BaseModel):
 #model_txt = Llama("../models/txt/hyperclovax-seed-text-instruct-1.5b-q4_k_m.gguf", n_threads=4, verbose=False) #from_pretrained
 
 #model_name = 'rippertnt/Phi-4-mini-it-ov-int4' #'../models/CLOVAX-1.5B-ov-int4'
-model_name = snapshot_download(repo_id='rippertnt/Phi-4-mini-it-ov-int4')
+#model_name = snapshot_download(repo_id='rippertnt/Phi-4-mini-it-ov-int4') # Phi-4-mini-it-ov-int4 //text only
+model_name = snapshot_download(repo_id='circulus/Qwen2.5-VL-3B-it-ov-int4') # Phi-4-mini-it-ov-int4 //text only
+
 #model_name = snapshot_download(repo_id='circulus/Gemma-3-1b-it-ov-int4')
 #model_name = '../models/gemma-3-1b-int4-ov'
 #model_name = '../models/Qwen-3-1.7B-int4-ov'
 
 token_txt = AutoTokenizer.from_pretrained(model_name)
-pipe_txt = ov_genai.LLMPipeline(model_name, device="GPU")
+pipe_txt = ov_genai.VLMPipeline(model_name, device="GPU")
+#pipe_txt = ov_genai.LLMPipeline(model_name, device="GPU")
 pipe_stt = ov_genai.WhisperPipeline('../models/stt',device="GPU")
-
 
 # for genai
 async def process_stream(streamer, isStream=True, isPlay=0):
@@ -181,15 +200,31 @@ def txt2chat(prompt : str ,system = _SYSTEM, isPlay = 0): # gen or med
     {"role": "system", "content": system},
     {"role": "user", "content": prompt}
   ] 
+  """
   prompt = token_txt.apply_chat_template(
     messages,
     tokenize=False,
     enable_thinking=True,
     add_generation_prompt=True
   )
-
+"""
   print(prompt)
 
+  config = GenerationConfig(
+      max_new_tokens=256,
+      temperature=0.5,
+      repetition_penalty=1.1,
+      top_k=50,
+      top_p=0.9,
+  )
+
+  generate_kwargs = dict(
+      prompt = prompt,
+      config = config,
+      streamer=streamer, # !do_sample || top_k > 0
+  )
+
+  """
   generate_kwargs = dict(
       inputs = prompt,
       max_new_tokens= 256,
@@ -200,6 +235,7 @@ def txt2chat(prompt : str ,system = _SYSTEM, isPlay = 0): # gen or med
       top_p=0.9,
       streamer=streamer, # !do_sample || top_k > 0
   )
+  """
 
   t1 = Thread(target=pipe_txt.generate, kwargs=generate_kwargs)
   t1.start()
@@ -207,17 +243,50 @@ def txt2chat(prompt : str ,system = _SYSTEM, isPlay = 0): # gen or med
   out = process_stream(streamer, False, isPlay)
   return StreamingResponse(out, media_type='text/event-stream')
 
-"""
-@app.post("/v1/txt2chat", summary="문장 기반의 chatgpt 스타일 구현 / batch ")
-def txt2chat(chat : Chat, isPlay = 0): # gen or med
-  print(chat)
-  return StreamingResponse(generate_text_stream(chat, False, isPlay), media_type="text/plain")
+@app.post("/v1/img2chat", summary="문장 기반의 chatgpt 스타일 구현")
+def img2chat(file : UploadFile = File(...), prompt = "" ,system = _SYSTEM, isPlay = 0): # gen or med
+  streamer = IterableStreamer(pipe_txt.get_tokenizer())
 
-@app.post("/v2/txt2chat", summary="문장 기반의 chatgpt 스타일 구현 / stream")
-def txt2chat2(chat : Chat, isPlay = 0): # gen or med
-  print(chat)
-  return StreamingResponse(generate_text_stream(chat, True, isPlay), media_type="text/plain")
-"""
+  rgbs = read_image(file.file)
+
+  print(rgbs)
+
+  messages = [
+    {"role": "system", "content": system},
+    {"role": "user", "content": prompt}
+  ] 
+  """
+  prompt = token_txt.apply_chat_template(
+    messages,
+    tokenize=False,
+    enable_thinking=True,
+    add_generation_prompt=True
+  )
+  """
+
+  print(prompt)
+
+  config = GenerationConfig(
+      max_new_tokens=256,
+      temperature=0.5,
+      repetition_penalty=1.1,
+      top_k=50,
+      top_p=0.9,
+  )
+
+  generate_kwargs = dict(
+      prompt = prompt,
+      images=rgbs,
+      config=config,
+      streamer=streamer, # !do_sample || top_k > 0
+  )
+
+  t1 = Thread(target=pipe_txt.generate, kwargs=generate_kwargs)
+  t1.start()
+
+  out = process_stream(streamer, False, isPlay)
+  return StreamingResponse(out, media_type='text/event-stream')
+
 
 @app.post("/v1/stt", summary="음성을 인식합니다.")
 def stt(file : UploadFile = File(...), lang="ko", isPlay=0):
