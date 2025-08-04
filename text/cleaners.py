@@ -387,7 +387,7 @@ def canvers_ja_cleaners(text):
     phonemes = ipa_ja.transliterate(text)
     return collapse_whitespace(phonemes)
  
-def canvers_cn_cleaners(text):
+def canvers_zh_cleaners(text):
     text = expand_abbreviations(text.lower())
     text = numCleaner(text,'cn')
     phonemes = ipa_cn.transliterate(text)

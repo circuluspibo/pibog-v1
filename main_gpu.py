@@ -133,19 +133,20 @@ class Chat(BaseModel):
 
 #model_name = 'rippertnt/Phi-4-mini-it-ov-int4' #'../models/CLOVAX-1.5B-ov-int4'
 #model_name = snapshot_download(repo_id='rippertnt/Phi-4-mini-it-ov-int4') # Phi-4-mini-it-ov-int4 //text only
-model_name = snapshot_download(repo_id='circulus/Qwen2.5-VL-3B-it-ov-int4') # Phi-4-mini-it-ov-int4 //text only
+model_txt = snapshot_download(repo_id='circulus/Qwen2.5-VL-3B-it-ov-int4') # Phi-4-mini-it-ov-int4 //text only
+model_stt = snapshot_download(repo_id='circulus/Qwen2.5-VL-3B-it-ov-int4')
 
 #model_name = snapshot_download(repo_id='circulus/Gemma-3-1b-it-ov-int4')
 #model_name = '../models/gemma-3-1b-int4-ov'
 #model_name = '../models/Qwen-3-1.7B-int4-ov'
 
-token_txt = AutoTokenizer.from_pretrained(model_name)
-pipe_txt = ov_genai.VLMPipeline(model_name, device="GPU")
+token_txt = AutoTokenizer.from_pretrained(model_txt)
+pipe_txt = ov_genai.VLMPipeline(model_txt, device="GPU")
 #pipe_txt = ov_genai.LLMPipeline(model_name, device="GPU")
 pipe_stt = ov_genai.WhisperPipeline('../models/stt',device="GPU")
 
 # for genai
-async def process_stream(streamer, isStream=True, isPlay=0):
+async def process_stream(streamer, isStream=True, isPlay=0, lang='en'):
   cnt = 0
   sentence = ""
   print("streaming start...")
@@ -165,7 +166,12 @@ async def process_stream(streamer, isStream=True, isPlay=0):
     elif "." in new_token or "\n" in new_token:
       sentence = sentence + new_token
       if len(sentence) > 3:      
+
         sentence = sentence.strip()
+
+        if int(isPlay) > 0:
+          get("http://127.0.0.1:59531/v2/tts", params={"text": sentence, "lang" : lang})          
+
         print(sentence)
         yield sentence
         #await asyncio.sleep(0.01) # thread 처리
@@ -193,7 +199,7 @@ def monitor():
   return si.getAll()
 
 @app.get("/v1/txt2chat", summary="문장 기반의 chatgpt 스타일 구현")
-def txt2chat(prompt : str ,system = _SYSTEM, isPlay = 0): # gen or med
+def txt2chat(prompt : str ,system = _SYSTEM, isPlay = 0, lang='en'): # gen or med
   streamer = IterableStreamer(pipe_txt.get_tokenizer())
 
   messages = [
@@ -240,16 +246,14 @@ def txt2chat(prompt : str ,system = _SYSTEM, isPlay = 0): # gen or med
   t1 = Thread(target=pipe_txt.generate, kwargs=generate_kwargs)
   t1.start()
 
-  out = process_stream(streamer, False, isPlay)
+  out = process_stream(streamer, False, isPlay,lang)
   return StreamingResponse(out, media_type='text/event-stream')
 
-@app.post("/v1/img2chat", summary="문장 기반의 chatgpt 스타일 구현")
-def img2chat(file : UploadFile = File(...), prompt = "" ,system = _SYSTEM, isPlay = 0): # gen or med
+
+@app.get("/v1/img2chat", summary="문장 기반의 chatgpt 스타일 구현")
+def img2chat2(prompt = "" ,system = _SYSTEM, isPlay = 0, lang='en'): # gen or med
   streamer = IterableStreamer(pipe_txt.get_tokenizer())
 
-  rgbs = read_image(file.file)
-
-  print(rgbs)
 
   messages = [
     {"role": "system", "content": system},
@@ -276,7 +280,7 @@ def img2chat(file : UploadFile = File(...), prompt = "" ,system = _SYSTEM, isPla
 
   generate_kwargs = dict(
       prompt = prompt,
-      images=rgbs,
+      images=read_image("capture.jpg"),
       config=config,
       streamer=streamer, # !do_sample || top_k > 0
   )
@@ -284,7 +288,48 @@ def img2chat(file : UploadFile = File(...), prompt = "" ,system = _SYSTEM, isPla
   t1 = Thread(target=pipe_txt.generate, kwargs=generate_kwargs)
   t1.start()
 
-  out = process_stream(streamer, False, isPlay)
+  out = process_stream(streamer, False, isPlay,lang)
+  return StreamingResponse(out, media_type='text/event-stream')
+
+@app.post("/v1/img2chat", summary="문장 기반의 chatgpt 스타일 구현")
+def img2chat(file : UploadFile = File(...), prompt = "" ,system = _SYSTEM, isPlay = 0, lang='en'): # gen or med
+  streamer = IterableStreamer(pipe_txt.get_tokenizer())
+
+
+  messages = [
+    {"role": "system", "content": system},
+    {"role": "user", "content": prompt}
+  ] 
+  """
+  prompt = token_txt.apply_chat_template(
+    messages,
+    tokenize=False,
+    enable_thinking=True,
+    add_generation_prompt=True
+  )
+  """
+
+  print(prompt)
+
+  config = GenerationConfig(
+      max_new_tokens=256,
+      temperature=0.5,
+      repetition_penalty=1.1,
+      top_k=50,
+      top_p=0.9,
+  )
+
+  generate_kwargs = dict(
+      prompt = prompt,
+      images=read_image(file.file),
+      config=config,
+      streamer=streamer, # !do_sample || top_k > 0
+  )
+
+  t1 = Thread(target=pipe_txt.generate, kwargs=generate_kwargs)
+  t1.start()
+
+  out = process_stream(streamer, False, isPlay, lang)
   return StreamingResponse(out, media_type='text/event-stream')
 
 

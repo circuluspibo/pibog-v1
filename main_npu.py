@@ -141,6 +141,7 @@ processed_frame_queue = Queue(maxsize=5)
 cnt_live = 0
 cnt_object = 0
 lastTime = 0
+cnt_image = 0
 
 app = FastAPI()
 
@@ -163,7 +164,7 @@ pipe_tts = core.compile_model(core.read_model(model=f"{path_tts}/all_base_ov.xml
 conf_tts = utils.get_hparams_from_file(hf_hub_download(repo_id="rippertnt/on-vits2-multi-tts-v1", filename="all_base.json"))
 
 def processing_thread():
-    global cnt_live, cnt_object, lastTime, state
+    global cnt_live, cnt_object, lastTime, state, cnt_image
     processing_times = collections.deque()
 
     print("============= processing....")
@@ -173,6 +174,13 @@ def processing_thread():
             image = np.array(frame_queue.get())
             cnt_live = 0
             cnt_object = 0
+
+            #frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+
+            if cnt_image % 100 == 0:
+              cv2.imwrite("capture.jpg", image)
+
+            cnt_image = cnt_image + 1
 
             start_time = time.time()
             results = det_model(image, verbose=False)[0]
@@ -235,16 +243,7 @@ def processing_thread():
             _, f_width = output.shape[:2]
             processing_time = np.mean(processing_times) * 1000
             fps = 1000 / processing_time
-            cv2.putText(
-                output,
-                f"Inference time: {processing_time:.1f}ms ({fps:.1f} FPS)",
-                (20, 40),
-                cv2.FONT_HERSHEY_COMPLEX,
-                f_width / 1000,
-                (0, 0, 255),
-                1,
-                cv2.LINE_AA
-            )
+            cv2.putText(output,f"{processing_time:.1f}ms ({fps:.1f} FPS)",(20, 40),cv2.FONT_HERSHEY_COMPLEX,f_width / 1000,(0, 0, 255),1,cv2.LINE_AA)
 
             if processed_frame_queue.full():
               processed_frame_queue.get()  # 가장 오래된 프레임 제거   
@@ -715,13 +714,62 @@ def tts(text = "", voice=31, lang='ko', static=0, isPlay=0):
         playsound(f"output/{filename}.wav")
 
       return f"output/{filename}.wav"
+    
+@app.get("/v2/tts", response_class=FileResponse, summary="음성 생성 후 로봇에서 재생")
+def tts(text = "", voice=31, lang='ko', static=0, isPlay=0):
+    #org_text = parse.quote(text, safe='', encoding="cp949")
+    start = t.time()
+    print(text, static)
+    filename = getHash(text)
+
+    #phoneme_ids = text_to_sequence(text, conf_tts.data.text_cleaners)
+    phoneme_ids = text_to_sequence(text, [f'canvers_{lang}_cleaners'])
+    text = np.expand_dims(np.array(phoneme_ids, dtype=np.int64), 0)
+
+    inputs = {
+        "input": text,
+        "input_lengths":  np.array([text.shape[1]], dtype=np.int64),
+        "scales": np.array([0.667, 1.0, 0.8], dtype=np.float16),
+        "sid" : np.array([int(voice)], dtype=np.int64) if voice is not None else None
+    }
+
+    start_time = t.time()
+    result = pipe_tts(inputs)
+    print(f"Inference time: {t.time() - start_time:.4f} seconds")
+
+    audio = list(result.values())[0].squeeze((0, 1))  
+
+    print(t.time() - start)
+    write(data=audio, rate=conf_tts.data.sampling_rate, filename=f"output/{filename}.wav")
+
+    # 파일 열고 전송
+    with open(f"output/{filename}.wav", "rb") as f:
+        files = {"audio_file": (f"{filename}.wav", f, "audio/wav")}
+        response = requests.post("http://10.42.0.1:59521/audio", files=files)
+    
+    """
+    else:
+      write(data=audio, rate=conf_tts.data.sampling_rate, filename=f"output/{filename}.wav")
+      audio = AudioSegment.from_wav(f"output/{filename}.wav")
+      # Set specific audio parameters for compatibility
+      audio = audio.set_frame_rate(22050)  # Standard sample rate
+      audio = audio.set_sample_width(2)
+      audio = audio.set_channels(1)
+      #wav_file_path = audiofile_path.replace('.mp3', '.wav')
+      audio.export(f"output/{filename}.wav", format='wav', codec="pcm_s16le" )#parameters=["-ar", "44100"])
+      if int(isPlay) > 0 :
+        playsound(f"output/{filename}.wav")
+    """
+
+    return f"output/{filename}.wav"
+
 
 
 
 import httpx  # httpx를 사용하여 비동기 HTTP 요청을 처리합니다.
 
 # 원본 비디오 스트림 URL
-SOURCE_VIDEO_URL = "http://127.0.0.1:59521/video_feed"
+SOURCE_VIDEO_URL = "http://10.42.0.1:59521/video_feed"
 
 async def proxy_video_stream():
     """원본 서버에서 비디오 스트림을 받아서 다시 스트리밍"""
@@ -956,7 +1004,5 @@ async def start_frame_collection():
     threading.Thread(target=processing_thread, daemon=True).start()
     
     return {"message": "프레임 수집을 시작했습니다"}
-
-
 
 print("Loading Complete","NPU")

@@ -13,6 +13,44 @@ var input;                  //MediaStreamAudioSourceNode we'll be recording
 let multi = 1
 let state = 'Walk_G1'
 
+const colors = {
+    "white": [255, 255, 255],
+    "red": [255, 0, 0],
+    "yellow": [255, 255, 0],
+    "blue": [0, 0, 255],
+    "green": [0, 255, 0],
+    "cyan": [0, 255, 255],
+    "purple": [128, 0, 128],
+}
+
+const cmds = {
+  "clamp": 17, 
+  "highFive": 18, 
+  "shakeHands_1": 27,
+  "makeHeartBothHands": 20, 
+  "makeHeartSingleHands": 21,
+  "blowKiss": 12, 
+  "hug": 19,
+  "hightWave": 26, 
+  "lowWave" : 25,
+  "ultramanRay" : 24, 
+  "bothHandsUp" : 15,
+  "singleHandsUp" : 23,
+  "Refuse" : 22, 
+  "Release_Arm" : 99,
+  
+  "ZeroTorque" : 0,
+  "Damp" : 1,
+  "Preparation": 4,
+  "Seating": 3,       
+  "Walk_G1": 500,
+  "Walk2_G1" : 501,
+  "Run_G1" : 801,
+  "Squat_G1" : 706,  
+  "SquatUp_G1" : 706,
+  "LieUp_G1" : 702,  
+}
+
 // shim for AudioContext when it's not avb.
 var AudioContext = window.AudioContext || window.webkitAudioContext;
 var audioContext //new audio context to help us record
@@ -80,37 +118,35 @@ function play(text){
     if(audio)
         audio.pause()
 
-    audio = new Audio(`/v1/tts?voice=31&lang=ko&static=0&isPlay=0&text=${text}`);
+    audio = new Audio(`/v2/tts?voice=31&lang=ko&static=0&isPlay=0&text=${text}`);
     audio.play()
 }
 
 function playNext(chunk) {
-
+    fetch(`http://10.42.0.1:59521/led?r=0&g=255&b=0`)
     let cmd = ''
 
     if(chunk)
         list_tts.push(chunk)
 
     if(audio == 0 && list_tts.length > 0){
-        if(pose == 'Release Arm'){
-            pose = poses[Math.floor(Math.random() * poses.length)]
-            fetch(`/arm?cmd=${pose}`)
-        } else {
-            pose = 'Release Arm'
-            fetch(`/arm?cmd=${pose}`)
-        }
+        pose = poses[Math.floor(Math.random() * poses.length)]
+        fetch(`http://10.42.0.1:59521/action?value=${pose}`)
 
-        fetch(cmd)
-
-        const text = list_tts.shift()
-        audio = new Audio(`/v1/tts?voice=31&lang=ko&static=0&isPlay=0&text=${text}`);
+        const text = list_tts.shift() // 31 ko  65 zh
+        audio = new Audio(`/v2/tts?voice=6&lang=en&static=0&isPlay=0&text=${text}`);
         audio.play()
 
         audio.addEventListener('ended', () => {
             audio = 0
+            //fetch(`http://10.42.0.1:59521/action?value="Release Arm"`)
             playNext()  // Play next audio when current one ends
         })
-    } 
+    } else {
+        console.log('finish to speaking')
+        fetch(`http://10.42.0.1:59521/led?r=0&g=255&b=255`)
+        fetch(`http://10.42.0.1:59521/action?value="Release_Arm"`)
+    }
 }
 
   // Start playing the list
@@ -146,6 +182,7 @@ async function generate(prompt) {
     //document.getElementById("output").textContent += chunk;
   }
 
+
   console.log("Final result:", result);
 }
 
@@ -153,7 +190,7 @@ function stt(blob){
   var fd = new FormData();
   fd.append("file", blob, 'voice.wav')
 
-  fetch(`http://127.0.0.1:59532/v1/stt`,{ //?prompt=${query}&temp=${temp}&lang=en
+  fetch(`http://127.0.0.1:59532/v1/stt?lang=en`,{ //?prompt=${query}&temp=${temp}&lang=en
     method: 'POST',
     body: fd
   }).then(async res=>{
@@ -228,54 +265,51 @@ function getDirection() {
         lastPressed['PageDown'] = keysPressed['PageDown']
     }
         
-    let lx = 0, ly = 0, rx = 0, ry=0
- 
+    //let lx = 0, ly = 0, rx = 0, ry=0
+    let vx = 0.0, vy=0.0, omega =0.0
 
     // 방향 이동 처리
     if (up) { // ⬆ 북쪽
-        ly = multi
-        ry = multi
+        vx = multi
         lastState = 'up'
     } else if (down) { // ⬇ 남쪽
         lastState = 'down'        
-        ly = -1 * multi
-        ry = -1 * multi
+        vx = -1 * multi
     }
     
     if (left)  // ⬅ 서쪽
-        lx = - 1 * smooth(multi)
+        vy = smooth(multi)
     else if (right) // ➡ 동쪽
-        lx = smooth(multi)
+        vy = -1 * smooth(multi)
 
     // 회전 처리
     if (rt_left)
-        rx = -1 * smooth(multi)
+        omega = smooth(multi)
     else if (rt_right)
-        rx = smooth(multi)
+        omega = -1 * smooth(multi)
     
     // 명령어 생성 // pion 은 정지 명령도 필요하여 무조건 전송 - 다만 기존과 다를때만
-    const cmd = `lx=${lx}&rx=${rx}&ly=${ly}&ry=${ry}`
+    const cmd = `${vx} ${vy} ${omega}`
 
     document.getElementById('log').value = cmd
 
-    if(lastCmd != cmd){
-        console.log('cmd',cmd)    
-        lastCmd = cmd
-        
-        clearInterval(intv)
-        
-        if(cmd == 'lx=0&rx=0&ly=0&ry=0' && lastState == 'up' && multi > 1){
-            lastState = 'stop'
-            fetch(`/walkG1?lx=0&rx=0&ly=0.5&ry=0.5`)
+    console.log('cmd',cmd)    
+    lastCmd = cmd
+    
+    clearInterval(intv)
+    
+    if(cmd == '0.0 0.0 0.0' && lastState == 'up' && multi > 1){
+        lastState = 'stop'
+        fetch(`http://10.42.0.1:59521/cmd?key=move&value="0.5 0 0"`)
 
-            intv = setTimeout(function(){
-                console.log('smooth stop....')
-                fetch(`/walkG1?lx=0&rx=0&ly=0&ry=0`)
-            },1000)
-            
-        } else
-            fetch(`/walkG1?${cmd}`)
-    }
+        intv = setTimeout(function(){
+            console.log('smooth stop....')
+            fetch(`http://10.42.0.1:59521/cmd?key=move&value="0.5 0 0"`)
+        },1000)
+        
+    } else
+        fetch(`http://10.42.0.1:59521/cmd?key=move&value=${cmd}`)
+    
 }
 
 
@@ -286,16 +320,6 @@ function gameLoop() {
 
 gameLoop() // 루프 시작
 
-// 글로벌 키 입력 감지
-/*
-document.addEventListener("keydown", (event) => {
-    console.log(`Global Keydown: ${event.key}`);
-});
-
-document.addEventListener("keyup", (event) => {
-    console.log(`Global Keyup: ${event.key}`);
-});
-*/
 
 let mode = 'normal'
 
@@ -358,75 +382,71 @@ document.addEventListener('DOMContentLoaded', function() {
                     cmd = `/walkG1?lx=0&rx=0&ly=${-1.5 * multi}&ry=${-1.5 * multi}`
                     break;        
                 case 'tts-hello':
-                    cmd = `/arm?cmd=shakeHands_1`
+                    cmd = 'http://10.42.0.1:59521/action?value=shakeHands_1'
                     play("안녕? 나는 서큘러스의 파이온이라고 해. 만나서 반가워.")
                     break;
                 case 'tts-intro':
-                    cmd = `/arm?cmd=clamp`
+                    cmd = 'http://10.42.0.1:59521/action?value=clamp'
                     play("서큘러스의 휴먼 인공지능기술과 만드로의 로봇 손 기술이 결합되었어.")
                     break; 
                 case 'tts-follow':
-                    cmd = `/arm?cmd=lowWave`
+                    cmd = 'http://10.42.0.1:59521/action?value=lowWave'
                     play("자 저를 따라 오세요!")
                     break;
                 case 'tts-warn':
-                    cmd = `/arm?cmd=highFive`
+                    cmd = 'http://10.42.0.1:59521/action?value=highFive'
                     play("안녕하세요. 저와 함께 사진좀 찍어보실래요?")
                     break;
                 case 'tts-bye':
-                    cmd = `/arm?cmd=lowWave`
-                    play("환영합니다. 저는 휴머노이드 로봇 파이온입니다.")
+                    cmd = 'http://127.0.0.1:59532/v1/txt2chat?isPlay=1&prompt="what is future of the robot?"'
+                    //cmd = 'http://10.42.0.1:59521/action?value=lowWave'
+                    //play("환영합니다. 저는 휴머노이드 로봇 파이온입니다.")
                     break;
                 case 'tts-poet':
-                    cmd = `/arm?cmd=Refuse`
-                    play("저는 업무를 처리중이므로, 가까이 오시면 위험합니다.")
+                    //cmd = 'http://10.42.0.1:59521/action?value=Refuse'
+                    cmd = 'http://127.0.0.1:59532/v1/img2chat?isPlay=1&prompt="describe the image, what you see?"'
+                    //play("저는 업무를 처리중이므로, 가까이 오시면 위험합니다.")
                     break;    
                 case 'mode':
-                    if(mode == 'Step_G1'){
-                        mode = 'Stand_G1'
-                        cmd = '/balanceG1?cmd=Stand_G1'
+                    if(mode == 'Walk2_G1'){
+                        mode = 'Run_G1'
                         multi = 1
                     } else {
-                        mode = 'Step_G1'
-                        cmd = '/balanceG1?cmd=Step_G1'
+                        mode = 'Walk2_G1'
                         multi = 2
                     }
+                    
+                    cmd = `http://10.42.0.1:59521/cmd?value=${cmds[mode]}`
                     break;     
                 case 'connect':
                     alert('connect!!!')
-                    fetch(`/connect3`).then(async response=>{
+                    fetch(`/start_collection`).then(async response=>{
                         if (!response.ok) {
                             throw new Error(`Response status: ${response.status}`)
                         }
-
-
-
-                        
+   
                         //const json = await response.json()
-                        //console.log('connect ok',json)
-
-                        
+                        //console.log('connect ok',json)  
                         
                     })
 
                     setTimeout(()=>{
-                        alert('start stream')
                         document.getElementById('background-video').src = '/video_feed'
-                    },5000)
+                    },1000)
 
                     break;
                 case 'prepare':
                     cmd = '/prepare'
                     break;                    
-                default:
-                    if(this.classList.contains('hands'))
-                        cmd = `/hand?cmd=${this.id}`
-                    else if(this.classList.contains('states')){
+                default: // hands 구현 필요
+                    if(this.classList.contains('arms')){ // ....
+                        cmd = `http://10.42.0.1:59521/action?value=${this.id}`
+                    } else if(this.classList.contains('states')){
                         state = this.id
                         multi = 0.5
-                        cmd = `/stateG1?cmd=${this.id}`                    
+                        cmd = `http://10.42.0.1:59521/cmd?value=${cmds[this.id]}`                 
                     } else
-                        cmd = `/arm?cmd=${this.id}`
+                        cmd = `http://10.42.0.1:59521/cmd?value=${cmds[this.id]}`
             }
 
 
@@ -604,7 +624,11 @@ document.addEventListener('DOMContentLoaded', function() {
             const color = this.getAttribute('data-color');
             const theme = themeColors[color];
 
-            const response = await fetch(`/color?value=${color}`)
+            const r = colors[color][0]
+            const g = colors[color][1]
+            const b = colors[color][2]
+
+            const response = await fetch(`http://10.42.0.1:59521/led?r=${r}&g=${g}&b=${b}`)
             if (!response.ok) {
                 throw new Error(`Response status: ${response.status}`)
             }
