@@ -1,4 +1,4 @@
-alert("Nice to meet you again! 2506260700")
+alert("Nice to meet you again! 2508051000")
 // 버튼 클릭 효과 및 상태 변화 시뮬레이션
 const list_tts = []
 let audio = 0
@@ -10,8 +10,8 @@ var gumStream;              //stream from getUserMedia()
 var rec;                    //Recorder.js object
 var input;                  //MediaStreamAudioSourceNode we'll be recording
 
-let multi = 1
-let state = 'Walk_G1'
+let multi = 0.5
+let state = 'Walk2_G1'
 
 const colors = {
     "white": [255, 255, 255],
@@ -241,6 +241,7 @@ let intv = 0
 const lastPressed = {}
 let lastCmd = ''
 let lastState = 'stop'
+let beforeTime = 0
 
 function getDirection() {
 
@@ -266,7 +267,7 @@ function getDirection() {
     }
         
     //let lx = 0, ly = 0, rx = 0, ry=0
-    let vx = 0.0, vy=0.0, omega =0.0
+    let vx = 0, vy=0, omega =0
 
     // 방향 이동 처리
     if (up) { // ⬆ 북쪽
@@ -277,27 +278,37 @@ function getDirection() {
         vx = -1 * multi
     }
     
-    if (left)  // ⬅ 서쪽
+    if (left){  // ⬅ 서쪽
+        lastState = 'left'
         vy = smooth(multi)
-    else if (right) // ➡ 동쪽
+    } else if (right) { // ➡ 동쪽
         vy = -1 * smooth(multi)
-
+        lastState = 'left'
+    }
     // 회전 처리
-    if (rt_left)
+    if (rt_left){
+        lastState = 'turn_left'
         omega = smooth(multi)
-    else if (rt_right)
+    } else if (rt_right){
+        lastState = 'turn_right'
         omega = -1 * smooth(multi)
-    
+    }
     // 명령어 생성 // pion 은 정지 명령도 필요하여 무조건 전송 - 다만 기존과 다를때만
     const cmd = `${vx} ${vy} ${omega}`
 
     document.getElementById('log').value = cmd
+     
+    clearInterval(intv)
+
+    if(Date.now() - beforeTime < 200 && lastCmd == cmd)
+        return
  
     lastCmd = cmd
-    
-    clearInterval(intv)
-    
-    if(cmd == '0.0 0.0 0.0' && lastState == 'up' && multi > 1){
+
+
+    if(cmd == '0 0 0' && lastState == 'up' && multi > 1){
+        console.log(lastState,cmd)
+        beforeTime = Date.now()
         lastState = 'stop'
         fetch(`http://10.42.0.1:59521/cmd?key=move&value="0.5 0 0"`)
 
@@ -306,8 +317,19 @@ function getDirection() {
             fetch(`http://10.42.0.1:59521/cmd?key=move&value="0 0 0"`)
         },1500)
         
-    } else if(cmd != '0.0 0.0 0.0')
+    } else if(cmd != '0 0 0' && lastState != 'stop'){
+        console.log('call here', cmd != '0 0 0')
+        console.log(lastState,cmd)
+        beforeTime = Date.now()
         fetch(`http://10.42.0.1:59521/cmd?key=move&value=${cmd}`)
+    } else if(cmd == '0 0 0' && lastState != 'stop'){
+
+        console.log('call stop', cmd == '0 0 0')
+        console.log(lastState,cmd)
+        beforeTime = Date.now()
+        lastState = 'stop'
+        fetch(`http://10.42.0.1:59521/cmd?key=move&value=${cmd}`)
+    }
     
 }
 
@@ -406,7 +428,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     cmd = 'http://127.0.0.1:59532/v1/img2chat?isPlay=1&prompt="describe the image, what you see?"'
                     //play("저는 업무를 처리중이므로, 가까이 오시면 위험합니다.")
                     break;    
-                case 'mode':
+                case 'mode': // discard
                     if(mode == 'Walk2_G1'){
                         mode = 'Run_G1'
                         multi = 1
@@ -417,7 +439,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     
                     cmd = `http://10.42.0.1:59521/cmd?value=${cmds[mode]}`
                     break;     
-                case 'connect':
+                case 'connect': // discard
                     alert('connect!!!')
                     fetch(`/start_collection`).then(async response=>{
                         if (!response.ok) {
@@ -435,6 +457,15 @@ document.addEventListener('DOMContentLoaded', function() {
 
                     break;
                 case 'prepare':
+                    fetch(`/start_collection`).then(async response=>{
+                        if (!response.ok) {
+                            throw new Error(`Response status: ${response.status}`)
+                        }
+   
+                        document.getElementById('background-video').src = '/video_feed'
+                        
+                    })
+              
                     cmd = '/prepare'
                     break;                    
                 default: // hands 구현 필요
@@ -791,7 +822,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function setSpeed(isUp){
 
-        if(state = 'Walk_G1'){
+        if(state == 'Walk_G1' || state == 'Walk2_G1'){
             if(isUp){
                 if(multi == 0.5)
                     multi = 1
@@ -815,19 +846,19 @@ document.addEventListener('DOMContentLoaded', function() {
             if(isUp){
                 if(multi < 1)
                     multi = 1
-                else if(multi < 1.5)
-                    multi = 1.5
                 else if(multi < 2)
-                    multi = 2.5
+                    multi = 2
+                else if(multi < 3)
+                    multi = 3
                 else
                     multi = 3
             } else {
-                if(multi < 1.5)
+                if(multi < 2)
                     multi = 1
-                else if(multi < 2)
-                    multi = 1.5
                 else if(multi < 3)
                     multi = 2
+                else if(multi < 4)
+                    multi = 3
                 else
                     multi = 1
             }            

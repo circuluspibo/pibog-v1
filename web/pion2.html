@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="style2.css" />
     <title>사이버네틱 리모콘</title>
     <!-- 구글 폰트 - Orbitron -->
      <!--
@@ -36,7 +36,7 @@
                 <button class="mic-button" id="tts-follow">컴온</button>
                 <button class="mic-button" id="tts-warn">사진</button>
                 <button class="mic-button" id="tts-bye">바이</button>
-                <button class="mic-button" id="tts-poet">위험</button>
+                <button class="mic-button" id="tts-poet">EYE</button>
             </div>
             
             <!-- 사람/사물 카운팅 패널 (중앙 상단) -->
@@ -55,6 +55,7 @@
                         <div class="counter-value" id="object-speed">0</div>
                     </div> 
  
+                    <!--
                     <div class="counter-box">
                         <button class="mic-button" id="mode">mode</button>
                     </div>
@@ -62,7 +63,7 @@
                     <div class="counter-box">
                         <button class="mic-button" id="connect">robot</button>
                     </div>
-                          
+                    -->      
                     <div class="counter-box">
                         <button class="mic-button" id="prepare">hand</button>
                     </div>                                        
@@ -132,7 +133,7 @@
         
         <div class="control-row">
             <!-- 이동 패드 (좌측) -->
-            <div class="control-pad">
+            <div class="control-pad" style="display:none;">
                 <div class="pad-button up-button" id="move-up" style="display: none;">
                     <i class="fas fa-chevron-up"></i>
                 </div>
@@ -166,7 +167,7 @@
                 <button class="function-button hands" id="promise">promise</button>
                 <button class="function-button hands" id="grab">grab</button>
                 <button class="function-button hands" id="release">Release Hand</button>
-                </p>
+                <hr>
                 <button class="function-button arms" id="clamp">clamp</button>
                 <button class="function-button arms" id="highFive">highFive</button>
                 <button class="function-button arms" id="shakeHands_1">shakeHands_1</button>
@@ -180,13 +181,15 @@
                 <button class="function-button arms" id="bothHandsUp">bothHandsUp</button>                      
                 <button class="function-button arms" id="singleHandsUp">singleHandsUp</button>    
                 <button class="function-button arms" id="Refuse">Refuse</button>    
-                <button class="function-button arms" id="Release Arm">Release Arm</button>     
-                </p>
+                <button class="function-button arms" id="Release_Arm">Release Arm</button>     
+                <hr>
                 <button class="function-button states" id="ZeroTorque">ZeroTorque</button>
                 <button class="function-button states" id="Damp">Damp</button>
                 <button class="function-button states" id="Preparation">Preparation</button>                      
-                <button class="function-button states" id="Seating">Seating</button>    
-                <button class="function-button states" id="Walk_G1">Walk</button>    
+                <button class="function-button states" id="Seating">Seating</button>
+                <!--    
+                <button class="function-button states" id="Walk_G1">Walk</button>   
+                --> 
                 <button class="function-button states" id="Walk2_G1">Walk2</button> 
                 <button class="function-button states" id="Run_G1">Run</button> 
                 <!--
@@ -197,7 +200,7 @@
             </div>
             
             <!-- 회전 패드 (우측) -->
-            <div class="rotation-pad">
+            <div class="rotation-pad"  style="display:none;">
                 <div class="rotation-button tilt-up" id="tilt-up">
                     <i class="fas fa-angle-up"></i>
                 </div>
