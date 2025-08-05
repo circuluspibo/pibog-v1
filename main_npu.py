@@ -213,24 +213,25 @@ def processing_thread():
             state["cnt_live"] = cnt_live
             state["cnt_object"] = cnt_object
 
-            masks = result.masks.data.cpu().numpy()
-            for mask in masks:
-                #mask = (mask * 255).astype(np.uint8)
-                #contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-                #cv2.drawContours(output, contours, -1, (0, 255, 0), 3)
+            if result.masks is not None:
+                masks = result.masks.data.cpu().numpy()
+                for mask in masks:
+                    #mask = (mask * 255).astype(np.uint8)
+                    #contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                    #cv2.drawContours(output, contours, -1, (0, 255, 0), 3)
 
-                colored_mask = (mask * 255).astype(np.uint8)
+                    colored_mask = (mask * 255).astype(np.uint8)
 
-                # 컬러 마스크 생성
-                color_layer = np.zeros_like(output, dtype=np.uint8)
-                color_layer[:, :] = (0, 255, 0) 
+                    # 컬러 마스크 생성
+                    color_layer = np.zeros_like(output, dtype=np.uint8)
+                    color_layer[:, :] = (0, 255, 0) 
 
-                # 마스크 적용
-                mask_3ch = cv2.merge([colored_mask] * 3)
-                masked_color = cv2.bitwise_and(color_layer, mask_3ch)
+                    # 마스크 적용
+                    mask_3ch = cv2.merge([colored_mask] * 3)
+                    masked_color = cv2.bitwise_and(color_layer, mask_3ch)
 
-                # 오버레이에 컬러 마스크 반영
-                output = np.where(mask_3ch > 0, cv2.addWeighted(output, 1 - 0.3, masked_color, 0.3, 0), output)
+                    # 오버레이에 컬러 마스크 반영
+                    output = np.where(mask_3ch > 0, cv2.addWeighted(output, 1 - 0.3, masked_color, 0.3, 0), output)
 
                 # 윤곽선 그리기 (선택 사항)
                 #contours, _ = cv2.findContours(colored_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -370,6 +371,20 @@ async def prepare():
   except Exception as e:
       print(f"컨트롤러 초기화 실패: {e}")
       exit()
+
+@app.get("/prepare2")
+async def prepare2():
+
+  global hL
+  global hR
+
+  try:
+      hL = HadnControler('/dev/ttyACM2') # L 컨트롤러 L동글 부터 연결
+      hR = HadnControler('/dev/ttyACM3') # R 컨트롤러
+      print("컨트롤러 초기화 성공")
+  except Exception as e:
+      print(f"컨트롤러 초기화 실패: {e}")
+      exit()      
 
 @app.get("/hand")
 async def hand(cmd : str):
@@ -709,8 +724,9 @@ def tts(text = "", voice=31, lang='ko', static=0, isPlay=0):
 
       return f"output/{filename}.wav"
     
+    # 31 korean
 @app.get("/v2/tts", response_class=FileResponse, summary="음성 생성 후 로봇에서 재생")
-def tts(text = "", voice=31, lang='ko', static=0, isPlay=0):
+def tts(text = "", voice=6, lang='ko', static=0, isPlay=0):
     #org_text = parse.quote(text, safe='', encoding="cp949")
     start = t.time()
     print(text, static)
@@ -740,24 +756,8 @@ def tts(text = "", voice=31, lang='ko', static=0, isPlay=0):
     with open(f"output/{filename}.wav", "rb") as f:
         files = {"audio_file": (f"{filename}.wav", f, "audio/wav")}
         response = requests.post("http://10.42.0.1:59521/audio", files=files)
-    
-    """
-    else:
-      write(data=audio, rate=conf_tts.data.sampling_rate, filename=f"output/{filename}.wav")
-      audio = AudioSegment.from_wav(f"output/{filename}.wav")
-      # Set specific audio parameters for compatibility
-      audio = audio.set_frame_rate(22050)  # Standard sample rate
-      audio = audio.set_sample_width(2)
-      audio = audio.set_channels(1)
-      #wav_file_path = audiofile_path.replace('.mp3', '.wav')
-      audio.export(f"output/{filename}.wav", format='wav', codec="pcm_s16le" )#parameters=["-ar", "44100"])
-      if int(isPlay) > 0 :
-        playsound(f"output/{filename}.wav")
-    """
 
     return f"output/{filename}.wav"
-
-
 
 
 import httpx  # httpx를 사용하여 비동기 HTTP 요청을 처리합니다.

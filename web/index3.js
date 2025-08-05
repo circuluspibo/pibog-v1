@@ -1,4 +1,4 @@
-alert("Nice to meet you again! 2508051000")
+alert("Nice to meet you again! 2508051200")
 // 버튼 클릭 효과 및 상태 변화 시뮬레이션
 const list_tts = []
 let audio = 0
@@ -120,8 +120,8 @@ function play(text){
 
     //audio = new Audio(`/v2/tts?voice=31&lang=ko&static=0&isPlay=0&text=${text}`);
     //audio.play()
-
-    fetch(`/v2/tts?voice=31&lang=ko&static=0&isPlay=0&text=${text}`)
+    // korean 31 
+    new Audio(`/v2/tts?text=${text}&lang=en&voice=6`)
 }
 
 function playNext(chunk) {
@@ -156,7 +156,7 @@ function playNext(chunk) {
 async function generate(prompt) {
     fetch(`http://10.42.0.1:59521/led?r=0&g=255&b=0`)
 
-  const response = await fetch(`http://127.0.0.1:59532/v1/txt2chat?prompt=${prompt}&isPlay=0`, {
+  const response = await fetch(`http://127.0.0.1:59532/v1/txt2chat?prompt=${prompt} response like human dialogue and shortly!&isPlay=0`, {
     method: 'GET',
     headers: {
       'Accept': 'application/json'
@@ -172,12 +172,12 @@ async function generate(prompt) {
   const decoder = new TextDecoder("utf-8");
   let result = "";
 
+    pose = poses[Math.floor(Math.random() * poses.length)]
+    fetch(`http://10.42.0.1:59521/action?value=${pose}`)
+
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
-
-    pose = poses[Math.floor(Math.random() * poses.length)]
-    fetch(`http://10.42.0.1:59521/action?value=${pose}`)
 
     const chunk = decoder.decode(value, { stream: true });
     result += chunk;
@@ -381,6 +381,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
 
             switch(this.id){
+                /*
                 case 'rotation-center':
                 case 'move-center':
                     cmd = '/walkG1?lx=0&rx=0&ly=0&ry=0'
@@ -410,31 +411,32 @@ document.addEventListener('DOMContentLoaded', function() {
                     break;
                 case 'tilt-down':
                     cmd = `/walkG1?lx=0&rx=0&ly=${-1.5 * multi}&ry=${-1.5 * multi}`
-                    break;        
+                    break; 
+                */       
                 case 'tts-hello':
                     cmd = 'http://10.42.0.1:59521/action?value=shakeHands_1'
-                    play("안녕? 나는 서큘러스의 파이온이라고 해. 만나서 반가워.")
+                    play("Hi, I am pi-on, the humanoid robot inside intel core ultra")
                     break;
                 case 'tts-intro':
                     cmd = 'http://10.42.0.1:59521/action?value=clamp'
-                    play("서큘러스의 휴먼 인공지능기술과 만드로의 로봇 손 기술이 결합되었어.")
+                    play("Welcome to TAIROS at taipei in taiwan!")
                     break; 
                 case 'tts-follow':
                     cmd = 'http://10.42.0.1:59521/action?value=lowWave'
-                    play("자 저를 따라 오세요!")
+                    play("Follow me now!")
                     break;
                 case 'tts-warn':
                     cmd = 'http://10.42.0.1:59521/action?value=highFive'
-                    play("안녕하세요. 저와 함께 사진좀 찍어보실래요?")
+                    play("How about take a photo with me?")
                     break;
                 case 'tts-bye':
-                    cmd = 'http://127.0.0.1:59532/v1/txt2chat?isPlay=1&prompt="what is future of the robot?"'
+                    cmd = 'http://127.0.0.1:59532/v1/txt2chat?isPlay=1&prompt="what is future of the robot? response like human dialogue and shortly!"'
                     //cmd = 'http://10.42.0.1:59521/action?value=lowWave'
                     //play("환영합니다. 저는 휴머노이드 로봇 파이온입니다.")
                     break;
                 case 'tts-poet':
                     //cmd = 'http://10.42.0.1:59521/action?value=Refuse'
-                    cmd = 'http://127.0.0.1:59532/v1/img2chat?isPlay=1&prompt="describe the image, what you see?"'
+                    cmd = 'http://127.0.0.1:59532/v1/img2chat?isPlay=1&prompt="describe the image, what you see? response like human dialogue and shortly!"'
                     //play("저는 업무를 처리중이므로, 가까이 오시면 위험합니다.")
                     break;    
                 case 'mode': // discard
@@ -475,7 +477,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         
                     })
               
-                    cmd = '/prepare'
+                    cmd = '/prepare2'
                     break;                    
                 default: // hands 구현 필요
                     if(this.classList.contains('arms')){ // ....
