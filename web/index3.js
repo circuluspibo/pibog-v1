@@ -115,11 +115,13 @@ function listen(){
 }
 
 function play(text){
-    if(audio)
-        audio.pause()
+    //if(audio)
+    //    audio.pause()
 
-    audio = new Audio(`/v2/tts?voice=31&lang=ko&static=0&isPlay=0&text=${text}`);
-    audio.play()
+    //audio = new Audio(`/v2/tts?voice=31&lang=ko&static=0&isPlay=0&text=${text}`);
+    //audio.play()
+
+    fetch(`/v2/tts?voice=31&lang=ko&static=0&isPlay=0&text=${text}`)
 }
 
 function playNext(chunk) {
@@ -150,9 +152,10 @@ function playNext(chunk) {
 }
 
   // Start playing the list
-  playNext();
 
 async function generate(prompt) {
+    fetch(`http://10.42.0.1:59521/led?r=0&g=255&b=0`)
+
   const response = await fetch(`http://127.0.0.1:59532/v1/txt2chat?prompt=${prompt}&isPlay=0`, {
     method: 'GET',
     headers: {
@@ -173,16 +176,22 @@ async function generate(prompt) {
     const { done, value } = await reader.read();
     if (done) break;
 
+    pose = poses[Math.floor(Math.random() * poses.length)]
+    fetch(`http://10.42.0.1:59521/action?value=${pose}`)
+
     const chunk = decoder.decode(value, { stream: true });
     result += chunk;
 
     // Update your UI with the streamed text here
     console.log(chunk); // for demo
-    playNext(chunk)
+    play(chunk)
+    //playNext(chunk)
     //document.getElementById("output").textContent += chunk;
   }
 
 
+    fetch(`http://10.42.0.1:59521/led?r=0&g=255&b=255`)
+    fetch(`http://10.42.0.1:59521/action?value="Release_Arm"`)
   console.log("Final result:", result);
 }
 
