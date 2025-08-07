@@ -1,5 +1,5 @@
 [Desktop Entry]
-Name=server
+Name=GPU
 Comment=Run Python script in terminal
 Exec=gnome-terminal -- bash -c "cd /home/circulus/git/pibog-v1;python index2.py; exec bash"
 Icon=utilities-terminal
