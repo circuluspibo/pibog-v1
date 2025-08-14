@@ -763,7 +763,8 @@ def tts(text = "", voice=6, lang='ko', static=0, isPlay=0):
 import httpx  # httpx를 사용하여 비동기 HTTP 요청을 처리합니다.
 
 # 원본 비디오 스트림 URL
-SOURCE_VIDEO_URL = "http://10.42.0.1:59511/video_feed"
+#SOURCE_VIDEO_URL = "http://10.42.0.1:59511/video_feed"
+SOURCE_VIDEO_URL = "http://192.168.12.117:59511/video_feed"
 
 async def proxy_video_stream():
     """원본 서버에서 비디오 스트림을 받아서 다시 스트리밍"""
