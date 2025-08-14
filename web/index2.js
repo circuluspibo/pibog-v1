@@ -92,11 +92,11 @@ function playNext(chunk) {
         list_tts.push(chunk)
 
     if(audio == 0 && list_tts.length > 0){
-        if(pose == 'Release Arm'){
+        if(pose == 'Release_Arm'){
             pose = poses[Math.floor(Math.random() * poses.length)]
             fetch(`/arm?cmd=${pose}`)
         } else {
-            pose = 'Release Arm'
+            pose = 'Release_Arm'
             fetch(`/arm?cmd=${pose}`)
         }
 
@@ -765,8 +765,8 @@ document.addEventListener('DOMContentLoaded', function() {
     }    
 
     function setSpeed(isUp){
-
-        if(state = 'Walk_G1'){
+        alert(state)
+        if(state == 'Walk_G1' || state == 'Walk2_G1'){
             if(isUp){
                 if(multi == 0.5)
                     multi = 1
