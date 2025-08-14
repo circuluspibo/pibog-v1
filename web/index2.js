@@ -26,7 +26,7 @@ function listen(){
   if(!isRecord){
     
     console.log("Recording started")
-    isRecord = true
+    isRecord = tze
     navigator.mediaDevices.getUserMedia({audio: true, video: false}).then(function(stream) {
       console.log("getUserMedia() success, stream created, initializing Recorder.js ...");
 
@@ -393,6 +393,17 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                     break;     
                 case 'connect':
+
+                    fetch(`/start_collection`).then(async response=>{
+                        if (!response.ok) {
+                            throw new Error(`Response status: ${response.status}`)
+                        }
+   
+                        document.getElementById('background-video').src = '/video_feed'
+                        
+                    })
+              
+
                     fetch(`/connect2`).then(async response=>{
                         if (!response.ok) {
                             throw new Error(`Response status: ${response.status}`)
@@ -400,12 +411,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
                         const json = await response.json()
                         console.log('connect ok',json)
-
-                        /*
-                        setTimeout(()=>{
-                            document.getElementById('background-video').src = '/video_feed'
-                        },5000)
-                        */
                     })
                     break;
                 case 'prepare':
