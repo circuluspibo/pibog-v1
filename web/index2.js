@@ -80,7 +80,7 @@ function play(text){
     if(audio)
         audio.pause()
 
-    audio = new Audio(`/v1/tts?voice=31&lang=ko&static=0&isPlay=0&text=${text}`);
+    audio = new Audio(`/v2/tts?voice=31&lang=ko&static=0&isPlay=0&text=${text}`);
     audio.play()
 }
 
@@ -103,7 +103,7 @@ function playNext(chunk) {
         fetch(cmd)
 
         const text = list_tts.shift()
-        audio = new Audio(`/v1/tts?voice=31&lang=ko&static=0&isPlay=0&text=${text}`);
+        audio = new Audio(`/v2/tts?voice=31&lang=ko&static=0&isPlay=0&text=${text}`);
         audio.play()
 
         audio.addEventListener('ended', () => {
@@ -765,7 +765,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }    
 
     function setSpeed(isUp){
-        alert(state)
+
         if(state == 'Walk_G1' || state == 'Walk2_G1'){
             if(isUp){
                 if(multi == 0.5)
@@ -824,15 +824,23 @@ document.addEventListener('DOMContentLoaded', function() {
         posX = Math.max(0, Math.min(window.innerWidth, posX));
         posY = Math.max(0, Math.min(window.innerHeight, posY));
 
-        if(dy > 0) // down
+        if(dy > 0){ // down
             multi = 0.5
-        else if(dy < 0) // up
-            multi = 2
+        } else if(dy < 0){ // up
+            if(state == 'Walk_G1' || state == 'Walk2_G1')    
+                multi = 2
+            else
+                multi = 3
+        }
 
-        if(dx > 0) // right
-            multi = 1.5 //setHeight(true)
-        else if(dx < 0) // left
-            multi = 1    
+        if(dx > 0){ // right
+            if(state == 'Walk_G1' || state == 'Walk2_G1')    
+                multi = 1.5
+            else
+                multi = 2      
+        } else if(dx < 0) // left
+            multi = 1
+        
 
         document.getElementById('object-speed').textContent = multi
         // 방향 감지
