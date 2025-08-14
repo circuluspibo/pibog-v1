@@ -526,7 +526,7 @@ body {
 }
 
 .function-button {
-    background-color: rgba(0, 0, 0, 0.7);
+    background-color: rgba(0, 0, 0, 0.7) !important;
     border: 1px solid var(--accent-color);
     padding: 10px 20px;
     border-radius: 8px;
@@ -724,4 +724,5 @@ body {
         width: 90%;
         max-width: 90%;
     }
+
 }
