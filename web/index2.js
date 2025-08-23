@@ -830,7 +830,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if(state == 'Walk_G1' || state == 'Walk2_G1')    
                 multi = 2
             else
-                multi = 3
+                multi = 3.5
         }
 
         if(dx > 0){ // right

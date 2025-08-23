@@ -114,18 +114,25 @@ function listen(){
   }
 }
 
-function play(text){
+function play(text, lang='en'){
     //if(audio)
     //    audio.pause()
 
     //audio = new Audio(`/v2/tts?voice=31&lang=ko&static=0&isPlay=0&text=${text}`);
     //audio.play()
     // korean 31 
-    new Audio(`/v2/tts?text=${text}&lang=en&voice=6`)
+    switch(lang){
+        case 'ko':
+            new Audio(`/v2/tts?text=${text}&lang=ko&voice=31`)
+        case 'zh':
+            new Audio(`/v2/tts?text=${text}&lang=zh&voice=65`)
+        default:
+            new Audio(`/v2/tts?text=${text}&lang=en&voice=6`)
+    }
 }
 
 function playNext(chunk) {
-    fetch(`http://10.42.0.1:59521/led?r=0&g=255&b=0`)
+    fetch(`http://192.168.12.128:59521/led?r=0&g=255&b=0`)
     let cmd = ''
 
     if(chunk)
@@ -133,7 +140,7 @@ function playNext(chunk) {
 
     if(audio == 0 && list_tts.length > 0){
         pose = poses[Math.floor(Math.random() * poses.length)]
-        fetch(`http://10.42.0.1:59521/action?value=${pose}`)
+        fetch(`http://192.168.12.128:59521/action?value=${pose}`)
 
         const text = list_tts.shift() // 31 ko  65 zh
         audio = new Audio(`/v2/tts?voice=6&lang=en&static=0&isPlay=0&text=${text}`);
@@ -141,20 +148,20 @@ function playNext(chunk) {
 
         audio.addEventListener('ended', () => {
             audio = 0
-            //fetch(`http://10.42.0.1:59521/action?value="Release Arm"`)
+            //fetch(`http://192.168.12.128:59521/action?value="Release Arm"`)
             playNext()  // Play next audio when current one ends
         })
     } else {
         console.log('finish to speaking')
-        fetch(`http://10.42.0.1:59521/led?r=0&g=255&b=255`)
-        fetch(`http://10.42.0.1:59521/action?value="Release_Arm"`)
+        fetch(`http://192.168.12.128:59521/led?r=0&g=255&b=255`)
+        fetch(`http://192.168.12.128:59521/action?value="Release_Arm"`)
     }
 }
 
   // Start playing the list
 
 async function generate(prompt) {
-    fetch(`http://10.42.0.1:59521/led?r=0&g=255&b=0`)
+    fetch(`http://192.168.12.128:59521/led?r=0&g=255&b=0`)
 
   const response = await fetch(`http://127.0.0.1:59532/v1/txt2chat?prompt=${prompt} response like human dialogue and shortly!&isPlay=0`, {
     method: 'GET',
@@ -173,7 +180,7 @@ async function generate(prompt) {
   let result = "";
 
     pose = poses[Math.floor(Math.random() * poses.length)]
-    fetch(`http://10.42.0.1:59521/action?value=${pose}`)
+    fetch(`http://192.168.12.128:59521/action?value=${pose}`)
 
   while (true) {
     const { done, value } = await reader.read();
@@ -190,8 +197,8 @@ async function generate(prompt) {
   }
 
 
-    fetch(`http://10.42.0.1:59521/led?r=0&g=255&b=255`)
-    fetch(`http://10.42.0.1:59521/action?value="Release_Arm"`)
+    fetch(`http://192.168.12.128:59521/led?r=0&g=255&b=255`)
+    fetch(`http://192.168.12.128:59521/action?value="Release_Arm"`)
   console.log("Final result:", result);
 }
 
@@ -319,25 +326,25 @@ function getDirection() {
         console.log(lastState,cmd)
         beforeTime = Date.now()
         lastState = 'stop'
-        fetch(`http://10.42.0.1:59521/cmd?key=move&value="0.5 0 0"`)
+        fetch(`http://192.168.12.128:59521/cmd?key=move&value="0.5 0 0"`)
 
         intv = setTimeout(function(){
             console.log('smooth stop....')
-            fetch(`http://10.42.0.1:59521/cmd?key=move&value="0 0 0"`)
+            fetch(`http://192.168.12.128:59521/cmd?key=move&value="0 0 0"`)
         },1500)
         
     } else if(cmd != '0 0 0' && lastState != 'stop'){
         console.log('call here', cmd != '0 0 0')
         console.log(lastState,cmd)
         beforeTime = Date.now()
-        fetch(`http://10.42.0.1:59521/cmd?key=move&value=${cmd}`)
+        fetch(`http://192.168.12.128:59521/cmd?key=move&value=${cmd}`)
     } else if(cmd == '0 0 0' && lastState != 'stop'){
 
         console.log('call stop', cmd == '0 0 0')
         console.log(lastState,cmd)
         beforeTime = Date.now()
         lastState = 'stop'
-        fetch(`http://10.42.0.1:59521/cmd?key=move&value=${cmd}`)
+        fetch(`http://192.168.12.128:59521/cmd?key=move&value=${cmd}`)
     }
     
 }
@@ -414,28 +421,34 @@ document.addEventListener('DOMContentLoaded', function() {
                     break; 
                 */       
                 case 'tts-hello':
-                    cmd = 'http://10.42.0.1:59521/action?value=shakeHands_1'
-                    play("Hi, I am pi-on, the humanoid robot inside intel core ultra")
-                    break;
+                    //cmd = 'http://192.168.12.128:59521/action?value=shakeHands_1'
+                    //fetch('http://192.168.12.128:59521/action?value=shakeHands_1')
+                    fetch('http://192.168.12.128:59521/action?value=shakeHands_1')
+                    play("Hi, I am pai-on, the humanoid robot inside intel core ultra")
+                    return;
                 case 'tts-intro':
-                    cmd = 'http://10.42.0.1:59521/action?value=clamp'
-                    play("Welcome to TAIROS at taipei in taiwan!")
-                    break; 
+                    //cmd = 'http://192.168.12.128:59521/action?value=clamp'
+                    //fetch('http://192.168.12.128:59521/action?value=clamp')
+                    fetch('http://192.168.12.128:59521/action?value=clamp')
+                    play("大家好，我是 PI ON. 基於 Intel Core Ultra，我整合 CPU、GPU、NPU，打造智慧引擎。別人還依賴單一加速器，我已能即時靈活調度，效率更高. CUDA 是過去，未來是靈活的. 而我是未來. 我是 PI-ON，很高興認識大家.","zh")
+                    return;
                 case 'tts-follow':
-                    cmd = 'http://10.42.0.1:59521/action?value=lowWave'
+                    //cmd = 'http://192.168.12.128:59521/action?value=lowWave'
+                    //fetch('http://192.168.12.128:59521/action?value=lowWave')
                     play("Follow me now!")
-                    break;
+                    return;
                 case 'tts-warn':
-                    cmd = 'http://10.42.0.1:59521/action?value=highFive'
+                    //cmd = 'http://192.168.12.128:59521/action?value=highFive'
+                    //fetch('http://192.168.12.128:59521/action?value=highFive')
                     play("How about take a photo with me?")
-                    break;
+                    return;
                 case 'tts-bye':
                     cmd = 'http://127.0.0.1:59532/v1/txt2chat?isPlay=1&prompt="what is future of the robot? response like human dialogue and shortly!"'
-                    //cmd = 'http://10.42.0.1:59521/action?value=lowWave'
+                    //cmd = 'http://192.168.12.128:59521/action?value=lowWave'
                     //play("환영합니다. 저는 휴머노이드 로봇 파이온입니다.")
                     break;
                 case 'tts-poet':
-                    //cmd = 'http://10.42.0.1:59521/action?value=Refuse'
+                    //cmd = 'http://192.168.12.128:59521/action?value=Refuse'
                     cmd = 'http://127.0.0.1:59532/v1/img2chat?isPlay=1&prompt="describe the image, what you see? response like human dialogue and shortly!"'
                     //play("저는 업무를 처리중이므로, 가까이 오시면 위험합니다.")
                     break;    
@@ -448,10 +461,12 @@ document.addEventListener('DOMContentLoaded', function() {
                         multi = 2
                     }
                     
-                    cmd = `http://10.42.0.1:59521/cmd?value=${cmds[mode]}`
+                    cmd = `http://192.168.12.128:59521/cmd?value=${cmds[mode]}`
                     break;     
                 case 'connect': // discard
                     alert('connect!!!')
+
+                    
                     fetch(`/start_collection`).then(async response=>{
                         if (!response.ok) {
                             throw new Error(`Response status: ${response.status}`)
@@ -466,13 +481,15 @@ document.addEventListener('DOMContentLoaded', function() {
                         document.getElementById('background-video').src = '/video_feed'
                     },1000)
 
-                    break;
+                    return;
                 case 'prepare':
                     fetch(`/start_collection`).then(async response=>{
                         if (!response.ok) {
                             throw new Error(`Response status: ${response.status}`)
                         }
    
+                        fetch('http://192.168.12.128:59521/intel')
+
                         document.getElementById('background-video').src = '/video_feed'
                         
                     })
@@ -481,13 +498,13 @@ document.addEventListener('DOMContentLoaded', function() {
                     break;                    
                 default: // hands 구현 필요
                     if(this.classList.contains('arms')){ // ....
-                        cmd = `http://10.42.0.1:59521/action?value=${this.id}`
+                        cmd = `http://192.168.12.128:59521/action?value=${this.id}`
                     } else if(this.classList.contains('states')){
                         state = this.id
                         multi = 0.5
-                        cmd = `http://10.42.0.1:59521/cmd?value=${cmds[this.id]}`                 
+                        cmd = `http://192.168.12.128:59521/cmd?value=${cmds[this.id]}`                 
                     } else
-                        cmd = `http://10.42.0.1:59521/cmd?value=${cmds[this.id]}`
+                        cmd = `http://192.168.12.128:59521/cmd?value=${cmds[this.id]}`
             }
 
 
@@ -669,7 +686,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const g = colors[color][1]
             const b = colors[color][2]
 
-            const response = await fetch(`http://10.42.0.1:59521/led?r=${r}&g=${g}&b=${b}`)
+            const response = await fetch(`http://192.168.12.128:59521/led?r=${r}&g=${g}&b=${b}`)
             if (!response.ok) {
                 throw new Error(`Response status: ${response.status}`)
             }

@@ -754,8 +754,8 @@ def tts(text = "", voice=6, lang='ko', static=0, isPlay=0):
 
     # 파일 열고 전송
     with open(f"output/{filename}.wav", "rb") as f:
-        files = {"audio_file": (f"{filename}.wav", f, "audio/wav")}
-        response = requests.post("http://10.42.0.1:59521/audio", files=files)
+        files = {"audio_file": (f"{filename}.wav", f, "audio/wav")} #10.42.0.1
+        response = requests.post("http://192.168.12.128:59521/audio", files=files)
 
     return f"output/{filename}.wav"
 
@@ -763,7 +763,7 @@ def tts(text = "", voice=6, lang='ko', static=0, isPlay=0):
 import httpx  # httpx를 사용하여 비동기 HTTP 요청을 처리합니다.
 
 # 원본 비디오 스트림 URL
-SOURCE_VIDEO_URL = "http://10.42.0.1:59511/video_feed"
+SOURCE_VIDEO_URL = "http://192.168.12.128:59511/video_feed"
 #SOURCE_VIDEO_URL = "http://192.168.12.117:59511/video_feed"
 
 async def proxy_video_stream():
