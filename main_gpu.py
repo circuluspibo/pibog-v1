@@ -214,6 +214,8 @@ def txt2chat(prompt : str ,system = _SYSTEM, isPlay = 0, lang='en'): # gen or me
     add_generation_prompt=True
   )
 """
+  pipe_txt.start_chat(system_message=system)
+
   print(prompt)
 
   config = GenerationConfig(
