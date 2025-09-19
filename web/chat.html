@@ -477,9 +477,17 @@
             constructor() {
                 this.apiBaseUrl = 'http://192.168.3.76:59532/v1';
                 this.ttsBaseUrl = 'http://192.168.3.76:59531/v1';
+                
+                // 음성 관련 변수들
                 this.mediaRecorder = null;
                 this.audioChunks = [];
                 this.isRecording = false;
+                this.audioContext = null;
+                this.gumStream = null;
+                this.input = null;
+                this.recordingTimeout = null;
+                
+                // 기타 설정
                 this.isTtsEnabled = true;
                 this.autoSendImage = false;
                 this.currentImage = null;
@@ -753,40 +761,89 @@
             }
             
             async startRecording() {
+                if (this.isRecording) return;
+                
                 try {
-                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                    this.mediaRecorder = new MediaRecorder(stream);
+                    console.log("Recording started");
+                    this.isRecording = true;
+                    
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+                    console.log("getUserMedia() success, stream created, initializing MediaRecorder...");
+                    
+                    this.audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 22050 });
+                    this.gumStream = stream;
+                    this.input = this.audioContext.createMediaStreamSource(stream);
+                    
+                    // MediaRecorder를 사용하여 녹음
+                    this.mediaRecorder = new MediaRecorder(stream, {
+                        mimeType: MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/mp4'
+                    });
+                    
                     this.audioChunks = [];
                     
                     this.mediaRecorder.ondataavailable = (event) => {
-                        this.audioChunks.push(event.data);
+                        if (event.data.size > 0) {
+                            this.audioChunks.push(event.data);
+                        }
                     };
                     
                     this.mediaRecorder.onstop = () => {
+                        console.log('MediaRecorder stopped');
                         this.processAudioRecording();
-                        stream.getTracks().forEach(track => track.stop());
+                        if (this.gumStream) {
+                            this.gumStream.getAudioTracks()[0].stop();
+                        }
                     };
                     
-                    this.mediaRecorder.start();
-                    this.isRecording = true;
+                    // 음성 활동 감지 (VAD) 시뮬레이션 - 5초 후 자동 중지
+                    this.recordingTimeout = setTimeout(() => {
+                        if (this.isRecording) {
+                            console.log('voice_stop - timeout');
+                            this.stopRecording();
+                        }
+                    }, 5000); // 5초 최대 녹음 시간
+                    
+                    this.mediaRecorder.start(100); // 100ms 간격으로 데이터 수집
                     this.elements.voiceBtn.classList.add('recording');
-                    this.updateStatus('음성 인식 중...');
+                    this.updateStatus('음성 인식 중... (5초)');
+                    
                 } catch (error) {
                     console.error('음성 녹음 시작 오류:', error);
+                    this.isRecording = false;
                     this.updateStatus('마이크 접근 실패');
                 }
             }
             
             stopRecording() {
-                if (this.mediaRecorder && this.isRecording) {
+                if (!this.isRecording) return;
+                
+                console.log('record end');
+                this.isRecording = false;
+                this.elements.voiceBtn.classList.remove('recording');
+                
+                if (this.recordingTimeout) {
+                    clearTimeout(this.recordingTimeout);
+                    this.recordingTimeout = null;
+                }
+                
+                if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
                     this.mediaRecorder.stop();
-                    this.isRecording = false;
-                    this.elements.voiceBtn.classList.remove('recording');
                 }
             }
             
             async processAudioRecording() {
-                const audioBlob = new Blob(this.audioChunks, { type: 'audio/wav' });
+                if (this.audioChunks.length === 0) {
+                    this.updateStatus('녹음된 데이터 없음');
+                    return;
+                }
+                
+                // WAV 형태로 오디오 블롭 생성
+                const audioBlob = new Blob(this.audioChunks, { 
+                    type: MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/mp4'
+                });
+                
+                console.log('오디오 블롭 크기:', audioBlob.size, 'bytes');
+                
                 const formData = new FormData();
                 formData.append('file', audioBlob, 'recording.wav');
                 
@@ -797,16 +854,28 @@
                         body: formData
                     });
                     
+                    if (!response.ok) {
+                        throw new Error(`STT API 오류: ${response.status}`);
+                    }
+                    
                     const data = await response.json();
-                    if (data.text) {
+                    console.log('STT 응답:', data);
+                    
+                    if (data.text && data.text.trim()) {
                         this.elements.messageInput.value = data.text;
                         this.updateStatus('음성 인식 완료');
+                        // 자동으로 메시지 전송
                         setTimeout(() => this.sendMessage(), 500);
+                    } else {
+                        this.updateStatus('음성을 인식하지 못했습니다');
                     }
                 } catch (error) {
                     console.error('음성 인식 오류:', error);
-                    this.updateStatus('음성 인식 실패');
+                    this.updateStatus('음성 인식 실패: ' + error.message);
                 }
+                
+                // 정리
+                this.audioChunks = [];
             }
             
             // 마크다운 파싱 (간단한 버전)
@@ -850,48 +919,85 @@
             
             // 웹캠 관련
             async startWebcam() {
+                console.log('웹캠 시작 시도');
+                
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                    alert("Media Device not supported");
+                    this.updateStatus('미디어 장치 미지원');
+                    return;
+                }
+                
                 try {
-                    this.webcamStream = await navigator.mediaDevices.getUserMedia({ video: true });
+                    // 512x512 정확한 해상도로 웹캠 시작
+                    this.webcamStream = await navigator.mediaDevices.getUserMedia({
+                        video: { 
+                            width: { exact: 512 }, 
+                            height: { exact: 512 }
+                        }
+                    });
+                    
+                    console.log('getUserMedia() success');
+                    
                     this.elements.webcamVideo.srcObject = this.webcamStream;
                     this.elements.webcamVideo.style.display = 'block';
                     this.elements.webcamPlaceholder.style.display = 'none';
                     this.elements.startWebcam.style.display = 'none';
                     this.elements.captureImage.style.display = 'block';
                     this.elements.stopWebcam.style.display = 'block';
-                    this.updateStatus('웹캠 시작됨');
+                    
+                    console.log('웹캠 비디오 크기:', this.elements.webcamVideo.height, this.elements.webcamVideo.width);
+                    this.updateStatus('웹캠 시작됨 (512x512)');
+                    
                 } catch (error) {
                     console.error('웹캠 시작 오류:', error);
-                    this.updateStatus('웹캠 접근 실패');
+                    alert("Permission failed: " + error.message);
+                    this.updateStatus('웹캠 권한 실패');
                 }
             }
             
             captureImage() {
-                if (!this.webcamStream) return;
+                if (!this.webcamStream) {
+                    this.updateStatus('웹캠이 시작되지 않음');
+                    return;
+                }
+                
+                console.log('사진 촬영 시작');
                 
                 const canvas = document.createElement('canvas');
                 const video = this.elements.webcamVideo;
-                canvas.width = video.videoWidth;
-                canvas.height = video.videoHeight;
+                
+                // 512x512로 캔버스 크기 설정
+                canvas.width = 512;
+                canvas.height = 512;
                 
                 const ctx = canvas.getContext('2d');
-                ctx.drawImage(video, 0, 0);
+                // 비디오를 512x512 캔버스에 그리기
+                ctx.drawImage(video, 0, 0, 512, 512);
                 
                 canvas.toBlob((blob) => {
-                    this.displayImage(blob, 'webcam-capture.jpg');
+                    this.displayImage(blob, `webcam-capture-${Date.now()}.jpg`);
+                    console.log('사진 촬영 완료:', blob.size, 'bytes');
+                    
                     if (this.autoSendImage) {
                         setTimeout(() => this.sendImageMessage(), 500);
                     }
-                });
+                }, 'image/jpeg', 0.9);
                 
-                this.updateStatus('사진 촬영 완료');
+                this.updateStatus('사진 촬영 완료 (512x512)');
             }
             
             stopWebcam() {
+                console.log('웹캠 중지');
+                
                 if (this.webcamStream) {
-                    this.webcamStream.getTracks().forEach(track => track.stop());
+                    this.webcamStream.getTracks().forEach(track => {
+                        console.log('트랙 중지:', track.kind);
+                        track.stop();
+                    });
                     this.webcamStream = null;
                 }
                 
+                this.elements.webcamVideo.srcObject = null;
                 this.elements.webcamVideo.style.display = 'none';
                 this.elements.webcamPlaceholder.style.display = 'flex';
                 this.elements.startWebcam.style.display = 'block';
