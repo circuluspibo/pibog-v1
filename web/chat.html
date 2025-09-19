@@ -142,6 +142,21 @@
             30% { transform: translateY(-10px); }
         }
 
+        .message-bubble.streaming {
+            position: relative;
+        }
+
+        .message-bubble.streaming::after {
+            content: '▊';
+            animation: blink 1s infinite;
+            color: #4facfe;
+        }
+
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0; }
+        }
+
         /* 입력 영역 */
         .input-section {
             padding: 20px;
@@ -577,7 +592,14 @@
             
             async sendTextMessage(message) {
                 this.addMessage(message, 'user');
-                this.showTyping();
+                this.hideTyping();
+                
+                // AI 응답용 메시지 버블 미리 생성
+                const aiMessageDiv = this.createMessageElement('', 'ai');
+                const aiMessageBubble = aiMessageDiv.querySelector('.message-bubble');
+                aiMessageBubble.classList.add('streaming'); // 스트리밍 인디케이터 추가
+                this.elements.chatMessages.appendChild(aiMessageDiv);
+                this.scrollToBottom();
                 
                 try {
                     const response = await fetch(`${this.apiBaseUrl}/txt2chat?` + new URLSearchParams({
@@ -587,18 +609,67 @@
                         lang: 'ko'
                     }));
                     
-                    const data = await response.json();
-                    this.hideTyping();
+                    if (!response.ok) {
+                        throw new Error('네트워크 응답 오류');
+                    }
                     
-                    if (data.response) {
-                        this.addMessage(data.response, 'ai');
-                        if (this.isTtsEnabled) {
-                            this.playTts(data.response);
+                    const reader = response.body.getReader();
+                    const decoder = new TextDecoder();
+                    let fullResponse = '';
+                    let lastSentenceEnd = 0;
+                    
+                    while (true) {
+                        const { done, value } = await reader.read();
+                        
+                        if (done) break;
+                        
+                        const chunk = decoder.decode(value, { stream: true });
+                        
+                        // JSON 스트림 파싱 (여러 JSON 객체가 올 수 있음)
+                        const lines = chunk.split('\n').filter(line => line.trim());
+                        
+                        for (const line of lines) {
+                            try {
+                                const data = JSON.parse(line);
+                                if (data.response) {
+                                    fullResponse += data.response;
+                                    
+                                    // 실시간으로 텍스트 업데이트
+                                    aiMessageBubble.textContent = fullResponse;
+                                    this.scrollToBottom();
+                                    
+                                    // 문장이 완성되면 TTS 재생
+                                    if (this.isTtsEnabled) {
+                                        const sentences = fullResponse.slice(lastSentenceEnd).match(/[^.!?]*[.!?]/g);
+                                        if (sentences) {
+                                            for (const sentence of sentences) {
+                                                const cleanSentence = sentence.trim();
+                                                if (cleanSentence) {
+                                                    this.playTtsSentence(cleanSentence);
+                                                }
+                                            }
+                                            lastSentenceEnd = fullResponse.length;
+                                        }
+                                    }
+                                }
+                            } catch (parseError) {
+                                // JSON 파싱 오류는 무시 (불완전한 청크일 수 있음)
+                                console.log('JSON 파싱 스킵:', line);
+                            }
                         }
                     }
+                    
+                    // 마지막 미완성 문장도 TTS 재생
+                    if (this.isTtsEnabled && fullResponse.slice(lastSentenceEnd).trim()) {
+                        this.playTtsSentence(fullResponse.slice(lastSentenceEnd).trim());
+                    }
+                    
+                    // 스트리밍 완료 후 커서 제거
+                    aiMessageBubble.classList.remove('streaming');
+                    
                 } catch (error) {
-                    this.hideTyping();
-                    this.addMessage('죄송합니다. 연결에 문제가 있습니다.', 'ai');
+                    aiMessageBubble.classList.remove('streaming');
+                    aiMessageBubble.textContent = '죄송합니다. 연결에 문제가 있습니다.';
                     console.error('텍스트 메시지 전송 오류:', error);
                 }
             }
@@ -610,7 +681,13 @@
                     this.addMessage(message, 'user');
                 }
                 this.addMessage('📸 이미지 분석중...', 'user');
-                this.showTyping();
+                
+                // AI 응답용 메시지 버블 미리 생성
+                const aiMessageDiv = this.createMessageElement('', 'ai');
+                const aiMessageBubble = aiMessageDiv.querySelector('.message-bubble');
+                aiMessageBubble.classList.add('streaming'); // 스트리밍 인디케이터 추가
+                this.elements.chatMessages.appendChild(aiMessageDiv);
+                this.scrollToBottom();
                 
                 try {
                     const formData = new FormData();
@@ -626,20 +703,67 @@
                         body: formData
                     });
                     
-                    const data = await response.json();
-                    this.hideTyping();
+                    if (!response.ok) {
+                        throw new Error('네트워크 응답 오류');
+                    }
                     
-                    if (data.response) {
-                        this.addMessage(data.response, 'ai');
-                        if (this.isTtsEnabled) {
-                            this.playTts(data.response);
+                    const reader = response.body.getReader();
+                    const decoder = new TextDecoder();
+                    let fullResponse = '';
+                    let lastSentenceEnd = 0;
+                    
+                    while (true) {
+                        const { done, value } = await reader.read();
+                        
+                        if (done) break;
+                        
+                        const chunk = decoder.decode(value, { stream: true });
+                        
+                        // JSON 스트림 파싱
+                        const lines = chunk.split('\n').filter(line => line.trim());
+                        
+                        for (const line of lines) {
+                            try {
+                                const data = JSON.parse(line);
+                                if (data.response) {
+                                    fullResponse += data.response;
+                                    
+                                    // 실시간으로 텍스트 업데이트
+                                    aiMessageBubble.textContent = fullResponse;
+                                    this.scrollToBottom();
+                                    
+                                    // 문장이 완성되면 TTS 재생
+                                    if (this.isTtsEnabled) {
+                                        const sentences = fullResponse.slice(lastSentenceEnd).match(/[^.!?]*[.!?]/g);
+                                        if (sentences) {
+                                            for (const sentence of sentences) {
+                                                const cleanSentence = sentence.trim();
+                                                if (cleanSentence) {
+                                                    this.playTtsSentence(cleanSentence);
+                                                }
+                                            }
+                                            lastSentenceEnd = fullResponse.length;
+                                        }
+                                    }
+                                }
+                            } catch (parseError) {
+                                console.log('JSON 파싱 스킵:', line);
+                            }
                         }
                     }
                     
+                    // 마지막 미완성 문장도 TTS 재생
+                    if (this.isTtsEnabled && fullResponse.slice(lastSentenceEnd).trim()) {
+                        this.playTtsSentence(fullResponse.slice(lastSentenceEnd).trim());
+                    }
+                    
+                    // 스트리밍 완료 후 커서 제거
+                    aiMessageBubble.classList.remove('streaming');
+                    
                     this.removeImage();
                 } catch (error) {
-                    this.hideTyping();
-                    this.addMessage('이미지 분석에 실패했습니다.', 'ai');
+                    aiMessageBubble.classList.remove('streaming');
+                    aiMessageBubble.textContent = '이미지 분석에 실패했습니다.';
                     console.error('이미지 메시지 전송 오류:', error);
                 }
             }
@@ -827,7 +951,7 @@
             }
             
             // UI 관련
-            addMessage(message, sender) {
+            createMessageElement(message, sender) {
                 const messageDiv = document.createElement('div');
                 messageDiv.className = `message ${sender}`;
                 
@@ -845,6 +969,11 @@
                 messageDiv.appendChild(bubble);
                 messageDiv.appendChild(time);
                 
+                return messageDiv;
+            }
+            
+            addMessage(message, sender) {
+                const messageDiv = this.createMessageElement(message, sender);
                 this.elements.chatMessages.appendChild(messageDiv);
                 this.scrollToBottom();
             }
