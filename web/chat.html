@@ -478,14 +478,15 @@
                 this.apiBaseUrl = 'http://192.168.3.76:59532/v1';
                 this.ttsBaseUrl = 'http://192.168.3.76:59531/v1';
                 
-                // 음성 관련 변수들
-                this.mediaRecorder = null;
-                this.audioChunks = [];
+                // 음성 관련 변수들 (16kHz WAV 전용)
                 this.isRecording = false;
                 this.audioContext = null;
                 this.gumStream = null;
                 this.input = null;
+                this.processor = null;
                 this.recordingTimeout = null;
+                this.audioData = [];
+                this.bufferSize = 4096;
                 
                 // 기타 설정
                 this.isTtsEnabled = true;
@@ -767,31 +768,42 @@
                     console.log("Recording started");
                     this.isRecording = true;
                     
-                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-                    console.log("getUserMedia() success, stream created, initializing MediaRecorder...");
+                    const stream = await navigator.mediaDevices.getUserMedia({ 
+                        audio: {
+                            sampleRate: 16000,
+                            channelCount: 1,
+                            echoCancellation: true,
+                            noiseSuppression: true
+                        }, 
+                        video: false 
+                    });
+                    console.log("getUserMedia() success, stream created, initializing for 16kHz WAV...");
                     
-                    this.audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
                     this.gumStream = stream;
+                    
+                    // 16000Hz로 오디오 컨텍스트 생성
+                    this.audioContext = new (window.AudioContext || window.webkitAudioContext)({ 
+                        sampleRate: 16000 
+                    });
                     this.input = this.audioContext.createMediaStreamSource(stream);
                     
-                    // MediaRecorder를 사용하여 녹음
-                    this.mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/wav' });
+                    // MediaRecorder 대신 ScriptProcessorNode 사용하여 WAV 생성
+                    this.bufferSize = 4096;
+                    this.processor = this.audioContext.createScriptProcessor(this.bufferSize, 1, 1);
+                    this.audioData = [];
                     
-                    this.audioChunks = [];
-                    
-                    this.mediaRecorder.ondataavailable = (event) => {
-                        if (event.data.size > 0) {
-                            this.audioChunks.push(event.data);
+                    this.processor.onaudioprocess = (e) => {
+                        const inputData = e.inputBuffer.getChannelData(0);
+                        // Float32Array를 Int16Array로 변환 (WAV 형식)
+                        const int16Data = new Int16Array(inputData.length);
+                        for (let i = 0; i < inputData.length; i++) {
+                            int16Data[i] = Math.max(-32768, Math.min(32767, inputData[i] * 32768));
                         }
+                        this.audioData.push(int16Data);
                     };
                     
-                    this.mediaRecorder.onstop = () => {
-                        console.log('MediaRecorder stopped');
-                        this.processAudioRecording();
-                        if (this.gumStream) {
-                            this.gumStream.getAudioTracks()[0].stop();
-                        }
-                    };
+                    this.input.connect(this.processor);
+                    this.processor.connect(this.audioContext.destination);
                     
                     // 음성 활동 감지 (VAD) 시뮬레이션 - 5초 후 자동 중지
                     this.recordingTimeout = setTimeout(() => {
@@ -801,9 +813,8 @@
                         }
                     }, 5000); // 5초 최대 녹음 시간
                     
-                    this.mediaRecorder.start(100); // 100ms 간격으로 데이터 수집
                     this.elements.voiceBtn.classList.add('recording');
-                    this.updateStatus('음성 인식 중... (5초)');
+                    this.updateStatus('음성 인식 중... (5초, 16kHz WAV)');
                     
                 } catch (error) {
                     console.error('음성 녹음 시작 오류:', error);
@@ -824,27 +835,51 @@
                     this.recordingTimeout = null;
                 }
                 
-                if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
-                    this.mediaRecorder.stop();
+                // 오디오 처리 중지
+                if (this.processor) {
+                    this.processor.disconnect();
+                    this.input.disconnect();
                 }
+                
+                if (this.gumStream) {
+                    this.gumStream.getAudioTracks()[0].stop();
+                }
+                
+                if (this.audioContext) {
+                    this.audioContext.close();
+                }
+                
+                // WAV 파일 생성 및 처리
+                this.processAudioRecording();
             }
             
             async processAudioRecording() {
-                if (this.audioChunks.length === 0) {
+                if (!this.audioData || this.audioData.length === 0) {
                     this.updateStatus('녹음된 데이터 없음');
                     return;
                 }
                 
-                // WAV 형태로 오디오 블롭 생성
-                const audioBlob = new Blob(this.audioChunks, {  type: { mimeType: 'audio/wav' }});
+                // 모든 오디오 데이터를 하나로 합치기
+                let totalLength = 0;
+                this.audioData.forEach(chunk => totalLength += chunk.length);
                 
-                console.log('오디오 블롭 크기:', audioBlob.size, 'bytes');
+                const combinedData = new Int16Array(totalLength);
+                let offset = 0;
+                this.audioData.forEach(chunk => {
+                    combinedData.set(chunk, offset);
+                    offset += chunk.length;
+                });
+                
+                // WAV 헤더 생성 (16000Hz, 16bit, mono)
+                const wavBlob = this.createWAVBlob(combinedData, 16000);
+                
+                console.log('WAV 블롭 크기:', wavBlob.size, 'bytes, 샘플레이트: 16000Hz');
                 
                 const formData = new FormData();
-                formData.append('file', audioBlob, 'recording.wav');
+                formData.append('file', wavBlob, 'recording.wav');
                 
                 try {
-                    this.updateStatus('음성 변환 중...');
+                    this.updateStatus('음성 변환 중... (16kHz WAV)');
                     const response = await fetch(`${this.apiBaseUrl}/stt?lang=ko&isPlay=0`, {
                         method: 'POST',
                         body: formData
@@ -871,7 +906,49 @@
                 }
                 
                 // 정리
-                this.audioChunks = [];
+                this.audioData = [];
+            }
+            
+            // WAV 파일 생성 함수
+            createWAVBlob(samples, sampleRate) {
+                const length = samples.length;
+                const buffer = new ArrayBuffer(44 + length * 2);
+                const view = new DataView(buffer);
+                
+                // WAV 헤더 작성
+                const writeString = (offset, string) => {
+                    for (let i = 0; i < string.length; i++) {
+                        view.setUint8(offset + i, string.charCodeAt(i));
+                    }
+                };
+                
+                // RIFF chunk descriptor
+                writeString(0, 'RIFF');
+                view.setUint32(4, 36 + length * 2, true); // file size - 8
+                writeString(8, 'WAVE');
+                
+                // FMT sub-chunk
+                writeString(12, 'fmt ');
+                view.setUint32(16, 16, true); // subchunk1 size (16 for PCM)
+                view.setUint16(20, 1, true); // audio format (1 for PCM)
+                view.setUint16(22, 1, true); // number of channels (1 for mono)
+                view.setUint32(24, sampleRate, true); // sample rate
+                view.setUint32(28, sampleRate * 2, true); // byte rate
+                view.setUint16(32, 2, true); // block align
+                view.setUint16(34, 16, true); // bits per sample
+                
+                // DATA sub-chunk
+                writeString(36, 'data');
+                view.setUint32(40, length * 2, true); // subchunk2 size
+                
+                // 오디오 데이터 작성
+                let offset = 44;
+                for (let i = 0; i < length; i++) {
+                    view.setInt16(offset, samples[i], true);
+                    offset += 2;
+                }
+                
+                return new Blob([view], { type: 'audio/wav' });
             }
             
             // 마크다운 파싱 (간단한 버전)
