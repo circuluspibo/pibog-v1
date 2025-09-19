@@ -134,8 +134,6 @@ class Chat(BaseModel):
 #model_name = 'rippertnt/Phi-4-mini-it-ov-int4' #'../models/CLOVAX-1.5B-ov-int4'
 #model_name = snapshot_download(repo_id='rippertnt/Phi-4-mini-it-ov-int4') # Phi-4-mini-it-ov-int4 //text only
 model_txt = snapshot_download(repo_id='circulus/Qwen2.5-VL-3B-it-ov-int4') # Phi-4-mini-it-ov-int4 //text only
-model_stt = snapshot_download(repo_id='circulus/Qwen2.5-VL-3B-it-ov-int4')
-
 #model_name = snapshot_download(repo_id='circulus/Gemma-3-1b-it-ov-int4')
 #model_name = '../models/gemma-3-1b-int4-ov'
 #model_name = '../models/Qwen-3-1.7B-int4-ov'
@@ -270,6 +268,8 @@ def img2chat2(prompt = "" ,system = _SYSTEM, isPlay = 0, lang='en'): # gen or me
   )
   """
 
+  pipe_txt.start_chat(system_message=system)
+    
   print(prompt)
 
   config = GenerationConfig(
@@ -296,7 +296,6 @@ def img2chat2(prompt = "" ,system = _SYSTEM, isPlay = 0, lang='en'): # gen or me
 @app.post("/v1/img2chat", summary="문장 기반의 chatgpt 스타일 구현")
 def img2chat(file : UploadFile = File(...), prompt = "" ,system = _SYSTEM, isPlay = 0, lang='en'): # gen or med
   streamer = IterableStreamer(pipe_txt.get_tokenizer())
-
 
   messages = [
     {"role": "system", "content": system},
