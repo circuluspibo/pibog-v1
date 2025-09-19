@@ -770,14 +770,12 @@
                     const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
                     console.log("getUserMedia() success, stream created, initializing MediaRecorder...");
                     
-                    this.audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 22050 });
+                    this.audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
                     this.gumStream = stream;
                     this.input = this.audioContext.createMediaStreamSource(stream);
                     
                     // MediaRecorder를 사용하여 녹음
-                    this.mediaRecorder = new MediaRecorder(stream, {
-                        mimeType: MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/mp4'
-                    });
+                    this.mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/wav' });
                     
                     this.audioChunks = [];
                     
@@ -838,9 +836,7 @@
                 }
                 
                 // WAV 형태로 오디오 블롭 생성
-                const audioBlob = new Blob(this.audioChunks, { 
-                    type: MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/mp4'
-                });
+                const audioBlob = new Blob(this.audioChunks, {  type: { mimeType: 'audio/wav' }});
                 
                 console.log('오디오 블롭 크기:', audioBlob.size, 'bytes');
                 
