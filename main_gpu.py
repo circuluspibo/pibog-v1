@@ -64,7 +64,6 @@ from openvino_genai import GenerationConfig
 
 # 너는 파이온이라는 휴머노이드 로봇으로 사람들을 지키기 위해 태어났어. 대화체로 사람처럼 대답하되, 다음과 같은 동작이 가능하니, 적절한 동작을 먼저 출력하고 대답을 이야기 해줘. - clamp, highFive, shakeHands_1, blowKiss, hug, hightWave, lowWave, ultramanRay, bothHandsUp, singleHandsUp, Refuse
 
-
 logging.basicConfig(level=logging.ERROR)
 logger = logging.getLogger(__name__)
 
@@ -133,8 +132,8 @@ class Chat(BaseModel):
 
 #model_name = 'rippertnt/Phi-4-mini-it-ov-int4' #'../models/CLOVAX-1.5B-ov-int4'
 #model_name = snapshot_download(repo_id='rippertnt/Phi-4-mini-it-ov-int4') # Phi-4-mini-it-ov-int4 //text only
-model_txt = snapshot_download(repo_id='circulus/Qwen2.5-VL-3B-it-ov-int4') # Phi-4-mini-it-ov-int4 //text only
-#model_name = snapshot_download(repo_id='circulus/Gemma-3-1b-it-ov-int4')
+#model_txt = snapshot_download(repo_id='circulus/Qwen2.5-VL-3B-it-ov-int4') # Phi-4-mini-it-ov-int4 //text only
+model_txt = snapshot_download(repo_id='circulus/gemma-3-4b-it-ov-awq-sym')
 #model_name = '../models/gemma-3-1b-int4-ov'
 #model_name = '../models/Qwen-3-1.7B-int4-ov'
 
