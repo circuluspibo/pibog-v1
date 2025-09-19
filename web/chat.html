@@ -1,0 +1,886 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 채팅 프로그램</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #fff;
+        }
+
+        .app-container {
+            display: flex;
+            height: 100vh;
+            max-width: 1600px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(20px);
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 25px 45px rgba(0, 0, 0, 0.3);
+        }
+
+        /* 왼쪽 채팅 영역 */
+        .chat-section {
+            flex: 2;
+            display: flex;
+            flex-direction: column;
+            background: rgba(0, 0, 0, 0.2);
+            backdrop-filter: blur(15px);
+        }
+
+        .chat-header {
+            padding: 20px;
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            text-align: center;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        .chat-header h1 {
+            font-size: 24px;
+            font-weight: 600;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(255, 255, 255, 0.3) transparent;
+        }
+
+        .chat-messages::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .chat-messages::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .chat-messages::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 3px;
+        }
+
+        .message {
+            margin-bottom: 15px;
+            animation: messageSlide 0.3s ease-out;
+        }
+
+        @keyframes messageSlide {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .message.user {
+            text-align: right;
+        }
+
+        .message-bubble {
+            display: inline-block;
+            max-width: 70%;
+            padding: 12px 18px;
+            border-radius: 20px;
+            position: relative;
+            word-wrap: break-word;
+        }
+
+        .message.user .message-bubble {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .message.ai .message-bubble {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: #1a1a1a;
+            box-shadow: 0 5px 15px rgba(79, 172, 254, 0.4);
+        }
+
+        .message-time {
+            font-size: 12px;
+            opacity: 0.7;
+            margin-top: 5px;
+        }
+
+        .typing-indicator {
+            display: none;
+            padding: 10px 18px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            max-width: 80px;
+        }
+
+        .typing-dots {
+            display: flex;
+            gap: 3px;
+        }
+
+        .typing-dots span {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #4facfe;
+            animation: typing 1.4s infinite;
+        }
+
+        .typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+        .typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+        @keyframes typing {
+            0%, 60%, 100% { transform: translateY(0); }
+            30% { transform: translateY(-10px); }
+        }
+
+        /* 입력 영역 */
+        .input-section {
+            padding: 20px;
+            background: rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(10px);
+        }
+
+        .input-controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .control-btn {
+            padding: 10px 15px;
+            border: none;
+            border-radius: 15px;
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .control-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(79, 172, 254, 0.4);
+        }
+
+        .control-btn.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        .input-container {
+            display: flex;
+            gap: 10px;
+            align-items: flex-end;
+        }
+
+        .message-input {
+            flex: 1;
+            padding: 15px 20px;
+            border: none;
+            border-radius: 25px;
+            background: rgba(255, 255, 255, 0.9);
+            color: #333;
+            font-size: 16px;
+            resize: none;
+            max-height: 120px;
+            min-height: 50px;
+        }
+
+        .message-input:focus {
+            outline: none;
+            box-shadow: 0 0 20px rgba(79, 172, 254, 0.5);
+        }
+
+        .send-btn, .voice-btn {
+            width: 50px;
+            height: 50px;
+            border: none;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+            font-size: 18px;
+        }
+
+        .send-btn:hover, .voice-btn:hover {
+            transform: scale(1.1);
+            box-shadow: 0 5px 15px rgba(79, 172, 254, 0.4);
+        }
+
+        .voice-btn.recording {
+            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a52 100%);
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+
+        /* 오른쪽 미디어 영역 */
+        .media-section {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: rgba(0, 0, 0, 0.2);
+            backdrop-filter: blur(15px);
+        }
+
+        .media-header {
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            text-align: center;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        .media-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+            gap: 20px;
+        }
+
+        .webcam-container {
+            flex: 1;
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 15px;
+            overflow: hidden;
+            position: relative;
+            min-height: 300px;
+        }
+
+        .webcam-video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .webcam-placeholder {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 18px;
+            text-align: center;
+        }
+
+        .webcam-controls {
+            position: absolute;
+            bottom: 15px;
+            right: 15px;
+            display: flex;
+            gap: 10px;
+        }
+
+        .webcam-btn {
+            width: 40px;
+            height: 40px;
+            border: none;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+        }
+
+        .webcam-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: scale(1.1);
+        }
+
+        .image-upload {
+            padding: 20px;
+            border: 2px dashed rgba(255, 255, 255, 0.3);
+            border-radius: 15px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .image-upload:hover {
+            border-color: #4facfe;
+            background: rgba(79, 172, 254, 0.1);
+        }
+
+        .image-upload input {
+            display: none;
+        }
+
+        .uploaded-image {
+            max-width: 100%;
+            max-height: 200px;
+            border-radius: 10px;
+            margin-top: 10px;
+        }
+
+        .image-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 10px;
+            font-size: 14px;
+            opacity: 0.8;
+        }
+
+        .remove-image {
+            background: rgba(255, 107, 107, 0.8);
+            border: none;
+            color: white;
+            padding: 5px 10px;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+
+        .status-bar {
+            padding: 10px 20px;
+            background: rgba(0, 0, 0, 0.3);
+            text-align: center;
+            font-size: 12px;
+            opacity: 0.8;
+        }
+
+        /* 반응형 디자인 */
+        @media (max-width: 768px) {
+            .app-container {
+                flex-direction: column;
+                height: auto;
+                min-height: 100vh;
+            }
+            
+            .media-section {
+                order: -1;
+            }
+            
+            .webcam-container {
+                min-height: 200px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <!-- 왼쪽 채팅 영역 -->
+        <div class="chat-section">
+            <div class="chat-header">
+                <h1>🤖 AI 챗봇</h1>
+            </div>
+            
+            <div class="chat-messages" id="chatMessages">
+                <div class="message ai">
+                    <div class="message-bubble">
+                        안녕하세요! 저는 파이봇입니다. 텍스트, 음성, 이미지로 대화할 수 있어요! 🐕
+                    </div>
+                    <div class="message-time">방금 전</div>
+                </div>
+                
+                <div class="typing-indicator" id="typingIndicator">
+                    <div class="typing-dots">
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="input-section">
+                <div class="input-controls">
+                    <button class="control-btn active" id="ttsToggle">🔊 TTS</button>
+                    <button class="control-btn" id="autoSendImage">📷 자동전송</button>
+                </div>
+                
+                <div class="input-container">
+                    <textarea class="message-input" id="messageInput" placeholder="메시지를 입력하세요..." rows="1"></textarea>
+                    <button class="voice-btn" id="voiceBtn">🎤</button>
+                    <button class="send-btn" id="sendBtn">➤</button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 오른쪽 미디어 영역 -->
+        <div class="media-section">
+            <div class="media-header">
+                <h2>📹 미디어</h2>
+            </div>
+            
+            <div class="media-container">
+                <div class="webcam-container">
+                    <div class="webcam-placeholder" id="webcamPlaceholder">
+                        웹캠을 시작하려면 📷 버튼을 클릭하세요
+                    </div>
+                    <video class="webcam-video" id="webcamVideo" style="display: none;" autoplay muted></video>
+                    
+                    <div class="webcam-controls">
+                        <button class="webcam-btn" id="startWebcam" title="웹캠 시작">📷</button>
+                        <button class="webcam-btn" id="captureImage" title="사진 촬영" style="display: none;">📸</button>
+                        <button class="webcam-btn" id="stopWebcam" title="웹캠 중지" style="display: none;">⏹</button>
+                    </div>
+                </div>
+                
+                <div class="image-upload" id="imageUpload">
+                    <input type="file" id="fileInput" accept="image/*">
+                    <div id="uploadText">
+                        🖼️ 이미지 업로드 또는 붙여넣기<br>
+                        <small>클릭하여 파일 선택</small>
+                    </div>
+                    <img id="uploadedImage" class="uploaded-image" style="display: none;">
+                    <div class="image-info" id="imageInfo" style="display: none;">
+                        <span id="fileName"></span>
+                        <button class="remove-image" id="removeImage">삭제</button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="status-bar" id="statusBar">
+                준비됨
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class AIChatApp {
+            constructor() {
+                this.apiBaseUrl = 'http://192.168.3.76:59532/v1';
+                this.ttsBaseUrl = 'http://192.168.3.76:59531/v1';
+                this.mediaRecorder = null;
+                this.audioChunks = [];
+                this.isRecording = false;
+                this.isTtsEnabled = true;
+                this.autoSendImage = false;
+                this.currentImage = null;
+                this.webcamStream = null;
+                
+                this.initializeElements();
+                this.bindEvents();
+                this.setupPaste();
+            }
+            
+            initializeElements() {
+                this.elements = {
+                    chatMessages: document.getElementById('chatMessages'),
+                    messageInput: document.getElementById('messageInput'),
+                    sendBtn: document.getElementById('sendBtn'),
+                    voiceBtn: document.getElementById('voiceBtn'),
+                    ttsToggle: document.getElementById('ttsToggle'),
+                    autoSendImage: document.getElementById('autoSendImage'),
+                    typingIndicator: document.getElementById('typingIndicator'),
+                    statusBar: document.getElementById('statusBar'),
+                    
+                    // 미디어 관련
+                    webcamVideo: document.getElementById('webcamVideo'),
+                    webcamPlaceholder: document.getElementById('webcamPlaceholder'),
+                    startWebcam: document.getElementById('startWebcam'),
+                    captureImage: document.getElementById('captureImage'),
+                    stopWebcam: document.getElementById('stopWebcam'),
+                    
+                    // 이미지 업로드
+                    imageUpload: document.getElementById('imageUpload'),
+                    fileInput: document.getElementById('fileInput'),
+                    uploadText: document.getElementById('uploadText'),
+                    uploadedImage: document.getElementById('uploadedImage'),
+                    imageInfo: document.getElementById('imageInfo'),
+                    fileName: document.getElementById('fileName'),
+                    removeImage: document.getElementById('removeImage')
+                };
+            }
+            
+            bindEvents() {
+                // 채팅 관련
+                this.elements.sendBtn.addEventListener('click', () => this.sendMessage());
+                this.elements.messageInput.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        this.sendMessage();
+                    }
+                });
+                
+                // 음성 관련
+                this.elements.voiceBtn.addEventListener('click', () => this.toggleVoiceRecording());
+                
+                // 컨트롤 버튼
+                this.elements.ttsToggle.addEventListener('click', () => this.toggleTts());
+                this.elements.autoSendImage.addEventListener('click', () => this.toggleAutoSendImage());
+                
+                // 웹캠 관련
+                this.elements.startWebcam.addEventListener('click', () => this.startWebcam());
+                this.elements.captureImage.addEventListener('click', () => this.captureImage());
+                this.elements.stopWebcam.addEventListener('click', () => this.stopWebcam());
+                
+                // 이미지 업로드
+                this.elements.imageUpload.addEventListener('click', () => {
+                    if (!this.currentImage) {
+                        this.elements.fileInput.click();
+                    }
+                });
+                this.elements.fileInput.addEventListener('change', (e) => this.handleFileSelect(e));
+                this.elements.removeImage.addEventListener('click', () => this.removeImage());
+            }
+            
+            setupPaste() {
+                document.addEventListener('paste', (e) => {
+                    const items = e.clipboardData.items;
+                    for (let item of items) {
+                        if (item.type.indexOf('image') !== -1) {
+                            const file = item.getAsFile();
+                            this.displayImage(file);
+                            if (this.autoSendImage) {
+                                setTimeout(() => this.sendImageMessage(), 500);
+                            }
+                            break;
+                        }
+                    }
+                });
+            }
+            
+            updateStatus(message) {
+                this.elements.statusBar.textContent = message;
+                setTimeout(() => {
+                    this.elements.statusBar.textContent = '준비됨';
+                }, 3000);
+            }
+            
+            // 메시지 전송
+            async sendMessage() {
+                const message = this.elements.messageInput.value.trim();
+                if (!message && !this.currentImage) return;
+                
+                if (this.currentImage && message) {
+                    await this.sendImageMessage(message);
+                } else if (this.currentImage) {
+                    await this.sendImageMessage();
+                } else {
+                    await this.sendTextMessage(message);
+                }
+                
+                this.elements.messageInput.value = '';
+            }
+            
+            async sendTextMessage(message) {
+                this.addMessage(message, 'user');
+                this.showTyping();
+                
+                try {
+                    const response = await fetch(`${this.apiBaseUrl}/txt2chat?` + new URLSearchParams({
+                        prompt: message,
+                        system: '당신은 서큘러스에서 만든 파이봇 이라고 하는 강아지 로봇 인공지능 입니다. 젊은 톤의 대화체로 입력된 언어로 사람 같이 짧게 응답하세요.',
+                        isPlay: '0',
+                        lang: 'ko'
+                    }));
+                    
+                    const data = await response.json();
+                    this.hideTyping();
+                    
+                    if (data.response) {
+                        this.addMessage(data.response, 'ai');
+                        if (this.isTtsEnabled) {
+                            this.playTts(data.response);
+                        }
+                    }
+                } catch (error) {
+                    this.hideTyping();
+                    this.addMessage('죄송합니다. 연결에 문제가 있습니다.', 'ai');
+                    console.error('텍스트 메시지 전송 오류:', error);
+                }
+            }
+            
+            async sendImageMessage(message = '이미지를 설명해주세요') {
+                if (!this.currentImage) return;
+                
+                if (message && message !== '이미지를 설명해주세요') {
+                    this.addMessage(message, 'user');
+                }
+                this.addMessage('📸 이미지 분석중...', 'user');
+                this.showTyping();
+                
+                try {
+                    const formData = new FormData();
+                    formData.append('file', this.currentImage);
+                    
+                    const response = await fetch(`${this.apiBaseUrl}/img2chat?` + new URLSearchParams({
+                        prompt: message,
+                        system: '당신은 서큘러스에서 만든 파이봇 이라고 하는 강아지 로봇 인공지능 입니다. 젊은 톤의 대화체로 입력된 언어로 사람 같이 짧게 응답하세요.',
+                        isPlay: '0',
+                        lang: 'ko'
+                    }), {
+                        method: 'POST',
+                        body: formData
+                    });
+                    
+                    const data = await response.json();
+                    this.hideTyping();
+                    
+                    if (data.response) {
+                        this.addMessage(data.response, 'ai');
+                        if (this.isTtsEnabled) {
+                            this.playTts(data.response);
+                        }
+                    }
+                    
+                    this.removeImage();
+                } catch (error) {
+                    this.hideTyping();
+                    this.addMessage('이미지 분석에 실패했습니다.', 'ai');
+                    console.error('이미지 메시지 전송 오류:', error);
+                }
+            }
+            
+            // 음성 인식
+            async toggleVoiceRecording() {
+                if (!this.isRecording) {
+                    await this.startRecording();
+                } else {
+                    this.stopRecording();
+                }
+            }
+            
+            async startRecording() {
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    this.mediaRecorder = new MediaRecorder(stream);
+                    this.audioChunks = [];
+                    
+                    this.mediaRecorder.ondataavailable = (event) => {
+                        this.audioChunks.push(event.data);
+                    };
+                    
+                    this.mediaRecorder.onstop = () => {
+                        this.processAudioRecording();
+                        stream.getTracks().forEach(track => track.stop());
+                    };
+                    
+                    this.mediaRecorder.start();
+                    this.isRecording = true;
+                    this.elements.voiceBtn.classList.add('recording');
+                    this.updateStatus('음성 인식 중...');
+                } catch (error) {
+                    console.error('음성 녹음 시작 오류:', error);
+                    this.updateStatus('마이크 접근 실패');
+                }
+            }
+            
+            stopRecording() {
+                if (this.mediaRecorder && this.isRecording) {
+                    this.mediaRecorder.stop();
+                    this.isRecording = false;
+                    this.elements.voiceBtn.classList.remove('recording');
+                }
+            }
+            
+            async processAudioRecording() {
+                const audioBlob = new Blob(this.audioChunks, { type: 'audio/wav' });
+                const formData = new FormData();
+                formData.append('file', audioBlob, 'recording.wav');
+                
+                try {
+                    this.updateStatus('음성 변환 중...');
+                    const response = await fetch(`${this.apiBaseUrl}/stt?lang=ko&isPlay=0`, {
+                        method: 'POST',
+                        body: formData
+                    });
+                    
+                    const data = await response.json();
+                    if (data.text) {
+                        this.elements.messageInput.value = data.text;
+                        this.updateStatus('음성 인식 완료');
+                        setTimeout(() => this.sendMessage(), 500);
+                    }
+                } catch (error) {
+                    console.error('음성 인식 오류:', error);
+                    this.updateStatus('음성 인식 실패');
+                }
+            }
+            
+            // TTS
+            async playTts(text) {
+                try {
+                    const sentences = text.split(/[.!?]+/).filter(s => s.trim());
+                    for (const sentence of sentences) {
+                        if (sentence.trim()) {
+                            await this.playTtsSentence(sentence.trim());
+                        }
+                    }
+                } catch (error) {
+                    console.error('TTS 재생 오류:', error);
+                }
+            }
+            
+            playTtsSentence(text) {
+                return new Promise((resolve) => {
+                    const audio = new Audio(`${this.ttsBaseUrl}/tts?` + new URLSearchParams({
+                        text: text,
+                        voice: '31',
+                        lang: 'ko',
+                        static: '0',
+                        isPlay: '0'
+                    }));
+                    
+                    audio.onended = resolve;
+                    audio.onerror = resolve;
+                    audio.play().catch(resolve);
+                });
+            }
+            
+            // 웹캠 관련
+            async startWebcam() {
+                try {
+                    this.webcamStream = await navigator.mediaDevices.getUserMedia({ video: true });
+                    this.elements.webcamVideo.srcObject = this.webcamStream;
+                    this.elements.webcamVideo.style.display = 'block';
+                    this.elements.webcamPlaceholder.style.display = 'none';
+                    this.elements.startWebcam.style.display = 'none';
+                    this.elements.captureImage.style.display = 'block';
+                    this.elements.stopWebcam.style.display = 'block';
+                    this.updateStatus('웹캠 시작됨');
+                } catch (error) {
+                    console.error('웹캠 시작 오류:', error);
+                    this.updateStatus('웹캠 접근 실패');
+                }
+            }
+            
+            captureImage() {
+                if (!this.webcamStream) return;
+                
+                const canvas = document.createElement('canvas');
+                const video = this.elements.webcamVideo;
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(video, 0, 0);
+                
+                canvas.toBlob((blob) => {
+                    this.displayImage(blob, 'webcam-capture.jpg');
+                    if (this.autoSendImage) {
+                        setTimeout(() => this.sendImageMessage(), 500);
+                    }
+                });
+                
+                this.updateStatus('사진 촬영 완료');
+            }
+            
+            stopWebcam() {
+                if (this.webcamStream) {
+                    this.webcamStream.getTracks().forEach(track => track.stop());
+                    this.webcamStream = null;
+                }
+                
+                this.elements.webcamVideo.style.display = 'none';
+                this.elements.webcamPlaceholder.style.display = 'flex';
+                this.elements.startWebcam.style.display = 'block';
+                this.elements.captureImage.style.display = 'none';
+                this.elements.stopWebcam.style.display = 'none';
+                this.updateStatus('웹캠 중지됨');
+            }
+            
+            // 이미지 관련
+            handleFileSelect(e) {
+                const file = e.target.files[0];
+                if (file) {
+                    this.displayImage(file);
+                    if (this.autoSendImage) {
+                        setTimeout(() => this.sendImageMessage(), 500);
+                    }
+                }
+            }
+            
+            displayImage(file, filename = null) {
+                this.currentImage = file;
+                const url = URL.createObjectURL(file);
+                
+                this.elements.uploadedImage.src = url;
+                this.elements.uploadedImage.style.display = 'block';
+                this.elements.uploadText.style.display = 'none';
+                this.elements.imageInfo.style.display = 'flex';
+                this.elements.fileName.textContent = filename || file.name;
+            }
+            
+            removeImage() {
+                this.currentImage = null;
+                this.elements.uploadedImage.style.display = 'none';
+                this.elements.uploadText.style.display = 'block';
+                this.elements.imageInfo.style.display = 'none';
+                this.elements.fileInput.value = '';
+                
+                if (this.elements.uploadedImage.src) {
+                    URL.revokeObjectURL(this.elements.uploadedImage.src);
+                }
+            }
+            
+            // UI 관련
+            addMessage(message, sender) {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = `message ${sender}`;
+                
+                const bubble = document.createElement('div');
+                bubble.className = 'message-bubble';
+                bubble.textContent = message;
+                
+                const time = document.createElement('div');
+                time.className = 'message-time';
+                time.textContent = new Date().toLocaleTimeString('ko-KR', {
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+                
+                messageDiv.appendChild(bubble);
+                messageDiv.appendChild(time);
+                
+                this.elements.chatMessages.appendChild(messageDiv);
+                this.scrollToBottom();
+            }
+            
+            showTyping() {
+                this.elements.typingIndicator.style.display = 'block';
+                this.scrollToBottom();
+            }
+            
+            hideTyping() {
+                this.elements.typingIndicator.style.display = 'none';
+            }
+            
+            scrollToBottom() {
+                setTimeout(() => {
+                    this.elements.chatMessages.scrollTop = this.elements.chatMessages.scrollHeight;
+                }, 100);
+            }
+            
+            toggleTts() {
+                this.isTtsEnabled = !this.isTtsEnabled;
+                this.elements.ttsToggle.classList.toggle('active', this.isTtsEnabled);
+                this.updateStatus(this.isTtsEnabled ? 'TTS 활성화' : 'TTS 비활성화');
+            }
+            
+            toggleAutoSendImage() {
+                this.autoSendImage = !this.autoSendImage;
+                this.elements.autoSendImage.classList.toggle('active', this.autoSendImage);
+                this.updateStatus(this.autoSendImage ? '이미지 자동전송 활성화' : '이미지 자동전송 비활성화');
+            }
+        }
+        
+        // 앱 초기화
+        document.addEventListener('DOMContentLoaded', () => {
+            new AIChatApp();
+        });
+    </script>
+</body>
+</html>
