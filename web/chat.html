@@ -617,7 +617,7 @@
                 try {
                     const response = await fetch(`${this.apiBaseUrl}/txt2chat?` + new URLSearchParams({
                         prompt: message,
-                        system: '당신은 서큘러스에서 만든 파이봇 이라고 하는 강아지 로봇 인공지능 입니다. 젊은 톤의 대화체로 입력된 언어로 사람 같이 짧게 응답하세요.',
+                        system: '당신은 서큘러스에서 만든 파이봇 이라고 하는 휴머노이드 입니다. 젊은 톤의 대화체로 입력된 언어로 사람 같이 짧게 응답하세요.',
                         isPlay: '0',
                         lang: 'ko'
                     }));
@@ -722,7 +722,7 @@
                         }
                         
                         const chunk = decoder.decode(value, { stream: true });
-                        fullResponse += chunk;
+                        fullResponse += chunk + '&nbsp;';
                         
                         // 실시간으로 텍스트 업데이트 (마크다운 파싱 포함)
                         aiMessageBubble.innerHTML = this.parseMarkdown(fullResponse);
