@@ -142,10 +142,14 @@
             30% { transform: translateY(-10px); }
         }
 
-        .typing-cursor {
+        .message-bubble.streaming {
+            position: relative;
+        }
+
+        .message-bubble.streaming::after {
+            content: '▊';
             animation: blink 1s infinite;
             color: #4facfe;
-            font-weight: bold;
         }
 
         @keyframes blink {
@@ -274,7 +278,7 @@
             min-height: 300px;
         }
 
-        .webcam-video, .webcam-canvas {
+        .webcam-video {
             width: 100%;
             height: 100%;
             object-fit: cover;
@@ -418,7 +422,6 @@
                 <div class="input-controls">
                     <button class="control-btn active" id="ttsToggle">🔊 TTS</button>
                     <button class="control-btn" id="autoSendImage">📷 자동전송</button>
-                    <button class="control-btn" id="toggleStreaming">📡 스트리밍</button>
                 </div>
                 
                 <div class="input-container">
@@ -441,7 +444,6 @@
                         웹캠을 시작하려면 📷 버튼을 클릭하세요
                     </div>
                     <video class="webcam-video" id="webcamVideo" style="display: none;" autoplay muted></video>
-                    <canvas class="webcam-canvas" id="processedCanvas" style="display: none;"></canvas>
                     
                     <div class="webcam-controls">
                         <button class="webcam-btn" id="startWebcam" title="웹캠 시작">📷</button>
@@ -475,29 +477,26 @@
             constructor() {
                 this.apiBaseUrl = 'http://192.168.3.76:59532/v1';
                 this.ttsBaseUrl = 'http://192.168.3.76:59531/v1';
-                this.streamingServerUrl = 'ws://localhost:8000/ws/stream'; // 스트리밍 서버 주소
                 
                 // 음성 관련 변수들 (16kHz WAV 전용)
                 this.isRecording = false;
-                this.mediaRecorder = null;
-                this.audioChunks = [];
+                this.audioContext = null;
+                this.gumStream = null;
+                this.input = null;
+                this.processor = null;
                 this.recordingTimeout = null;
+                this.audioData = [];
+                this.bufferSize = 4096;
+                
+                // TTS 큐 시스템
+                this.ttsQueue = [];
+                this.isPlayingTts = false;
                 
                 // 기타 설정
                 this.isTtsEnabled = true;
                 this.autoSendImage = false;
                 this.currentImage = null;
                 this.webcamStream = null;
-                
-                // TTS 재생 큐 관리
-                this.ttsQueue = [];
-                this.isPlayingTts = false;
-                
-                // 웹캠 스트리밍 관련
-                this.streamingToServer = false;
-                this.streamingWebSocket = null;
-                this.processedCanvas = null;
-                this.processedCtx = null;
                 
                 this.initializeElements();
                 this.bindEvents();
@@ -512,14 +511,12 @@
                     voiceBtn: document.getElementById('voiceBtn'),
                     ttsToggle: document.getElementById('ttsToggle'),
                     autoSendImage: document.getElementById('autoSendImage'),
-                    toggleStreaming: document.getElementById('toggleStreaming'),
                     typingIndicator: document.getElementById('typingIndicator'),
                     statusBar: document.getElementById('statusBar'),
                     
                     // 미디어 관련
                     webcamVideo: document.getElementById('webcamVideo'),
                     webcamPlaceholder: document.getElementById('webcamPlaceholder'),
-                    processedCanvas: document.getElementById('processedCanvas'),
                     startWebcam: document.getElementById('startWebcam'),
                     captureImage: document.getElementById('captureImage'),
                     stopWebcam: document.getElementById('stopWebcam'),
@@ -551,7 +548,6 @@
                 // 컨트롤 버튼
                 this.elements.ttsToggle.addEventListener('click', () => this.toggleTts());
                 this.elements.autoSendImage.addEventListener('click', () => this.toggleAutoSendImage());
-                this.elements.toggleStreaming.addEventListener('click', () => this.toggleStreaming());
                 
                 // 웹캠 관련
                 this.elements.startWebcam.addEventListener('click', () => this.startWebcam());
@@ -614,13 +610,14 @@
                 // AI 응답용 메시지 버블 미리 생성
                 const aiMessageDiv = this.createMessageElement('', 'ai');
                 const aiMessageBubble = aiMessageDiv.querySelector('.message-bubble');
+                aiMessageBubble.classList.add('streaming'); // 스트리밍 인디케이터 추가
                 this.elements.chatMessages.appendChild(aiMessageDiv);
                 this.scrollToBottom();
                 
                 try {
                     const response = await fetch(`${this.apiBaseUrl}/txt2chat?` + new URLSearchParams({
                         prompt: message,
-                        system: '당신은 서큘러스에서 만든 파이봇 이라고 하는 강아지 로봇 인공지능 입니다. 젊은 톤의 대화체로 입력된 언어로 사람 같이 짧게 응답하세요.',
+                        system: '당신은 서큘러스에서 만든 파이봇 이라고 하는 휴머노이드 입니다. 젊은 톤의 대화체로 입력된 언어로 사람 같이 짧게 응답하세요.',
                         isPlay: '0',
                         lang: 'ko'
                     }));
@@ -632,61 +629,47 @@
                     const reader = response.body.getReader();
                     const decoder = new TextDecoder();
                     let fullResponse = '';
-                    let displayedText = '';
                     let lastSentenceEnd = 0;
                     
                     while (true) {
                         const { done, value } = await reader.read();
                         
                         if (done) {
-                            // 스트리밍 완료 후 남은 텍스트 타이핑 효과로 표시
-                            if (fullResponse.length > displayedText.length) {
-                                await this.typewriterEffect(aiMessageBubble, fullResponse, displayedText.length);
-                            }
+                            // 스트리밍 완료 후 커서 제거
+                            aiMessageBubble.classList.remove('streaming');
                             break;
                         }
                         
                         const chunk = decoder.decode(value, { stream: true });
                         fullResponse += chunk;
                         
-                        // 문장이 완성되면 타이핑 효과와 함께 표시
-                        const sentences = fullResponse.slice(lastSentenceEnd).match(/[^.!?]*[.!?]/g);
-                        if (sentences) {
-                            for (const sentence of sentences) {
-                                const cleanSentence = sentence.trim();
-                                if (cleanSentence) {
-                                    // 타이핑 효과로 문장 표시
-                                    const sentenceStartPos = fullResponse.indexOf(cleanSentence, lastSentenceEnd);
-                                    const sentenceEndPos = sentenceStartPos + cleanSentence.length;
-                                    
-                                    // 이전 텍스트부터 현재 문장까지 타이핑 효과
-                                    await this.typewriterEffect(aiMessageBubble, fullResponse.slice(0, sentenceEndPos), displayedText.length);
-                                    displayedText = fullResponse.slice(0, sentenceEndPos);
-                                    
-                                    // 문장 끝에 줄바꿈 추가
-                                    if (!displayedText.endsWith('\n')) {
-                                        displayedText += '\n';
-                                        aiMessageBubble.innerHTML = this.parseMarkdown(displayedText);
-                                        this.scrollToBottom();
-                                    }
-                                    
-                                    // TTS 재생 (큐에 추가)
-                                    if (this.isTtsEnabled) {
+                        // 실시간으로 텍스트 업데이트 (마크다운 파싱 포함)
+                        aiMessageBubble.innerHTML = this.parseMarkdown(fullResponse);
+                        this.scrollToBottom();
+                        
+                        // 문장이 완성되면 TTS 큐에 추가
+                        if (this.isTtsEnabled) {
+                            const sentences = fullResponse.slice(lastSentenceEnd).match(/[^.!?]*[.!?]/g);
+                            if (sentences) {
+                                for (const sentence of sentences) {
+                                    const cleanSentence = sentence.trim();
+                                    if (cleanSentence) {
                                         this.addToTtsQueue(cleanSentence);
                                     }
                                 }
+                                lastSentenceEnd = fullResponse.length;
                             }
-                            lastSentenceEnd = fullResponse.length;
                         }
                     }
                     
-                    // 마지막 미완성 문장도 TTS 재생
+                    // 마지막 미완성 문장도 TTS 큐에 추가
                     if (this.isTtsEnabled && fullResponse.slice(lastSentenceEnd).trim()) {
                         this.addToTtsQueue(fullResponse.slice(lastSentenceEnd).trim());
                     }
                     
                 } catch (error) {
-                    aiMessageBubble.innerHTML = '죄송합니다. 연결에 문제가 있습니다.';
+                    aiMessageBubble.classList.remove('streaming');
+                    aiMessageBubble.textContent = '죄송합니다. 연결에 문제가 있습니다.';
                     console.error('텍스트 메시지 전송 오류:', error);
                 }
             }
@@ -702,6 +685,7 @@
                 // AI 응답용 메시지 버블 미리 생성
                 const aiMessageDiv = this.createMessageElement('', 'ai');
                 const aiMessageBubble = aiMessageDiv.querySelector('.message-bubble');
+                aiMessageBubble.classList.add('streaming'); // 스트리밍 인디케이터 추가
                 this.elements.chatMessages.appendChild(aiMessageDiv);
                 this.scrollToBottom();
                 
@@ -726,85 +710,53 @@
                     const reader = response.body.getReader();
                     const decoder = new TextDecoder();
                     let fullResponse = '';
-                    let displayedText = '';
                     let lastSentenceEnd = 0;
                     
                     while (true) {
                         const { done, value } = await reader.read();
                         
                         if (done) {
-                            // 스트리밍 완료 후 남은 텍스트 타이핑 효과로 표시
-                            if (fullResponse.length > displayedText.length) {
-                                await this.typewriterEffect(aiMessageBubble, fullResponse, displayedText.length);
-                            }
+                            // 스트리밍 완료 후 커서 제거
+                            aiMessageBubble.classList.remove('streaming');
                             break;
                         }
                         
                         const chunk = decoder.decode(value, { stream: true });
-                        fullResponse += chunk;
+                        fullResponse += chunk + '&nbsp;';
                         
-                        // 문장이 완성되면 타이핑 효과와 함께 표시
-                        const sentences = fullResponse.slice(lastSentenceEnd).match(/[^.!?]*[.!?]/g);
-                        if (sentences) {
-                            for (const sentence of sentences) {
-                                const cleanSentence = sentence.trim();
-                                if (cleanSentence) {
-                                    // 타이핑 효과로 문장 표시
-                                    const sentenceStartPos = fullResponse.indexOf(cleanSentence, lastSentenceEnd);
-                                    const sentenceEndPos = sentenceStartPos + cleanSentence.length;
-                                    
-                                    // 이전 텍스트부터 현재 문장까지 타이핑 효과
-                                    await this.typewriterEffect(aiMessageBubble, fullResponse.slice(0, sentenceEndPos), displayedText.length);
-                                    displayedText = fullResponse.slice(0, sentenceEndPos);
-                                    
-                                    // 문장 끝에 줄바꿈 추가
-                                    if (!displayedText.endsWith('\n')) {
-                                        displayedText += '\n';
-                                        aiMessageBubble.innerHTML = this.parseMarkdown(displayedText);
-                                        this.scrollToBottom();
-                                    }
-                                    
-                                    // TTS 재생 (큐에 추가)
-                                    if (this.isTtsEnabled) {
+                        // 실시간으로 텍스트 업데이트 (마크다운 파싱 포함)
+                        aiMessageBubble.innerHTML = this.parseMarkdown(fullResponse);
+                        this.scrollToBottom();
+                        
+                        // 문장이 완성되면 TTS 큐에 추가
+                        if (this.isTtsEnabled) {
+                            const sentences = fullResponse.slice(lastSentenceEnd).match(/[^.!?]*[.!?]/g);
+                            if (sentences) {
+                                for (const sentence of sentences) {
+                                    const cleanSentence = sentence.trim();
+                                    if (cleanSentence) {
                                         this.addToTtsQueue(cleanSentence);
                                     }
                                 }
+                                lastSentenceEnd = fullResponse.length;
                             }
-                            lastSentenceEnd = fullResponse.length;
                         }
                     }
                     
-                    // 마지막 미완성 문장도 TTS 재생
+                    // 마지막 미완성 문장도 TTS 큐에 추가
                     if (this.isTtsEnabled && fullResponse.slice(lastSentenceEnd).trim()) {
                         this.addToTtsQueue(fullResponse.slice(lastSentenceEnd).trim());
                     }
                     
                     this.removeImage();
                 } catch (error) {
-                    aiMessageBubble.innerHTML = '이미지 분석에 실패했습니다.';
+                    aiMessageBubble.classList.remove('streaming');
+                    aiMessageBubble.textContent = '이미지 분석에 실패했습니다.';
                     console.error('이미지 메시지 전송 오류:', error);
                 }
             }
             
-            // 타이핑 효과
-            async typewriterEffect(element, fullText, startPos = 0) {
-                const typingSpeed = 30; // 밀리초 (숫자가 작을수록 빠름)
-                
-                for (let i = startPos; i < fullText.length; i++) {
-                    const currentText = fullText.slice(0, i + 1);
-                    element.innerHTML = this.parseMarkdown(currentText) + '<span class="typing-cursor">▊</span>';
-                    this.scrollToBottom();
-                    
-                    // 타이핑 속도 조절
-                    await new Promise(resolve => setTimeout(resolve, typingSpeed));
-                }
-                
-                // 타이핑 완료 후 커서 제거
-                element.innerHTML = this.parseMarkdown(fullText);
-                this.scrollToBottom();
-            }
-            
-            // 음성 인식 (개선된 16kHz WAV 녹음)
+            // 음성 인식
             async toggleVoiceRecording() {
                 if (!this.isRecording) {
                     await this.startRecording();
@@ -817,54 +769,56 @@
                 if (this.isRecording) return;
                 
                 try {
-                    console.log("음성 녹음 시작 (16kHz WAV)");
+                    console.log("Recording started");
                     this.isRecording = true;
                     
-                    // 16kHz로 오디오 스트림 요청
                     const stream = await navigator.mediaDevices.getUserMedia({ 
                         audio: {
                             sampleRate: 16000,
                             channelCount: 1,
                             echoCancellation: true,
-                            noiseSuppression: true,
-                            autoGainControl: true
+                            noiseSuppression: true
                         }, 
                         video: false 
                     });
+                    console.log("getUserMedia() success, stream created, initializing for 16kHz WAV...");
                     
-                    console.log("오디오 스트림 생성 완료");
+                    this.gumStream = stream;
                     
-                    // MediaRecorder 설정 (WEBM 코덱 사용)
-                    const options = {
-                        mimeType: 'audio/webm;codecs=opus',
-                        audioBitsPerSecond: 128000
-                    };
+                    // 16000Hz로 오디오 컨텍스트 생성
+                    this.audioContext = new (window.AudioContext || window.webkitAudioContext)({ 
+                        sampleRate: 16000 
+                    });
+                    this.input = this.audioContext.createMediaStreamSource(stream);
                     
-                    this.mediaRecorder = new MediaRecorder(stream, options);
-                    this.audioChunks = [];
+                    // MediaRecorder 대신 ScriptProcessorNode 사용하여 WAV 생성
+                    this.bufferSize = 4096;
+                    this.processor = this.audioContext.createScriptProcessor(this.bufferSize, 1, 1);
+                    this.audioData = [];
                     
-                    this.mediaRecorder.ondataavailable = (event) => {
-                        if (event.data.size > 0) {
-                            this.audioChunks.push(event.data);
+                    this.processor.onaudioprocess = (e) => {
+                        const inputData = e.inputBuffer.getChannelData(0);
+                        // Float32Array를 Int16Array로 변환 (WAV 형식)
+                        const int16Data = new Int16Array(inputData.length);
+                        for (let i = 0; i < inputData.length; i++) {
+                            int16Data[i] = Math.max(-32768, Math.min(32767, inputData[i] * 32768));
                         }
+                        this.audioData.push(int16Data);
                     };
                     
-                    this.mediaRecorder.onstop = () => {
-                        this.processAudioRecording();
-                    };
+                    this.input.connect(this.processor);
+                    this.processor.connect(this.audioContext.destination);
                     
-                    this.mediaRecorder.start();
-                    
-                    // 최대 녹음 시간 5초
+                    // 음성 활동 감지 (VAD) 시뮬레이션 - 5초 후 자동 중지
                     this.recordingTimeout = setTimeout(() => {
                         if (this.isRecording) {
-                            console.log('최대 녹음 시간 도달 - 자동 중지');
+                            console.log('voice_stop - timeout');
                             this.stopRecording();
                         }
-                    }, 5000);
+                    }, 5000); // 5초 최대 녹음 시간
                     
                     this.elements.voiceBtn.classList.add('recording');
-                    this.updateStatus('음성 인식 중... (최대 5초)');
+                    this.updateStatus('음성 인식 중... (5초, 16kHz WAV)');
                     
                 } catch (error) {
                     console.error('음성 녹음 시작 오류:', error);
@@ -876,7 +830,7 @@
             stopRecording() {
                 if (!this.isRecording) return;
                 
-                console.log('음성 녹음 중지');
+                console.log('record end');
                 this.isRecording = false;
                 this.elements.voiceBtn.classList.remove('recording');
                 
@@ -885,34 +839,50 @@
                     this.recordingTimeout = null;
                 }
                 
-                if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
-                    this.mediaRecorder.stop();
+                // 오디오 처리 중지
+                if (this.processor) {
+                    this.processor.disconnect();
+                    this.input.disconnect();
                 }
                 
-                // 스트림 정리
-                if (this.mediaRecorder && this.mediaRecorder.stream) {
-                    this.mediaRecorder.stream.getTracks().forEach(track => track.stop());
+                if (this.gumStream) {
+                    this.gumStream.getAudioTracks()[0].stop();
                 }
+                
+                if (this.audioContext) {
+                    this.audioContext.close();
+                }
+                
+                // WAV 파일 생성 및 처리
+                this.processAudioRecording();
             }
             
             async processAudioRecording() {
-                if (!this.audioChunks || this.audioChunks.length === 0) {
+                if (!this.audioData || this.audioData.length === 0) {
                     this.updateStatus('녹음된 데이터 없음');
                     return;
                 }
                 
+                // 모든 오디오 데이터를 하나로 합치기
+                let totalLength = 0;
+                this.audioData.forEach(chunk => totalLength += chunk.length);
+                
+                const combinedData = new Int16Array(totalLength);
+                let offset = 0;
+                this.audioData.forEach(chunk => {
+                    combinedData.set(chunk, offset);
+                    offset += chunk.length;
+                });
+                
+                // WAV 헤더 생성 (16000Hz, 16bit, mono)
+                const wavBlob = this.createWAVBlob(combinedData, 16000);
+                
+                console.log('WAV 블롭 크기:', wavBlob.size, 'bytes, 샘플레이트: 16000Hz');
+                
+                const formData = new FormData();
+                formData.append('file', wavBlob, 'recording.wav');
+                
                 try {
-                    // WEBM 오디오 블롭 생성
-                    const webmBlob = new Blob(this.audioChunks, { type: 'audio/webm' });
-                    console.log('WEBM 블롭 크기:', webmBlob.size, 'bytes');
-                    
-                    // 16kHz WAV로 변환
-                    const wavBlob = await this.convertToWAV(webmBlob);
-                    console.log('WAV 변환 완료:', wavBlob.size, 'bytes');
-                    
-                    const formData = new FormData();
-                    formData.append('file', wavBlob, 'recording.wav');
-                    
                     this.updateStatus('음성 변환 중... (16kHz WAV)');
                     const response = await fetch(`${this.apiBaseUrl}/stt?lang=ko&isPlay=0`, {
                         method: 'POST',
@@ -940,60 +910,14 @@
                 }
                 
                 // 정리
-                this.audioChunks = [];
+                this.audioData = [];
             }
             
-            async convertToWAV(webmBlob) {
-                return new Promise((resolve, reject) => {
-                    const audioContext = new (window.AudioContext || window.webkitAudioContext)({
-                        sampleRate: 16000
-                    });
-                    
-                    const fileReader = new FileReader();
-                    fileReader.onload = async (e) => {
-                        try {
-                            const arrayBuffer = e.target.result;
-                            const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-                            
-                            // 16kHz 모노로 리샘플링
-                            const targetSampleRate = 16000;
-                            const numberOfChannels = 1;
-                            const length = audioBuffer.duration * targetSampleRate;
-                            
-                            const offlineContext = new OfflineAudioContext(
-                                numberOfChannels, 
-                                length, 
-                                targetSampleRate
-                            );
-                            
-                            const source = offlineContext.createBufferSource();
-                            source.buffer = audioBuffer;
-                            source.connect(offlineContext.destination);
-                            source.start();
-                            
-                            const renderedBuffer = await offlineContext.startRendering();
-                            const wavBlob = this.audioBufferToWav(renderedBuffer);
-                            
-                            resolve(wavBlob);
-                        } catch (error) {
-                            reject(error);
-                        }
-                    };
-                    
-                    fileReader.onerror = reject;
-                    fileReader.readAsArrayBuffer(webmBlob);
-                });
-            }
-            
-            audioBufferToWav(buffer) {
-                const numberOfChannels = buffer.numberOfChannels;
-                const sampleRate = buffer.sampleRate;
-                const format = 1; // PCM
-                const bitDepth = 16;
-                
-                const length = buffer.length;
-                const arrayBuffer = new ArrayBuffer(44 + length * numberOfChannels * 2);
-                const view = new DataView(arrayBuffer);
+            // WAV 파일 생성 함수
+            createWAVBlob(samples, sampleRate) {
+                const length = samples.length;
+                const buffer = new ArrayBuffer(44 + length * 2);
+                const view = new DataView(buffer);
                 
                 // WAV 헤더 작성
                 const writeString = (offset, string) => {
@@ -1002,58 +926,82 @@
                     }
                 };
                 
+                // RIFF chunk descriptor
                 writeString(0, 'RIFF');
-                view.setUint32(4, 36 + length * numberOfChannels * 2, true);
+                view.setUint32(4, 36 + length * 2, true); // file size - 8
                 writeString(8, 'WAVE');
+                
+                // FMT sub-chunk
                 writeString(12, 'fmt ');
-                view.setUint32(16, 16, true);
-                view.setUint16(20, format, true);
-                view.setUint16(22, numberOfChannels, true);
-                view.setUint32(24, sampleRate, true);
-                view.setUint32(28, sampleRate * numberOfChannels * bitDepth / 8, true);
-                view.setUint16(32, numberOfChannels * bitDepth / 8, true);
-                view.setUint16(34, bitDepth, true);
+                view.setUint32(16, 16, true); // subchunk1 size (16 for PCM)
+                view.setUint16(20, 1, true); // audio format (1 for PCM)
+                view.setUint16(22, 1, true); // number of channels (1 for mono)
+                view.setUint32(24, sampleRate, true); // sample rate
+                view.setUint32(28, sampleRate * 2, true); // byte rate
+                view.setUint16(32, 2, true); // block align
+                view.setUint16(34, 16, true); // bits per sample
+                
+                // DATA sub-chunk
                 writeString(36, 'data');
-                view.setUint32(40, length * numberOfChannels * 2, true);
+                view.setUint32(40, length * 2, true); // subchunk2 size
                 
                 // 오디오 데이터 작성
                 let offset = 44;
                 for (let i = 0; i < length; i++) {
-                    for (let channel = 0; channel < numberOfChannels; channel++) {
-                        const sample = Math.max(-1, Math.min(1, buffer.getChannelData(channel)[i]));
-                        view.setInt16(offset, sample * 0x7FFF, true);
-                        offset += 2;
-                    }
+                    view.setInt16(offset, samples[i], true);
+                    offset += 2;
                 }
                 
                 return new Blob([view], { type: 'audio/wav' });
             }
             
-            // TTS 큐 관리
-            addToTtsQueue(text) {
-                this.ttsQueue.push(text);
-                if (!this.isPlayingTts) {
-                    this.processNextTts();
-                }
+            // 마크다운 파싱 (간단한 버전)
+            parseMarkdown(text) {
+                return text
+                    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                    .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                    .replace(/`(.*?)`/g, '<code>$1</code>')
+                    .replace(/\n/g, '<br>');
             }
             
-            async processNextTts() {
-                if (this.ttsQueue.length === 0) {
-                    this.isPlayingTts = false;
+            // TTS 큐 시스템
+            addToTtsQueue(text) {
+                this.ttsQueue.push(text);
+                this.processTtsQueue();
+            }
+            
+            async processTtsQueue() {
+                if (this.isPlayingTts || this.ttsQueue.length === 0) {
                     return;
                 }
                 
                 this.isPlayingTts = true;
-                const text = this.ttsQueue.shift();
                 
-                try {
+                while (this.ttsQueue.length > 0) {
+                    const text = this.ttsQueue.shift();
                     await this.playTtsSentence(text);
+                }
+                
+                this.isPlayingTts = false;
+            }
+            
+            clearTtsQueue() {
+                this.ttsQueue = [];
+                this.isPlayingTts = false;
+            }
+            
+            // TTS
+            async playTts(text) {
+                try {
+                    const sentences = text.split(/[.!?]+/).filter(s => s.trim());
+                    for (const sentence of sentences) {
+                        if (sentence.trim()) {
+                            this.addToTtsQueue(sentence.trim());
+                        }
+                    }
                 } catch (error) {
                     console.error('TTS 재생 오류:', error);
                 }
-                
-                // 다음 TTS 처리
-                setTimeout(() => this.processNextTts(), 100);
             }
             
             playTtsSentence(text) {
@@ -1070,134 +1018,6 @@
                     audio.onerror = resolve;
                     audio.play().catch(resolve);
                 });
-            }
-            
-            // 마크다운 파싱 (간단한 버전)
-            parseMarkdown(text) {
-                return text
-                    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-                    .replace(/\*(.*?)\*/g, '<em>$1</em>')
-                    .replace(/`(.*?)`/g, '<code>$1</code>')
-                    .replace(/\n/g, '<br>');
-            }
-            
-            // 웹캠 스트리밍 토글
-            toggleStreaming() {
-                if (!this.streamingToServer) {
-                    this.startStreaming();
-                } else {
-                    this.stopStreaming();
-                }
-            }
-            
-            async startStreaming() {
-                if (!this.webcamStream) {
-                    this.updateStatus('먼저 웹캠을 시작하세요');
-                    return;
-                }
-                
-                try {
-                    // WebSocket 연결
-                    this.streamingWebSocket = new WebSocket(this.streamingServerUrl);
-                    
-                    this.streamingWebSocket.onopen = () => {
-                        console.log('스트리밍 서버 연결됨');
-                        this.streamingToServer = true;
-                        this.elements.toggleStreaming.classList.add('active');
-                        this.elements.toggleStreaming.textContent = '📡 스트리밍 중지';
-                        this.updateStatus('스트리밍 시작됨');
-                        
-                        // 처리된 이미지를 보여줄 캔버스 설정
-                        this.processedCanvas = this.elements.processedCanvas;
-                        this.processedCtx = this.processedCanvas.getContext('2d');
-                        this.processedCanvas.width = 512;
-                        this.processedCanvas.height = 512;
-                        
-                        // 원본 비디오 숨기고 처리된 캔버스 보이기
-                        this.elements.webcamVideo.style.display = 'none';
-                        this.processedCanvas.style.display = 'block';
-                        
-                        // 스트리밍 시작
-                        this.streamFrames();
-                    };
-                    
-                    this.streamingWebSocket.onmessage = (event) => {
-                        // 서버에서 처리된 이미지 받기
-                        if (event.data instanceof Blob) {
-                            const url = URL.createObjectURL(event.data);
-                            const img = new Image();
-                            img.onload = () => {
-                                this.processedCtx.drawImage(img, 0, 0, 512, 512);
-                                URL.revokeObjectURL(url);
-                            };
-                            img.src = url;
-                        }
-                    };
-                    
-                    this.streamingWebSocket.onerror = (error) => {
-                        console.error('스트리밍 연결 오류:', error);
-                        this.updateStatus('스트리밍 연결 실패');
-                        this.stopStreaming();
-                    };
-                    
-                    this.streamingWebSocket.onclose = () => {
-                        console.log('스트리밍 연결 종료');
-                        this.stopStreaming();
-                    };
-                    
-                } catch (error) {
-                    console.error('스트리밍 시작 오류:', error);
-                    this.updateStatus('스트리밍 시작 실패');
-                }
-            }
-            
-            stopStreaming() {
-                this.streamingToServer = false;
-                this.elements.toggleStreaming.classList.remove('active');
-                this.elements.toggleStreaming.textContent = '📡 스트리밍';
-                
-                if (this.streamingWebSocket) {
-                    this.streamingWebSocket.close();
-                    this.streamingWebSocket = null;
-                }
-                
-                // 처리된 캔버스 숨기기
-                if (this.processedCanvas) {
-                    this.processedCanvas.style.display = 'none';
-                }
-                
-                // 원본 비디오 보이기
-                this.elements.webcamVideo.style.display = 'block';
-                
-                this.updateStatus('스트리밍 중지됨');
-            }
-            
-            streamFrames() {
-                if (!this.streamingToServer || !this.streamingWebSocket || 
-                    this.streamingWebSocket.readyState !== WebSocket.OPEN) {
-                    return;
-                }
-                
-                // 웹캠에서 프레임 캡처
-                const canvas = document.createElement('canvas');
-                canvas.width = 512;
-                canvas.height = 512;
-                const ctx = canvas.getContext('2d');
-                
-                ctx.drawImage(this.elements.webcamVideo, 0, 0, 512, 512);
-                
-                // JPEG로 변환하여 전송
-                canvas.toBlob((blob) => {
-                    if (blob && this.streamingToServer && this.streamingWebSocket && 
-                        this.streamingWebSocket.readyState === WebSocket.OPEN) {
-                        this.streamingWebSocket.send(blob);
-                    }
-                }, 'image/jpeg', 0.8);
-                
-                // 다음 프레임 예약 (30 FPS)
-                if (this.streamingToServer) {
-                    setTimeout(() => this.streamFrames(), 1000 / 30);
-                }
             }
             
             // 웹캠 관련
@@ -1230,12 +1050,6 @@
                     
                     console.log('웹캠 비디오 크기:', this.elements.webcamVideo.height, this.elements.webcamVideo.width);
                     this.updateStatus('웹캠 시작됨 (512x512)');
-                    
-                    // 스트리밍이 활성화되어 있다면 처리된 캔버스로 전환
-                    if (this.streamingToServer && this.processedCanvas) {
-                        this.elements.webcamVideo.style.display = 'none';
-                        this.processedCanvas.style.display = 'block';
-                    }
                     
                 } catch (error) {
                     console.error('웹캠 시작 오류:', error);
@@ -1285,13 +1099,6 @@
                     });
                     this.webcamStream = null;
                 }
-                
-                if (this.streamingWebSocket) {
-                    this.streamingWebSocket.close();
-                    this.streamingWebSocket = null;
-                }
-                
-                this.stopStreaming();
                 
                 this.elements.webcamVideo.srcObject = null;
                 this.elements.webcamVideo.style.display = 'none';
