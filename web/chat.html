@@ -472,19 +472,17 @@
         </div>
     </div>
 
-    <script src='./recorder.js'></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/recorder.js/0.1.0/recorder.min.js"></script>
     <script>
         class AIChatApp {
             constructor() {
                 this.apiBaseUrl = 'http://192.168.3.76:59532/v1';
                 this.ttsBaseUrl = 'http://192.168.3.76:59531/v1';
                 
-                // 음성 관련 변수들 (Recorder.js 사용)
+                // 음성 관련 변수들 (MediaRecorder 사용)
                 this.isRecording = false;
-                this.audioContext = null;
+                this.mediaRecorder = null;
                 this.gumStream = null;
-                this.input = null;
-                this.rec = null;
                 
                 // TTS 큐 시스템
                 this.ttsQueue = [];
@@ -754,7 +752,7 @@
                 }
             }
             
-            // 음성 인식 (Recorder.js 기반)
+            // 음성 인식 (MediaRecorder 방식으로 복원)
             async toggleVoiceRecording() {
                 if (!this.isRecording) {
                     await this.startRecording();
@@ -766,6 +764,8 @@
             async startRecording() {
                 if (this.isRecording) return;
                 
+                let chunks = [];
+                
                 try {
                     console.log("Recording started");
                     this.isRecording = true;
@@ -774,38 +774,62 @@
                         audio: true, 
                         video: false 
                     });
-                    console.log("getUserMedia() success, stream created, initializing Recorder.js ...");
+                    console.log("getUserMedia() success, stream created");
                     
-                    // 22050Hz 샘플레이트로 AudioContext 생성
-                    this.audioContext = new AudioContext({ sampleRate: 16000 });
                     this.gumStream = stream;
-                    this.input = this.audioContext.createMediaStreamSource(stream);
                     
-                    // Recorder 객체 생성 (모노 채널)
-                    this.rec = new Recorder(this.input, { numChannels: 1, sampleRate: 16000, bufferLen: 4096 });
+                    // MediaRecorder로 음성 녹음
+                    this.mediaRecorder = new MediaRecorder(stream, {
+                        audioBitsPerSecond: 16000
+                    });
                     
-                    // VAD 옵션 설정
-                    const options = {
-                        source: this.input,
-                        voice_stop: () => {
-                            console.log('voice_stop');
-                            this.isRecording = false;
-                            console.log('record end');
-                            this.rec.stop();
-                            this.gumStream.getAudioTracks()[0].stop();
-                            this.rec.exportWAV((blob) => this.processSttBlob(blob));
-                        },
-                        voice_start: () => {
-                            console.log('voice_start');
-                        }
+                    this.mediaRecorder.ondataavailable = (e) => {
+                        chunks.push(e.data);
                     };
                     
-                    // VAD 생성 (주석 처리되어 있으므로 수동 중지 방식 사용)
-                    // const vad = new VAD(options);
+                    this.mediaRecorder.onstop = async (e) => {
+                        console.log("recorder stopped");
+                        
+                        const audioBlob = new Blob(chunks, { type: 'audio/ogg;codecs=opus' });
+                        console.log('오디오 블롭 크기:', audioBlob.size, 'bytes');
+                        
+                        const formData = new FormData();
+                        formData.append('file', audioBlob, 'voice.ogg');
+                        
+                        try {
+                            this.updateStatus('음성 변환 중...');
+                            const response = await fetch(`${this.apiBaseUrl}/stt?lang=ko&isPlay=0`, {
+                                method: 'POST',
+                                body: formData
+                            });
+                            
+                            if (!response.ok) {
+                                throw new Error(`STT API 오류: ${response.status}`);
+                            }
+                            
+                            const data = await response.json();
+                            console.log('STT 응답:', data);
+                            
+                            if (data.text && data.text.trim()) {
+                                this.elements.messageInput.value = data.text;
+                                this.updateStatus('음성 인식 완료');
+                                setTimeout(() => this.sendMessage(), 500);
+                            } else if (data.data && data.data.trim()) {
+                                this.elements.messageInput.value = data.data;
+                                this.updateStatus('음성 인식 완료');
+                                setTimeout(() => this.sendMessage(), 500);
+                            } else {
+                                this.updateStatus('음성을 인식하지 못했습니다');
+                            }
+                        } catch (error) {
+                            console.error('음성 인식 오류:', error);
+                            this.updateStatus('음성 인식 실패: ' + error.message);
+                        }
+                        
+                        chunks = [];
+                    };
                     
-                    // 녹음 시작
-                    this.rec.record();
-                    
+                    this.mediaRecorder.start();
                     this.elements.voiceBtn.classList.add('recording');
                     this.updateStatus('음성 인식 중... (클릭하여 중지)');
                     
@@ -824,55 +848,13 @@
                 this.isRecording = false;
                 this.elements.voiceBtn.classList.remove('recording');
                 
-                if (this.rec) {
-                    this.rec.stop();
+                if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
+                    this.mediaRecorder.stop();
                 }
                 
                 if (this.gumStream) {
-                    this.gumStream.getAudioTracks()[0].stop();
-                }
-                
-                if (this.rec) {
-                    this.rec.exportWAV((blob) => this.processSttBlob(blob));
-                }
-            }
-            
-            async processSttBlob(blob) {
-                console.log('WAV 블롭 크기:', blob.size, 'bytes, 샘플레이트: 22050Hz');
-                
-                const formData = new FormData();
-                formData.append('file', blob, 'recording.wav');
-                
-                try {
-                    this.updateStatus('음성 변환 중... (22050Hz WAV)');
-                    const response = await fetch(`${this.apiBaseUrl}/stt?lang=ko&isPlay=0`, {
-                        method: 'POST',
-                        body: formData
-                    });
-                    
-                    if (!response.ok) {
-                        throw new Error(`STT API 오류: ${response.status}`);
-                    }
-                    
-                    const data = await response.json();
-                    console.log('STT 응답:', data);
-                    
-                    if (data.text && data.text.trim()) {
-                        this.elements.messageInput.value = data.text;
-                        this.updateStatus('음성 인식 완료');
-                        // 자동으로 메시지 전송
-                        setTimeout(() => this.sendMessage(), 500);
-                    } else if (data.data && data.data.trim()) {
-                        // API 응답 구조가 다를 경우 대비
-                        this.elements.messageInput.value = data.data;
-                        this.updateStatus('음성 인식 완료');
-                        setTimeout(() => this.sendMessage(), 500);
-                    } else {
-                        this.updateStatus('음성을 인식하지 못했습니다');
-                    }
-                } catch (error) {
-                    console.error('음성 인식 오류:', error);
-                    this.updateStatus('음성 인식 실패: ' + error.message);
+                    this.gumStream.getAudioTracks().forEach(track => track.stop());
+                    this.gumStream = null;
                 }
             }
             
