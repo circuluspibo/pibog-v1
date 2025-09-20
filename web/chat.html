@@ -777,7 +777,7 @@
                     console.log("getUserMedia() success, stream created, initializing Recorder.js ...");
                     
                     // 22050Hz 샘플레이트로 AudioContext 생성
-                    this.audioContext = new AudioContext({ sampleRate: 22050 });
+                    this.audioContext = new AudioContext({ sampleRate: 16000 });
                     this.gumStream = stream;
                     this.input = this.audioContext.createMediaStreamSource(stream);
                     
