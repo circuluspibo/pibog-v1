@@ -488,6 +488,10 @@
                 this.audioData = [];
                 this.bufferSize = 4096;
                 
+                // TTS 큐 시스템
+                this.ttsQueue = [];
+                this.isPlayingTts = false;
+                
                 // 기타 설정
                 this.isTtsEnabled = true;
                 this.autoSendImage = false;
@@ -643,14 +647,14 @@
                         aiMessageBubble.innerHTML = this.parseMarkdown(fullResponse);
                         this.scrollToBottom();
                         
-                        // 문장이 완성되면 TTS 재생
+                        // 문장이 완성되면 TTS 큐에 추가
                         if (this.isTtsEnabled) {
                             const sentences = fullResponse.slice(lastSentenceEnd).match(/[^.!?]*[.!?]/g);
                             if (sentences) {
                                 for (const sentence of sentences) {
                                     const cleanSentence = sentence.trim();
                                     if (cleanSentence) {
-                                        this.playTtsSentence(cleanSentence);
+                                        this.addToTtsQueue(cleanSentence);
                                     }
                                 }
                                 lastSentenceEnd = fullResponse.length;
@@ -658,9 +662,9 @@
                         }
                     }
                     
-                    // 마지막 미완성 문장도 TTS 재생
+                    // 마지막 미완성 문장도 TTS 큐에 추가
                     if (this.isTtsEnabled && fullResponse.slice(lastSentenceEnd).trim()) {
-                        this.playTtsSentence(fullResponse.slice(lastSentenceEnd).trim());
+                        this.addToTtsQueue(fullResponse.slice(lastSentenceEnd).trim());
                     }
                     
                 } catch (error) {
@@ -724,14 +728,14 @@
                         aiMessageBubble.innerHTML = this.parseMarkdown(fullResponse);
                         this.scrollToBottom();
                         
-                        // 문장이 완성되면 TTS 재생
+                        // 문장이 완성되면 TTS 큐에 추가
                         if (this.isTtsEnabled) {
                             const sentences = fullResponse.slice(lastSentenceEnd).match(/[^.!?]*[.!?]/g);
                             if (sentences) {
                                 for (const sentence of sentences) {
                                     const cleanSentence = sentence.trim();
                                     if (cleanSentence) {
-                                        this.playTtsSentence(cleanSentence);
+                                        this.addToTtsQueue(cleanSentence);
                                     }
                                 }
                                 lastSentenceEnd = fullResponse.length;
@@ -739,9 +743,9 @@
                         }
                     }
                     
-                    // 마지막 미완성 문장도 TTS 재생
+                    // 마지막 미완성 문장도 TTS 큐에 추가
                     if (this.isTtsEnabled && fullResponse.slice(lastSentenceEnd).trim()) {
-                        this.playTtsSentence(fullResponse.slice(lastSentenceEnd).trim());
+                        this.addToTtsQueue(fullResponse.slice(lastSentenceEnd).trim());
                     }
                     
                     this.removeImage();
@@ -960,13 +964,39 @@
                     .replace(/\n/g, '<br>');
             }
             
+            // TTS 큐 시스템
+            addToTtsQueue(text) {
+                this.ttsQueue.push(text);
+                this.processTtsQueue();
+            }
+            
+            async processTtsQueue() {
+                if (this.isPlayingTts || this.ttsQueue.length === 0) {
+                    return;
+                }
+                
+                this.isPlayingTts = true;
+                
+                while (this.ttsQueue.length > 0) {
+                    const text = this.ttsQueue.shift();
+                    await this.playTtsSentence(text);
+                }
+                
+                this.isPlayingTts = false;
+            }
+            
+            clearTtsQueue() {
+                this.ttsQueue = [];
+                this.isPlayingTts = false;
+            }
+            
             // TTS
             async playTts(text) {
                 try {
                     const sentences = text.split(/[.!?]+/).filter(s => s.trim());
                     for (const sentence of sentences) {
                         if (sentence.trim()) {
-                            await this.playTtsSentence(sentence.trim());
+                            this.addToTtsQueue(sentence.trim());
                         }
                     }
                 } catch (error) {
