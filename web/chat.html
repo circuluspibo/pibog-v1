@@ -782,7 +782,7 @@
                     this.input = this.audioContext.createMediaStreamSource(stream);
                     
                     // Recorder 객체 생성 (모노 채널)
-                    this.rec = new Recorder(this.input, { numChannels: 1 });
+                    this.rec = new Recorder(this.input, { numChannels: 1, sampleRate: 16000, bufferLen: 4096 });
                     
                     // VAD 옵션 설정
                     const options = {
