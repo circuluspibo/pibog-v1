@@ -42,7 +42,7 @@ from fastapi.staticfiles import StaticFiles
 from queue import Queue
 from ultralytics import YOLO, FastSAM
 import openvino as ov
-from playsound import playsound
+#from playsound import playsound
 from mandro import HadnControler
 import threading
 from threading import Event, Thread

@@ -42,7 +42,7 @@ from fastapi.staticfiles import StaticFiles
 from queue import Queue
 from ultralytics import YOLO, FastSAM
 import openvino as ov
-from playsound import playsound
+#from playsound import playsound
 from mandro import HadnControler
 import threading
 from threading import Event, Thread
@@ -116,7 +116,6 @@ def read_images(path: str) -> list[Tensor]:
         return [read_image(str(file)) for file in sorted(entry.iterdir())]
     return [read_image(path)]
 
-
 class Chat(BaseModel):
   prompt : str = ''
   lang : str = 'auto'
@@ -127,20 +126,19 @@ class Chat(BaseModel):
   top_k : int = 50
   max : int = 256 #16384
 
-# gemma-3-1b-it-Q4_K_M.gguf
-#model_txt = Llama("../models/txt/hyperclovax-seed-text-instruct-1.5b-q4_k_m.gguf", n_threads=4, verbose=False) #from_pretrained
-
 #model_name = 'rippertnt/Phi-4-mini-it-ov-int4' #'../models/CLOVAX-1.5B-ov-int4'
 #model_name = snapshot_download(repo_id='rippertnt/Phi-4-mini-it-ov-int4') # Phi-4-mini-it-ov-int4 //text only
 #model_txt = snapshot_download(repo_id='circulus/Qwen2.5-VL-3B-it-ov-int4') # Phi-4-mini-it-ov-int4 //text only
-model_txt = snapshot_download(repo_id='circulus/gemma-3-4b-it-ov-awq-sym')
+
 #model_name = '../models/gemma-3-1b-int4-ov'
-#model_name = '../models/Qwen-3-1.7B-int4-ov'
+#pipe_txt = ov_genai.LLMPipeline(model_name, device="GPU")
+
+model_txt = snapshot_download(repo_id='circulus/gemma-3-4b-it-ov-awq-sym')
+model_stt = snapshot_download(repo_id='circulus/whisper-large-v3-turbo-ov')
 
 token_txt = AutoTokenizer.from_pretrained(model_txt)
-pipe_txt = ov_genai.VLMPipeline(model_txt, device="GPU")
-#pipe_txt = ov_genai.LLMPipeline(model_name, device="GPU")
-pipe_stt = ov_genai.WhisperPipeline('../models/stt',device="GPU")
+pipe_txt = ov_genai.VLMPipeline(model_txt, device="GPU", config={"PERFORMANCE_HINT": "LATENCY"})
+pipe_stt = ov_genai.WhisperPipeline(model_stt,device="GPU", config={"PERFORMANCE_HINT": "LATENCY"})
 
 # for genai
 async def process_stream(streamer, isStream=True, isPlay=0, lang='en'):
@@ -218,9 +216,12 @@ def txt2chat(prompt : str ,system = _SYSTEM, isPlay = 0, lang='en'): # gen or me
   config = GenerationConfig(
       max_new_tokens=256,
       temperature=0.5,
-      repetition_penalty=1.1,
-      top_k=50,
-      top_p=0.9,
+      beam_size=1,
+      do_sample=False, #fast for beam-search
+      speculative_decoding=True,
+      #repetition_penalty=1.1,
+      #top_k=50,
+      #top_p=0.9,
   )
 
   generate_kwargs = dict(
@@ -274,9 +275,12 @@ def img2chat2(prompt = "" ,system = _SYSTEM, isPlay = 0, lang='en'): # gen or me
   config = GenerationConfig(
       max_new_tokens=256,
       temperature=0.5,
-      repetition_penalty=1.1,
-      top_k=50,
-      top_p=0.9,
+      beam_size=1,
+      do_sample=False, #fast for beam-search
+      speculative_decoding=True,
+      #repetition_penalty=1.1,
+      #top_k=50,
+      #top_p=0.9,
   )
 
   generate_kwargs = dict(
@@ -314,9 +318,13 @@ def img2chat(file : UploadFile = File(...), prompt = "" ,system = _SYSTEM, isPla
   config = GenerationConfig(
       max_new_tokens=256,
       temperature=0.5,
-      repetition_penalty=1.1,
-      top_k=50,
-      top_p=0.9,
+      beam_size=1,
+      do_sample=False, #fast for beam-search
+      speculative_decoding=True,
+      #repetition_penalty=1.1,
+      #top_k=50,
+      #top_p=0.9,
+      
   )
 
   generate_kwargs = dict(
