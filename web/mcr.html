@@ -1099,6 +1099,23 @@
             async startWebcam() {
                 console.log('웹캠 시작 시도');
                 
+                fetch(`${this.apiBaseUrl}/start_collection`).then(async response=>{
+                    if (!response.ok) {
+                        throw new Error(`Response status: ${response.status}`)
+                    }
+
+                    this.elements.webcamVideo.style.display = 'block';
+                    this.elements.webcamPlaceholder.style.display = 'none';
+                    this.elements.startWebcam.style.display = 'none';
+                    this.elements.captureImage.style.display = 'block';
+                    this.elements.stopWebcam.style.display = 'block';
+                    document.getElementById('webcamVideo').src = '/video_feed'
+                    
+                })
+
+                return
+                
+                
                 if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
                     alert("Media Device not supported");
                     this.updateStatus('미디어 장치 미지원');
