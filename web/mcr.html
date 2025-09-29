@@ -1099,7 +1099,7 @@
             async startWebcam() {
                 console.log('웹캠 시작 시도');
                 
-                fetch(`http://192.168.42.1:59532/start_collection`).then(async response=>{
+                fetch(`http://192.168.42.1:59531/start_collection`).then(async response=>{
                     if (!response.ok) {
                         throw new Error(`Response status: ${response.status}`)
                     }
@@ -1109,7 +1109,7 @@
                     this.elements.startWebcam.style.display = 'none';
                     this.elements.captureImage.style.display = 'block';
                     this.elements.stopWebcam.style.display = 'block';
-                    document.getElementById('webcamVideo').src = '/video_feed'
+                    document.getElementById('webcamVideo').src = 'http://192.168.42.1:59531/video_feed'
                     
                 })
 
