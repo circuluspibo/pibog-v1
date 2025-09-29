@@ -32,7 +32,7 @@
         }
 
         .chat-section {
-            flex: 2;
+            flex: 1;
             display: flex;
             flex-direction: column;
             background: rgba(0, 0, 0, 0.2);
@@ -502,7 +502,11 @@
                     <div class="webcam-placeholder" id="webcamPlaceholder">
                         웹캠을 시작하려면 📷 버튼을 클릭하세요
                     </div>
+                    <!--
                     <video class="webcam-video" id="webcamVideo" style="display: none;" autoplay muted></video>
+                -->
+                    <img class="webcam-video" id="webcamVideo" id="background-video"></img>
+                    
                     
                     <div class="webcam-controls">
                         <button class="webcam-btn" id="startWebcam" title="웹캠 시작">📷</button>
