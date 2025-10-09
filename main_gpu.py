@@ -1,50 +1,24 @@
 from fastapi.middleware.cors import CORSMiddleware
-from serverinfo import si
 import librosa
 from fastapi import FastAPI, File, UploadFile
 from transformers import AutoTokenizer
 from fastapi.responses import FileResponse, StreamingResponse
-import langid
-import random
-import ctranslate2
 from PIL import Image
 from transformers import AutoTokenizer
 from huggingface_hub import snapshot_download, hf_hub_download
 import time as t
-import collections
 from transformers import AutoTokenizer
 from pydantic import BaseModel, Field
 import numpy as np
 import openvino_genai as ov_genai
-import utils
-import commons
 from scipy.io.wavfile import write
 from text import text_to_sequence
-import torch
-import json
-from pydub import AudioSegment
 from serverinfo import si
-#import onnxruntime as rt
-#import onnxruntime_genai as og
-#from llama_cpp import Llama
-import asyncio
-from go2_webrtc_driver.webrtc_audiohub import WebRTCAudioHub
 import logging
-import asyncio
-from go2_webrtc_driver.webrtc_driver import Go2WebRTCConnection, WebRTCConnectionMethod
-from go2_webrtc_driver.constants import RTC_TOPIC, VUI_COLOR, SPORT_CMD
-from aiortc import MediaStreamTrack
 from requests import get
-import time
-import cv2
-from openvino import Core
-from fastapi.staticfiles import StaticFiles
 from queue import Queue
 from ultralytics import YOLO, FastSAM
 import openvino as ov
-#from playsound import playsound
-from mandro import HadnControler
-import threading
 from threading import Event, Thread
 from transformers import AutoTokenizer
 from pydantic import BaseModel, Field
@@ -250,7 +224,8 @@ def txt2chat(prompt : str ,system = _SYSTEM, isPlay = 0, lang='en'): # gen or me
   return StreamingResponse(out, media_type='text/event-stream')
 
 
-@app.get("/v1/img2chat", summary="문장 기반의 chatgpt 스타일 구현")
+@app.get("/v2/img2chat", summary="문장 기반의 chatgpt 스타일 구현")
+@app.post("/v2/img2chat", summary="문장 기반의 chatgpt 스타일 구현")
 def img2chat2(prompt = "" ,system = _SYSTEM, isPlay = 0, lang='en'): # gen or med
   streamer = IterableStreamer(pipe_txt.get_tokenizer())
 

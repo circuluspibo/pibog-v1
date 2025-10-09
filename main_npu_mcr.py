@@ -1,38 +1,20 @@
 from fastapi.middleware.cors import CORSMiddleware
-from serverinfo import si
-import librosa
-from fastapi import FastAPI, File, UploadFile
-from transformers import AutoTokenizer
+from fastapi import FastAPI
 from fastapi.responses import FileResponse, StreamingResponse
-import langid
-import random
-import ctranslate2
-from PIL import Image
-from transformers import AutoTokenizer
+import time
 from huggingface_hub import snapshot_download, hf_hub_download
 import time as t
-import collections
-from transformers import AutoTokenizer
-from pydantic import BaseModel, Field
 import numpy as np
 import openvino_genai as ov_genai
 import utils
-import commons
+import subprocess
 from scipy.io.wavfile import write
 from text import text_to_sequence
-import torch
-import json
+import collections
 from pydub import AudioSegment
 from serverinfo import si
-#import onnxruntime as rt
-#import onnxruntime_genai as og
-#from llama_cpp import Llama
 import asyncio
-from go2_webrtc_driver.webrtc_audiohub import WebRTCAudioHub
 import logging
-import asyncio
-from go2_webrtc_driver.webrtc_driver import Go2WebRTCConnection, WebRTCConnectionMethod
-from go2_webrtc_driver.constants import RTC_TOPIC, VUI_COLOR, SPORT_CMD
 from aiortc import MediaStreamTrack
 from requests import get
 import time
@@ -42,24 +24,17 @@ from fastapi.staticfiles import StaticFiles
 from queue import Queue
 from ultralytics import YOLO, FastSAM
 import openvino as ov
-#from playsound import playsound
 from mandro import HadnControler
 import threading
-from threading import Event, Thread
-from transformers import AutoTokenizer
-from pydantic import BaseModel, Field
-from iterator import IterableStreamer
-from skimage.morphology import skeletonize
 from scipy.interpolate import splprep, splev
 from fastapi.middleware.cors import CORSMiddleware
 import hashlib
-import aiohttp
 import asyncio
-import requests
 #optimum-cli export openvino --weight-format int4 --task text-generation-with-past --model growdle/HyperCLOVAX-SEED-Text-Instruct-1.5B ./CLOVAX-1.5B-ov-int4
 #kakaocorp/kanana-1.5-2.1b-instruct-2505
 #https://github.com/Unitree-Go2-Robot/go2_robot
 
+ser = None
 
 def getHash(text):
   hash_func = hashlib.new('md5')
@@ -98,42 +73,8 @@ conn = None
 audio_hub = None
 track = None
 lastColor = 'cyan'
-state = { "charge" : 0, "temp" : 0, "voltage" : 0, "cnt_live" : 0, "cnt_object" : 0 }
+state = { "charge" : 0, "temp" : 0, "voltage" : 0, "cnt_live" : 0, "cnt_object" : 0,  "boxes" : []}
 
-G1_ARM = {
-  "clamp": 17, 
-  "highFive": 18, 
-  "shakeHands_1": 27,
-  "makeHeartBothHands": 20, 
-  "makeHeartSingleHands": 21,
-  "blowKiss": 12, 
-  "hug": 19,
-  "hightWave": 26, 
-  "lowWave" : 25,
-  "ultramanRay" : 24, 
-  "bothHandsUp" : 15,
-  "singleHandsUp" : 23,
-  "Refuse" : 22, 
-  "Release_Arm" : 99,
-}
-
-G1_STATE = {
-  "ZeroTorque" : 0,
-  "Damp" : 1,
-  "Preparation": 4,
-  "Seating": 3,       
-  "Walk_G1": 500,
-  "Walk2_G1" : 501,
-  "Run_G1" : 801,
-  "Squat_G1" : 706,  
-  "SquatUp_G1" : 706,
-  "LieUp_G1" : 702,
-}
-
-G1_BALANCE = {
-  "Stand_G1" : 0,
-  "Step_G1" : 1 
-}
 
 frame_queue = Queue(maxsize=5)
 processed_frame_queue = Queue(maxsize=5)
@@ -163,56 +104,108 @@ path_tts = snapshot_download(repo_id="rippertnt/on-vits2-multi-tts-v1", allow_pa
 pipe_tts = core.compile_model(core.read_model(model=f"{path_tts}/all_base_ov.xml"), device_name="CPU", config=config)
 conf_tts = utils.get_hparams_from_file(hf_hub_download(repo_id="rippertnt/on-vits2-multi-tts-v1", filename="all_base.json"))
 
+
+#from concurrent.futures import ThreadPoolExecutor
+
+# 멀티스레드 executor 생성
+#executor = ThreadPoolExecutor(max_workers=4)
+
+def process_detect(image):
+    # 모델 추론 및 후처리
+    results = det_model(image, verbose=False)[0]
+    return results
+
 def processing_thread():
     global cnt_live, cnt_object, lastTime, state, cnt_image
     processing_times = collections.deque()
 
     print("============= processing....")
+    highlight_classes = ['person', 'dog', 'cat', 'horse', 'cow', 'sheep', 'bird', 'elephant', 'bear', 'zebra', 'giraffe','teddy bear']
+    names = det_model.names
+    img_w, img_h = 640, 384  # 해상도 명시 (또는 image.shape에서 추출)
+
+    cell_w = img_w // 3  # 213
+    cell_h = img_h // 3  # 128    
 
     while True:
         if not frame_queue.empty():
             image = np.array(frame_queue.get())
             cnt_live = 0
             cnt_object = 0
+            boxes = []
 
             #frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
             if cnt_image % 100 == 0:
-              cv2.imwrite("capture.jpg", image)
+              cv2.imwrite("capture.jpg", image) #cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
 
             cnt_image = cnt_image + 1
 
             start_time = time.time()
+
+            #future = executor.submit(process_detect, image)  # 모델 추론을 비동기적으로 처리
+            #results = future.result()  # 결과가 나올 때까지 대기
+
             results = det_model(image, verbose=False)[0]
-            result = sam_model(image, verbose=False, device="intel:npu", retina_masks=True, imgsz=640, conf=0.6, iou=0.9)[0]
+            #result = sam_model(image, verbose=False, device="intel:npu", retina_masks=True, imgsz=640, conf=0.6, iou=0.9)[0]
             stop_time = time.time()
 
             # 결과 처리 (Bounding box, mask 등)
-            names = det_model.names
             output = image.copy()
-
-            highlight_classes = ['person', 'dog', 'cat', 'horse', 'cow', 'sheep', 'bird', 'elephant', 'bear', 'zebra', 'giraffe','teddy bear']
             for box in results.boxes:
                 cls_id = int(box.cls.item())
                 cls_name = names[cls_id]
                 conf = box.conf.item()
                 x1, y1, x2, y2 = map(int, box.xyxy[0].tolist())
 
+                position = ""
+
                 if cls_name in highlight_classes:
                     rgb_color = (0, 0, 255)
                     cnt_live += 1
                     lastTime = time.time()
+
+                    # 중심 좌표 계산
+                    cx = (x1 + x2) // 2
+                    cy = (y1 + y2) // 2
+
+                    # 위치 계산 (grid 3x3)
+                    if cy < cell_h:
+                        row = 'T'
+                    elif cy < 2 * cell_h:
+                        row = 'C'
+                    else:
+                        row = 'B'
+
+                    if cx < cell_w:
+                        col = 'L'
+                    elif cx < 2 * cell_w:
+                        col = 'C'
+                    else:
+                        col = 'R'
+
+                    position = row + col  # ex: "TC", "BR", etc.
+
                 else:
                     rgb_color = (255, 255, 0)
-                    cnt_object += 1
+                    cnt_object += 1        
+
+                boxes.append({
+                    'class': cls_name,
+                    'confidence': round(conf, 2),
+                    'bbox': {'x1': x1, 'y1': y1, 'x2': x2, 'y2': y2},
+                    'highlight': cls_name in highlight_classes,
+                    'position': position  # 위치 정보 추가
+                }) 
 
                 cv2.rectangle(output, (x1, y1), (x2, y2), rgb_color, 2)
-                label = f'{cls_name} {conf:.2f}'
-                cv2.putText(output, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, rgb_color, 2)
+                cv2.putText(output, f'{cls_name} {conf:.2f}', (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, rgb_color, 2)
 
             state["cnt_live"] = cnt_live
             state["cnt_object"] = cnt_object
+            state['boxes'] = boxes
 
+            """
             if result.masks is not None:
                 masks = result.masks.data.cpu().numpy()
                 for mask in masks:
@@ -236,6 +229,7 @@ def processing_thread():
                 # 윤곽선 그리기 (선택 사항)
                 #contours, _ = cv2.findContours(colored_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
                 #cv2.drawContours(output, contours, -1, (0, 0, 255), 2)
+            """
 
             processing_times.append(stop_time - start_time)
             if len(processing_times) > 200:
@@ -258,35 +252,6 @@ def processing_thread():
 def main():
   return { "result" : True, "data" : "AI-CPU-V2", "ip" : _IP, "port" : _PORT }      
 
-"""
-def fetch_frames():
-    print("streaming start......")
-    with requests.get("http://127.0.0.1:59521/video_feed", stream=True) as response:
-        if response.status_code == 200:
-            # 서버 A에서 오는 스트리밍을 하나씩 받아 큐에 넣음
-            frame_buffer = b''  # 비디오 프레임을 이어서 받기 위한 버퍼
-            for chunk in response.iter_content(chunk_size=1024):
-                frame_buffer += chunk
-                # JPEG 데이터가 하나의 프레임을 완성한 경우
-                if b'\xff\xd9' in frame_buffer:  # JPEG의 끝 마커
-                    try:
-                        # 받은 데이터를 디코딩하여 이미지로 변환
-                        image = cv2.imdecode(np.frombuffer(frame_buffer, dtype=np.uint8), cv2.IMREAD_COLOR)
-                        if image is not None:
-                            # 큐에 디코딩된 이미지를 넣음
-
-                            if frame_queue.full():
-                              frame_queue.get()  # 가장 오래된 프레임 제거  
-                            print('............ frame input')
-                            frame_queue.put(image)
-                    except Exception as e:
-                        print(f"Error decoding image: {e}")
-                    frame_buffer = b''  # 다음 프레임을 받기 위해 버퍼 초기화
-# 비디오 프레임을 가져오는 스레드를 시작
-thread = Thread(target=fetch_frames, daemon=True)
-thread.start()
-"""
-
 # Async function to receive video frames and put them in the queue
 async def recv_camera_stream(track: MediaStreamTrack):
     while True:
@@ -297,66 +262,6 @@ async def recv_camera_stream(track: MediaStreamTrack):
             frame_queue.get()  # 가장 오래된 프레임 제거        
 
         frame_queue.put(img)
-
-@app.get("/connect")
-async def connect():
-  global conn
-  global audio_hub
-  conn =  Go2WebRTCConnection(WebRTCConnectionMethod.LocalAP) #Go2WebRTCConnection(WebRTCConnectionMethod.LocalSTA, ip="192.168.0.101")
-  await conn.connect()
-  print(1)
-  audio_hub = WebRTCAudioHub(conn, logger)
-  await audio_hub.set_play_mode('no_cycle')
-  print(2)
-  """
-  await conn.datachannel.pub_sub.publish_request_new(
-    RTC_TOPIC["MOTION_SWITCHER"], 
-    {
-        "api_id": 1002,
-        "parameter": {"name": "normal"}
-    }
-  )
-  """
-  conn.video.switchVideoChannel(True)
-  conn.video.add_track_callback(recv_camera_stream)
-  
-  # image processer start
-  threading.Thread(target=processing_thread, daemon=True).start()
-
-  def lowstate_callback(message):
-    #print(message)
-    msg = message['data']      
-    state["charge"] = msg['bms_state']['soc']
-    state["temp"] = msg['temperature_ntc1']
-    state["voltage"] = msg['power_v']
-
-  conn.datachannel.pub_sub.subscribe(RTC_TOPIC['LOW_STATE'], lowstate_callback)
-
-  return { "result" : True, "data" : True }        
-
-@app.get("/connect2")
-async def connect2():
-  global conn
-  #global audio_hub
-  conn =  Go2WebRTCConnection(WebRTCConnectionMethod.LocalAP) #Go2WebRTCConnection(WebRTCConnectionMethod.LocalSTA, ip="192.168.0.101")
-  await conn.connect()
-  print(1)
-  #audio_hub = WebRTCAudioHub(conn, logger)
-  #await audio_hub.set_play_mode('no_cycle')
-  #conn.video.switchVideoChannel(True)
-  #conn.video.add_track_callback(recv_camera_stream)
-  #print(3)
-  def lowstate_callback(message):
-    #print(message)
-    msg = message['data']      
-    state["charge"] = msg['bms_state']['soc']
-    state["temp"] = msg['temperature_ntc1']
-    state["voltage"] = msg['power_v']
-
-  conn.datachannel.pub_sub.subscribe(RTC_TOPIC['LOW_STATE'], lowstate_callback)
-
-  return { "result" : True, "data" : True }     
-
 
 @app.get("/prepare")
 async def prepare():
@@ -428,254 +333,11 @@ async def video_feed():
 
 lastCmd = {} 
 
-@app.get("/sport")
-async def sport(cmd : str, x=0.0, y=0.0, z=0.0, data=None):
-  global conn
-  out = 0
-  print(cmd, f'x:{x}, y:{y}, z:{z}')
-  if conn is None:
-    print('Disconnected', cmd)
-  elif cmd == 'Move':
-    out = await conn.datachannel.pub_sub.publish_request_new(
-        RTC_TOPIC["SPORT_MOD"], {
-          "api_id": SPORT_CMD[cmd],
-          "parameter": {"x": float(x), "y": float(y), "z": float(z)}
-        }
-    )
-  elif data != None: # SPORT_CMD[cmd] != None and
-    out = await conn.datachannel.pub_sub.publish_request_new(
-      RTC_TOPIC["SPORT_MOD"], {
-          "api_id": SPORT_CMD[cmd],
-          "parameter": { "data" : float(data) } # if possible
-      }
-    )
-  else:
-    if lastCmd.get(cmd, False):
-      lastCmd[cmd] = True
-      out = await conn.datachannel.pub_sub.publish_request_new(
-        RTC_TOPIC["SPORT_MOD"], {
-            "api_id": SPORT_CMD[cmd],
-            "parameter": { "data" : True } # if possible
-        }
-      )       
-    else:
-      lastCmd[cmd] = False
-      out = await conn.datachannel.pub_sub.publish_request_new(
-        RTC_TOPIC["SPORT_MOD"], {
-            "api_id": SPORT_CMD[cmd],
-            "parameter": { "data" : False } # if possible
-        }
-      )
-
-
-  print("response", out)
-            
-  return { "result" : True, "data" : out }      
-
 def toFloat(value):
     try:
         return float(value)
     except (ValueError, TypeError):
         return value
-
-@app.get("/manual")
-async def manual(cmd : str, data : str):
-  out = await conn.datachannel.pub_sub.publish_request_new(
-    RTC_TOPIC["SPORT_MOD"], {
-        "api_id": int(cmd),
-        "parameter": { "data" : toFloat(data) } # if possible
-    }
-  )
-
-  print("response", out)
-            
-  return { "result" : True, "data" : out }      
-
-@app.get("/arm")
-async def arm(cmd = "clamp"):
-  global conn
-  global G1_ARM
-
-  await conn.datachannel.pub_sub.publish_request_new(
-    "rt/api/arm/request", {
-        "api_id": 7106,
-        "parameter" : { "data" : G1_ARM[cmd] }
-    }
-  )
-
-  return { "result" : True, "data" : True }      
-
-@app.get("/walkG1")
-async def walkG1(lx = 0, ly = 0, rx = 0, ry = 0):
-  print("walking",f"L : {lx} {ly} | R : {rx} {ry}")
-  global conn
-
-  conn.datachannel.pub_sub.publish_without_callback(
-     "rt/wirelesscontroller", {
-        "lx": float(lx), "ly": float(ly), "rx": float(rx), "ry": float(ry) 
-     }
-  )
-  """
-  await conn.datachannel.pub_sub.publish("rt/wirelesscontroller", { 
-     "lx": int(lx), "ly": int(ly), "rx": int(rx), "ry": int(ry) 
-  })
-  """
-  
-  return { "result" : True, "data" : True }     
-
-@app.get("/stateG1")
-async def stateG1(cmd="Walk_G1"):
-  global conn
-  global G1_STATE
-
-  await conn.datachannel.pub_sub.publish_request_new(
-    "rt/api/sport/request", {
-        "api_id": 7101,
-        "parameter" : { "data" : G1_STATE[cmd] }
-    }
-  )
-
-  return { "result" : True, "data" : True }      
-
-@app.get("/balanceG1")
-async def balanceG1(cmd="Stand_G1"):
-  global conn
-  global G1_BALANCE
-
-  await conn.datachannel.pub_sub.publish_request_new(
-    "rt/api/sport/request", {
-        "api_id": 7102,
-        "parameter" : { "data" : G1_BALANCE[cmd] }
-    }
-  )
-
-  return { "result" : True, "data" : True }      
-
-
-@app.get("/speech")
-async def speech(text : str, motion = None, voice=31, lang='ko'):
-  print('speech', text)
-  global audio_hub
-  filename = getHash(text)
-  if audio_hub is not None:
-    response = await audio_hub.get_audio_list()
-    if response and isinstance(response, dict):
-        data_str = response.get('data', {}).get('data', '{}')
-        audio_list = json.loads(data_str).get('audio_list', [])
-        
-        #filename = os.path.splitext(audio_file_path)[0]
-        existing_audio = next((audio for audio in audio_list if audio['CUSTOM_NAME'] == filename), None)
-        if existing_audio:
-            print(f"Audio file {filename} already exists, skipping upload")
-            uuid = existing_audio['UNIQUE_ID']
-        else:
-            print(f"Audio file {filename} not found, proceeding with upload")
-            audio_file_path = tts(text = text, voice = voice, lang=lang)
-            logger.info(f"Using audio file: {audio_file_path}")
-            response = await audio_hub.upload_audio_file(audio_file_path)
-            uuid = None
-            print(response)
-            response = await audio_hub.get_audio_list()
-            if response and isinstance(response, dict):
-                data_str = response.get('data', {}).get('data', '{}')
-                audio_list = json.loads(data_str).get('audio_list', [])
-            existing_audio = next((audio for audio in audio_list if audio['CUSTOM_NAME'] == filename), None)
-            uuid = existing_audio['UNIQUE_ID']
-    print(f"Starting audio playback of file: {uuid}")
-
-    """
-    if motion is not None:
-      conn.datachannel.pub_sub.publish_without_callback(
-        RTC_TOPIC["SPORT_MOD"], {
-            "api_id": SPORT_CMD[motion]
-        }
-      )
-    """      
-    await audio_hub.play_by_uuid(uuid)
-      
-  return { "result" : True, "data" : True }  
-
-
-@app.get("/color")
-async def color(value = 'purple', warn = 0):
-  global conn
-  global lastColor 
-
-  if lastColor == value:
-    return
-
-  print(warn)
-  if int(warn) > 0:
-    await speech("저한테 접근하면 위험하니, 조심해 주세요.", 'Content', 0,'ko')
-
-  if conn is None:
-    print('brightness', value)
-  else:  
-    lastColor = value
-    await conn.datachannel.pub_sub.publish_request_new(
-      RTC_TOPIC["VUI"], 
-      {
-        "api_id": 1007,
-        "parameter": 
-        {
-            "color": value,
-            #"time": 5,
-            #"flash_cycle": 1000  # Flash every second
-        }
-      }
-    )
-
-  return { "result" : True, "data" : True }  
-
-@app.get("/brightness")
-async def brightness(value = 10):
-  global conn
-
-  if conn is None:
-    print('brightness', value)
-  else:
-    await conn.datachannel.pub_sub.publish_request_new(
-      RTC_TOPIC["VUI"], 
-      {
-          "api_id": 1005,
-          "parameter": {"brightness": int(value)}
-      }
-    )
-
-  return { "result" : True, "data" : True } 
-
-@app.get("/mode")
-async def mode(value = 'normal'):
-  global conn
-  if conn is None:
-    print('mode', value)
-  else:  
-    conn.datachannel.pub_sub.publish_without_callback(
-      RTC_TOPIC["MOTION_SWITCHER"], 
-      {
-          "api_id": 1002,
-          "parameter": {"name": value}
-      }
-    )
-
-  return { "result" : True, "data" : True }  
-
-@app.get("/volume")
-async def volume(value = 10):
-  global conn
-  if conn is None:
-    print('volume', value)
-  else:
-    conn.datachannel.pub_sub.publish_without_callback(
-      RTC_TOPIC["VUI"], 
-      {
-          "api_id": 1003,
-          "parameter": {"volume": int(value)}
-      }
-    )
-
-  return { "result" : True, "data" : True }  
-
 
 @app.get("/monitor")
 def monitor():
@@ -720,7 +382,8 @@ def tts(text = "", voice=31, lang='ko', static=0, isPlay=0):
       #wav_file_path = audiofile_path.replace('.mp3', '.wav')
       audio.export(f"output/{filename}.wav", format='wav', codec="pcm_s16le" )#parameters=["-ar", "44100"])
       if int(isPlay) > 0 :
-        playsound(f"output/{filename}.wav")
+        subprocess.Popen(["play", f"output/{filename}.wav"]) # async
+        #playsound(f"output/{filename}.wav")
 
       return f"output/{filename}.wav"
     
@@ -753,9 +416,11 @@ def tts(text = "", voice=6, lang='ko', static=0, isPlay=0):
     write(data=audio, rate=conf_tts.data.sampling_rate, filename=f"output/{filename}.wav")
 
     # 파일 열고 전송
-    with open(f"output/{filename}.wav", "rb") as f:
-        files = {"audio_file": (f"{filename}.wav", f, "audio/wav")}
-        response = requests.post("http://192.168.12.117:59521/audio", files=files)
+    #with open(f"output/{filename}.wav", "rb") as f:
+    #    files = {"audio_file": (f"{filename}.wav", f, "audio/wav")}
+    #    response = requests.post("http://192.168.12.117:59521/audio", files=files)
+
+    subprocess.Popen(["play", f"output/{filename}.wav"]) # async
 
     return f"output/{filename}.wav"
 
@@ -853,7 +518,7 @@ def parse_mjpeg_boundary(buffer):
                         
                         if frame is not None:
                             # BGR을 RGB로 변환
-                            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                            #frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                             frames.append(frame)
                             #print(f"✓ 프레임 추출 성공: {frame.shape}")
                         else:
@@ -997,7 +662,7 @@ async def start_frame_collection():
     is_collecting = True
     task1 = asyncio.create_task(collect_frames())
     threading.Thread(target=processing_thread, daemon=True).start()
-    
+
     return {"message": "프레임 수집을 시작했습니다"}
 
 print("Loading Complete","NPU")

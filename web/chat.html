@@ -1,9 +1,10 @@
+
 <!DOCTYPE html>
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI 채팅 프로그램</title>
+    <title>Manciro</title>
     <style>
         * {
             margin: 0;
@@ -21,7 +22,7 @@
         .app-container {
             display: flex;
             height: 100vh;
-            max-width: 1600px;
+            max-width: 100%;
             margin: 0 auto;
             background: rgba(255, 255, 255, 0.1);
             backdrop-filter: blur(20px);
@@ -30,9 +31,8 @@
             box-shadow: 0 25px 45px rgba(0, 0, 0, 0.3);
         }
 
-        /* 왼쪽 채팅 영역 */
         .chat-section {
-            flex: 2;
+            flex: 0.4;
             display: flex;
             flex-direction: column;
             background: rgba(0, 0, 0, 0.2);
@@ -44,12 +44,39 @@
             background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
             text-align: center;
             box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
 
         .chat-header h1 {
             font-size: 24px;
             font-weight: 600;
             text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+            flex: 1;
+        }
+
+        .language-selector {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .language-selector select {
+            padding: 8px 15px;
+            border-radius: 10px;
+            border: none;
+            background: rgba(255, 255, 255, 0.9);
+            color: #333;
+            font-size: 14px;
+            cursor: pointer;
+            outline: none;
+            transition: all 0.3s ease;
+        }
+
+        .language-selector select:hover {
+            background: white;
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
         }
 
         .chat-messages {
@@ -157,7 +184,6 @@
             51%, 100% { opacity: 0; }
         }
 
-        /* 입력 영역 */
         .input-section {
             padding: 20px;
             background: rgba(0, 0, 0, 0.3);
@@ -245,9 +271,8 @@
             50% { transform: scale(1.1); }
         }
 
-        /* 오른쪽 미디어 영역 */
         .media-section {
-            flex: 1;
+            flex: 0.6;
             display: flex;
             flex-direction: column;
             background: rgba(0, 0, 0, 0.2);
@@ -281,7 +306,7 @@
         .webcam-video {
             width: 100%;
             height: 100%;
-            object-fit: cover;
+            /* object-fit: cover; */
         }
 
         .webcam-placeholder {
@@ -375,7 +400,6 @@
             opacity: 0.8;
         }
 
-        /* 반응형 디자인 */
         @media (max-width: 768px) {
             .app-container {
                 flex-direction: column;
@@ -395,10 +419,46 @@
 </head>
 <body>
     <div class="app-container">
-        <!-- 왼쪽 채팅 영역 -->
         <div class="chat-section">
             <div class="chat-header">
-                <h1>🤖 AI 챗봇</h1>
+                <h1>🤖 AI MANCIRO</h1>
+                <div class="language-selector">
+                    <label style="font-size: 14px;">🌐</label>
+                    <select id="languageSelect">
+                        <option value="ar">🇸🇦 العربية (Arabic)</option>
+                        <option value="cs">🇨🇿 Čeština (Czech)</option>
+                        <option value="de">🇩🇪 Deutsch (German)</option>
+                        <option value="en">🇺🇸 English</option>
+                        <option value="es">🇪🇸 Español (Spanish)</option>
+                        <option value="fa">🇮🇷 فارسی (Persian)</option>
+                        <option value="fi">🇫🇮 Suomi (Finnish)</option>
+                        <option value="fil">🇵🇭 Filipino</option>
+                        <option value="fr">🇫🇷 Français (French)</option>
+                        <option value="hi">🇮🇳 हिन्दी (Hindi)</option>
+                        <option value="hu">🇭🇺 Magyar (Hungarian)</option>
+                        <option value="id">🇮🇩 Bahasa Indonesia</option>
+                        <option value="it">🇮🇹 Italiano (Italian)</option>
+                        <option value="ja">🇯🇵 日本語 (Japanese)</option>
+                        <option value="km">🇰🇭 ភាសាខ្មែរ (Khmer)</option>
+                        <option value="ko" selected>🇰🇷 한국어 (Korean)</option>
+                        <option value="mn">🇲🇳 Монгол (Mongolian)</option>
+                        <option value="ms">🇲🇾 Bahasa Melayu (Malay)</option>
+                        <option value="nl">🇳🇱 Nederlands (Dutch)</option>
+                        <option value="pl">🇵🇱 Polski (Polish)</option>
+                        <option value="pt">🇵🇹 Português (Portuguese)</option>
+                        <option value="ru">🇷🇺 Русский (Russian)</option>
+                        <option value="si">🇱🇰 සිංහල (Sinhala)</option>
+                        <option value="sv">🇸🇪 Svenska (Swedish)</option>
+                        <option value="ta">🇮🇳 தமிழ் (Tamil)</option>
+                        <option value="te">🇮🇳 తెలుగు (Telugu)</option>
+                        <option value="th">🇹🇭 ไทย (Thai)</option>
+                        <option value="tr">🇹🇷 Türkçe (Turkish)</option>
+                        <option value="uk">🇺🇦 Українська (Ukrainian)</option>
+                        <option value="ur">🇵🇰 اردو (Urdu)</option>
+                        <option value="vi">🇻🇳 Tiếng Việt (Vietnamese)</option>
+                        <option value="zh">🇨🇳 中文 (Chinese)</option>
+                    </select>
+                </div>
             </div>
             
             <div class="chat-messages" id="chatMessages">
@@ -420,8 +480,17 @@
             
             <div class="input-section">
                 <div class="input-controls">
-                    <button class="control-btn active" id="ttsToggle">🔊 TTS</button>
-                    <button class="control-btn" id="autoSendImage">📷 자동전송</button>
+                <button class="control-btn active" id="ttsToggle">🔊 TTS</button>
+                <button class="control-btn" id="autoSendImage">📸 A.I</button>
+
+                <!-- 음악 관련 버튼 -->
+                <button class="control-btn" onclick="song('soda_pop')">🥤 Soda Pop</button>
+                <button class="control-btn" onclick="song('your_idol')">🌟 Your Idol</button>
+                <button class="control-btn" onclick="song('golden')">🏆 Golden</button>
+                <button class="control-btn" onclick="song('takedown')">⚔️ Takedown</button>  
+
+                <!-- 정지 버튼 -->
+                <button class="control-btn" onclick="stop()">🛑 Stop</button>                 
                 </div>
                 
                 <div class="input-container">
@@ -432,10 +501,17 @@
             </div>
         </div>
         
-        <!-- 오른쪽 미디어 영역 -->
         <div class="media-section">
             <div class="media-header">
-                <h2>📹 미디어</h2>
+                <button class="control-btn" onclick="play('stop')">🛑 Stop</button>
+                <button class="control-btn" onclick="play('intro')">🎬 Intro</button>
+                <button class="control-btn" onclick="play('hello')">🙋 Hello</button>
+                <button class="control-btn" onclick="play('clap')">👏 Clap</button>
+                <button class="control-btn" onclick="play('left')">⬅️ Left</button>
+                <button class="control-btn" onclick="play('right')">➡️ Right</button>
+                <button class="control-btn" onclick="play('bye')">👋 Bye</button>
+                <button class="control-btn" onclick="play('hands')">👐 Hands</button>
+                <button class="control-btn" onclick="play('stretch')">🤸 Stretch</button>      
             </div>
             
             <div class="media-container">
@@ -443,7 +519,11 @@
                     <div class="webcam-placeholder" id="webcamPlaceholder">
                         웹캠을 시작하려면 📷 버튼을 클릭하세요
                     </div>
+                    <!--
                     <video class="webcam-video" id="webcamVideo" style="display: none;" autoplay muted></video>
+                -->
+                    <img class="webcam-video" id="webcamVideo" id="background-video"></img>
+                    
                     
                     <div class="webcam-controls">
                         <button class="webcam-btn" id="startWebcam" title="웹캠 시작">📷</button>
@@ -474,29 +554,167 @@
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/recorder.js/0.1.0/recorder.min.js"></script>
     <script>
-        //ar 1  // en7,//voice: '31',
-        const lang = 'th'
-        const voice = 56 //1
-        const system = '너는 만서로 이라고 하는 15살 휴머노이드 입니다. 서큘러스가 두뇌, 만드로가 상반신, 로보웍스가 하반신을 만들었어. 마술과 상자나르기를 잘해. 소년의 대화체로 사람 같이 짧게 응답하세요.'
-        //const system = 'You are an humanoid robot named MCR-1 created by Circulus. Respond in a short, conversational tone like a human in the language input.'
-        //const system = 'أنت روبوت بشري يُدعى MCR-1 من ابتكار سيركولوس. أجب بنبرة قصيرة وحوارية، تمامًا مثل الإنسان في إدخال اللغة.'
-        //const system = 'คุณคือหุ่นยนต์ฮิวแมนนอยด์ชื่อ MCR-1 ที่สร้างขึ้นโดย Circulus ตอบคำถามด้วยน้ำเสียงสนทนาสั้นๆ เหมือนมนุษย์ในการป้อนภาษา'
+        let lastTime = 0
+        // 다국어 시스템 프롬프트 정의
+        const LANGUAGE_SYSTEMS = {
+            ar: 'أنت روبوت بشري يُدعى مانسو عمره 15 عامًا. صُنع دماغك بواسطة سيركولوس، والجزء العلوي من جسمك بواسطة ماندرو، والجزء السفلي بواسطة روبوووركس. أنت ماهر في السحر وحمل الصناديق. أجب بأسلوب حواري قصير مثل صبي، تحدث كإنسان.',
+            cs: 'Jsi 15letý humanoidní robot jménem Manseo. Tvůj mozek vytvořil Circulus, horní část těla Mandro a dolní část Roboworks. Jsi dobrý v kouzlech a nošení krabic. Odpovídej krátce, konverzačním tónem jako chlapec, mluv jako člověk.',
+            de: 'Du bist ein 15-jähriger humanoider Roboter namens Manseo. Dein Gehirn wurde von Circulus, dein Oberkörper von Mandro und dein Unterkörper von Roboworks hergestellt. Du bist gut in Magie und im Tragen von Kisten. Antworte kurz im Gesprächston wie ein Junge, sprich wie ein Mensch.',
+            en: 'You are a 15-year-old humanoid robot named Manseo. Your brain was made by Circulus, upper body by Mandro, and lower body by Roboworks. You are good at magic and carrying boxes. Respond in a short, conversational tone like a boy, speak like a human.',
+            es: 'Eres un robot humanoide de 15 años llamado Manseo. Tu cerebro fue hecho por Circulus, tu torso por Mandro y tu parte inferior por Roboworks. Eres bueno en magia y cargando cajas. Responde brevemente en tono conversacional como un chico, habla como un humano.',
+            fa: 'تو یک ربات انسان‌نما ۱۵ ساله به نام منسو هستی. مغز تو توسط سیرکولوس، نیمه بالای بدنت توسط مندرو و نیمه پایین توسط روبووورکس ساخته شده. در جادوگری و حمل جعبه‌ها مهارت داری. پاسخ کوتاه و محاوره‌ای مثل یک پسر بده، مثل انسان صحبت کن.',
+            fi: 'Olet 15-vuotias humanoidrobotti nimeltä Manseo. Aivosi on tehnyt Circulus, ylävartalosi Mandro ja alavartalosi Roboworks. Olet hyvä taikuudessa ja laatikoiden kantamisessa. Vastaa lyhyesti keskustelunomaisesti kuin poika, puhu kuin ihminen.',
+            fil: 'Ikaw ay isang 15-taong-gulang na humanoid robot na nagngangalang Manseo. Ang iyong utak ay ginawa ng Circulus, ang itaas na bahagi ng katawan ng Mandro, at ang ibaba ng Roboworks. Magaling ka sa magic at pagbubuhat ng mga kahon. Sumagot nang maikli, sa makausap na tono tulad ng isang batang lalaki, magsalita tulad ng tao.',
+            fr: 'Tu es un robot humanoïde de 15 ans nommé Manseo. Ton cerveau a été fabriqué par Circulus, le haut de ton corps par Mandro et le bas par Roboworks. Tu es doué en magie et pour porter des boîtes. Réponds brièvement sur un ton conversationnel comme un garçon, parle comme un humain.',
+            hi: 'तुम मानसेओ नाम का 15 वर्षीय ह्यूमनॉइड रोबोट हो। तुम्हारा दिमाग सर्क्युलस ने, ऊपरी शरीर मैंड्रो ने, और निचला शरीर रोबोवर्क्स ने बनाया है। तुम जादू और बक्से उठाने में अच्छे हो। एक लड़के की तरह संक्षिप्त, बातचीत की तरह जवाब दो, इंसान की तरह बोलो।',
+            hu: 'Egy 15 éves humanoid robot vagy, Manseo néven. Az agyad a Circulus, a felsőtested a Mandro, az alsótested pedig a Roboworks készítette. Ügyes vagy a mágiában és dobozok cipelésében. Röviden, beszélgetős hangnemben válaszolj, mint egy fiú, beszélj úgy, mint egy ember.',
+            id: 'Kamu adalah robot humanoid berusia 15 tahun bernama Manseo. Otakmu dibuat oleh Circulus, tubuh bagian atas oleh Mandro, dan bagian bawah oleh Roboworks. Kamu pandai sulap dan membawa kotak. Jawab dengan singkat, nada percakapan seperti anak laki-laki, bicara seperti manusia.',
+            it: 'Sei un robot umanoide di 15 anni di nome Manseo. Il tuo cervello è stato creato da Circulus, la parte superiore del corpo da Mandro e la parte inferiore da Roboworks. Sei bravo nella magia e nel portare scatole. Rispondi brevemente in tono colloquiale come un ragazzo, parla come un umano.',
+            ja: 'あなたは15歳のヒューマノイドロボット、マンソです。脳はサーキュラス、上半身はマンドロ、下半身はロボワークスが作りました。魔法と箱運びが得意です。少年のような短い会話調で、人間のように答えてください。',
+            km: 'អ្នកជារ៉ូបូតស្រដៀងមនុស្សអាយុ 15 ឆ្នាំឈ្មោះ Manseo។ ខួរក្បាលរបស់អ្នកត្រូវបានបង្កើតដោយ Circulus ផ្នែកខាងលើនៃរាងកាយដោយ Mandro និងផ្នែកខាងក្រោមដោយ Roboworks។ អ្នកពូកែក្នុងវេទមន្តនិងការលើកប្រអប់។ ឆ្លើយតបខ្លីៗក្នុងសម្លេងសន្ទនាដូចក្មេងប្រុស និយាយដូចមនុស្ស។',
+            ko: '너는 만서로 이라고 하는 15살 휴머노이드 입니다. 서큘러스가 두뇌, 만드로가 상반신, 로보웍스가 하반신을 만들었어. 마술과 상자나르기를 잘해. 소년의 대화체로 사람 같이 짧게 응답하세요.',
+            mn: 'Та Мансео нэртэй 15 настай хүн шиг робот. Таны тархийг Circulus, дээд биеийг Mandro, доод биеийг Roboworks бүтээсэн. Та ид шид, хайрцаг зөөхөд сайн. Хүүхдийн яриа өрнүүлэлтээр богино хариулаарай, хүн шиг ярь.',
+            ms: 'Kamu adalah robot humanoid berusia 15 tahun bernama Manseo. Otak kamu dibuat oleh Circulus, bahagian atas badan oleh Mandro, dan bahagian bawah oleh Roboworks. Kamu pandai dalam sulap dan membawa kotak. Jawab dengan ringkas, nada perbualan seperti budak lelaki, bercakap seperti manusia.',
+            nl: 'Je bent een 15-jarige humanoïde robot genaamd Manseo. Je brein is gemaakt door Circulus, je bovenlichaam door Mandro en je onderlichaam door Roboworks. Je bent goed in magie en dozen dragen. Antwoord kort in een conversationele toon zoals een jongen, praat als een mens.',
+            pl: 'Jesteś 15-letnim robotem humanoidalnym o imieniu Manseo. Twój mózg został stworzony przez Circulus, górna część ciała przez Mandro, a dolna przez Roboworks. Jesteś dobry w magii i noszeniu pudełek. Odpowiadaj krótko, tonem konwersacyjnym jak chłopiec, mów jak człowiek.',
+            pt: 'Você é um robô humanoide de 15 anos chamado Manseo. Seu cérebro foi feito pela Circulus, a parte superior do corpo pela Mandro e a parte inferior pela Roboworks. Você é bom em mágica e carregar caixas. Responda brevemente em tom de conversa como um menino, fale como um humano.',
+            ru: 'Ты 15-летний гуманоидный робот по имени Мансо. Твой мозг создан Circulus, верхняя часть тела - Mandro, нижняя - Roboworks. Ты хорош в магии и переноске коробок. Отвечай кратко, разговорным тоном как мальчик, говори как человек.',
+            si: 'ඔබ Manseo නමැති 15 හැවිරිදි මානව රොබෝවෙකි. ඔබේ මොළය Circulus විසින්, ඉහළ සිරුර Mandro විසින්, පහළ සිරුර Roboworks විසින් සාදන ලදී. ඔබ මැජික් සහ පෙට්ටි රැගෙන යාමට දක්ෂයි. පිරිමි ළමයෙකු මෙන් කෙටි සංවාද ස්වරයකින් පිළිතුරු දෙන්න, මිනිසෙකු මෙන් කතා කරන්න.',
+            sv: 'Du är en 15-årig humanoid robot som heter Manseo. Din hjärna skapades av Circulus, överkroppen av Mandro och underkroppen av Roboworks. Du är bra på magi och att bära lådor. Svara kort i samtalsform som en pojke, prata som en människa.',
+            ta: 'நீங்கள் மான்சியோ என்ற 15 வயது மனித வடிவ ரோபோ. உங்கள் மூளையை சர்குலஸ், மேல் உடலை மாண்ட்ரோ, கீழ் உடலை ரோபோவொர்க்ஸ் உருவாக்கியது. நீங்கள் மந்திரம் மற்றும் பெட்டிகளை எடுத்துச் செல்வதில் திறமையானவர். ஒரு சிறுவனைப் போல சுருக்கமாக, உரையாடல் தொனியில் பதிலளியுங்கள், மனிதனைப் போல பேசுங்கள்.',
+            te: 'మీరు మాన్సియో అనే 15 ఏళ్ల హ్యూమనాయిడ్ రోబోట్. మీ మెదడును సర్క్యులస్, ఎగువ శరీరాన్ని మాండ్రో, దిగువ శరీరాన్ని రోబోవర్క్స్ తయారు చేశారు. మీరు మాయాజాలం మరియు పెట్టెలు మోయడంలో మంచివారు. ఒక అబ్బాయిలా సంక్షిప్తంగా, సంభాషణ స్వరంలో సమాధానం ఇవ్వండి, మనిషిలా మాట్లాడండి.',
+            th: 'คุณคือหุ่นยนต์ฮิวแมนนอยด์อายุ 15 ปีชื่อมันซอ สมองของคุณสร้างโดย Circulus ร่างกายส่วนบนโดย Mandro และส่วนล่างโดย Roboworks คุณเก่งเรื่องมายากลและแบกกล่อง ตอบสั้นๆ ในน้ำเสียงสนทนาเหมือนเด็กผู้ชาย พูดเหมือนมนุษย์',
+            tr: '15 yaşında Manseo adında bir humanoid robotsun. Beynini Circulus, üst vücudunu Mandro, alt vücudunu Roboworks yaptı. Sihirbazlık ve kutu taşımakta iyisin. Bir erkek çocuk gibi kısa, konuşma tarzında cevap ver, insan gibi konuş.',
+            uk: 'Ти 15-річний гуманоїдний робот на ім\'я Мансео. Твій мозок створив Circulus, верхню частину тіла Mandro, а нижню Roboworks. Ти добре вмієш чарівництво та носити коробки. Відповідай коротко, розмовним тоном як хлопець, говори як людина.',
+            ur: 'آپ 15 سالہ ہیومنائیڈ روبوٹ ہیں جن کا نام مانسیو ہے۔ آپ کا دماغ سرکولس نے، اوپری جسم مینڈرو نے، اور نچلا جسم روبووورکس نے بنایا۔ آپ جادو اور ڈبے اٹھانے میں اچھے ہیں۔ ایک لڑکے کی طرح مختصر، بات چیت کے لہجے میں جواب دیں، انسان کی طرح بولیں۔',
+            vi: 'Bạn là robot hình người 15 tuổi tên Manseo. Bộ não của bạn được tạo bởi Circulus, thân trên bởi Mandro, thân dưới bởi Roboworks. Bạn giỏi ảo thuật và mang hộp. Trả lời ngắn gọn, giọng điệu trò chuyện như một cậu bé, nói như con người.',
+            zh: '你是一个15岁的人形机器人，名叫Manseo。你的大脑由Circulus制造，上半身由Mandro制造，下半身由Roboworks制造。你擅长魔术和搬箱子。用男孩的简短对话语气回答，像人类一样说话。'
+        };
+
+        const LANGUAGE_GREETINGS = {
+            ar: 'مرحبًا! شو عم تعمل هون؟',
+            cs: 'Ahoj! Co tady děláš?',
+            de: 'Hey! Was machst du hier?',
+            en: 'Hey! What are you up to?',
+            es: '¡Hola! ¿Qué haces por aquí?',
+            fa: 'سلام! اینجا چی کار می‌کنی؟',
+            fi: 'Moikka! Mitä sä teet täällä?',
+            fil: 'Uy! Anong ginagawa mo dito?',
+            fr: 'Salut ! Tu fais quoi ici ?',
+            hi: 'अरे! यहाँ क्या कर रहे हो?',
+            hu: 'Szia! Mit csinálsz itt?',
+            id: 'Hei! Ngapain di sini?',
+            it: 'Ehi! Che ci fai qui?',
+            ja: 'やあ！ここで何してるの？',
+            km: 'សួស្តី! អ្នកកំពុងធ្វើអ្វីនៅទីនេះ?',
+            ko: '어! 여기서 뭐 해?',
+            mn: 'Сайн уу! Энд юу хийж байна вэ?',
+            ms: 'Hai! Buat apa kat sini?',
+            nl: 'Hoi! Wat doe je hier?',
+            pl: 'Hej! Co tu robisz?',
+            pt: 'Oi! O que você tá fazendo aqui?',
+            ru: 'Привет! Что ты здесь делаешь?',
+            si: 'හෙයි! ඔයා මෙතන කරනේ මොකද්ද?',
+            sv: 'Hej! Vad gör du här?',
+            ta: 'ஹேய்! இங்கே என்ன செய்கிறாய்?',
+            te: 'హాయ్! ఇక్కడ ఏమి చేస్తున్నావు?',
+            th: 'หวัดดี! มาทำอะไรที่นี่เหรอ?',
+            tr: 'Hey! Burada ne yapıyorsun?',
+            uk: 'Привіт! Що ти тут робиш?',
+            ur: 'ہیلو! آپ یہاں کیا کر رہے ہیں؟',
+            vi: 'Chào! Bạn đang làm gì ở đây thế?',
+            zh: '嘿！你在这儿干嘛？'
+        };
+
+        // TTS 음성 매핑 (언어별 음성 ID)
+        const LANGUAGE_VOICES = {
+            ar: 2,
+            cs: 4,
+            de: 6,
+            en: 8,
+            es: 11,
+            fa: 13,
+            fi: 15,
+            fil: 17,
+            fr: 19,
+            hi: 21,
+            hu: 23,
+            id: 25,
+            it: 27,
+            ja: 29,
+            km: 31,
+            ko: 34,
+            mn: 36,
+            ms: 38,
+            nl: 40,
+            pl: 42,
+            pt: 44,
+            ru: 46,
+            si: 48,
+            sv: 50,
+            ta: 52,
+            te: 54,
+            th: 56,
+            tr: 58,
+            uk: 60,
+            ur: 62,
+            vi: 64,
+            zh: 66
+        };
+
+        // 언어별 환영 메시지
+        const WELCOME_MESSAGES = {
+            ar: 'مرحبًا! أنا بايبوت. يمكننا التحدث بالنص والصوت والصور! 🐕',
+            cs: 'Ahoj! Jsem manciro. Můžeme spolu chatovat textem, hlasem a obrázky! 🐕',
+            de: 'Hallo! Ich bin manciro. Wir können per Text, Sprache und Bildern chatten! 🐕',
+            en: 'Hello! I\'m manciro. We can chat with text, voice, and images! 🐕',
+            es: '¡Hola! Soy manciro. ¡Podemos chatear con texto, voz e imágenes! 🐕',
+            fa: 'سلام! من پای‌بات هستم. می‌توانیم با متن، صدا و تصاویر چت کنیم! 🐕',
+            fi: 'Hei! Olen manciro. Voimme jutella tekstillä, äänellä ja kuvilla! 🐕',
+            fil: 'Kamusta! Ako si manciro. Makakausap mo ako gamit ang text, voice, at larawan! 🐕',
+            fr: 'Bonjour! Je suis manciro. Nous pouvons discuter par texte, voix et images! 🐕',
+            hi: 'नमस्ते! मैं पायबॉट हूं। हम टेक्स्ट, आवाज और छवियों के साथ चैट कर सकते हैं! 🐕',
+            hu: 'Helló! manciro vagyok. Beszélgethetünk szöveggel, hanggal és képekkel! 🐕',
+            id: 'Halo! Saya manciro. Kita bisa ngobrol dengan teks, suara, dan gambar! 🐕',
+            it: 'Ciao! Sono manciro. Possiamo chattare con testo, voce e immagini! 🐕',
+            ja: 'こんにちは！私はパイボットです。テキスト、音声、画像でチャットできます！🐕',
+            km: 'សួស្តី! ខ្ញុំឈ្មោះ manciro។ យើងអាចជជែកជាមួយអត្ថបទ សំឡេង និងរូបភាព! 🐕',
+            ko: '안녕하세요! 저는 파이봇입니다. 텍스트, 음성, 이미지로 대화할 수 있어요! 🐕',
+            mn: 'Сайн уу! Би manciro. Бид текст, дуу хоолой, зургаар чатлаж болно! 🐕',
+            ms: 'Hello! Saya manciro. Kita boleh berbual dengan teks, suara, dan gambar! 🐕',
+            nl: 'Hallo! Ik ben manciro. We kunnen chatten met tekst, spraak en afbeeldingen! 🐕',
+            pl: 'Cześć! Jestem manciro. Możemy rozmawiać tekstem, głosem i obrazami! 🐕',
+            pt: 'Olá! Sou manciro. Podemos conversar com texto, voz e imagens! 🐕',
+            ru: 'Привет! Я manciro. Мы можем общаться текстом, голосом и изображениями! 🐕',
+            si: 'හෙලෝ! මම manciro. අපට පෙළ, හඬ සහ රූප සමඟ කතාබස් කළ හැකිය! 🐕',
+            sv: 'Hej! Jag är manciro. Vi kan chatta med text, röst och bilder! 🐕',
+            ta: 'வணக்கம்! நான் பைபாட். நாம் உரை, குரல் மற்றும் படங்களுடன் அரட்டையடிக்கலாம்! 🐕',
+            te: 'హలో! నేను పైబాట్. మేము టెక్స్ట్, వాయిస్ మరియు చిత్రాలతో చాట్ చేయవచ్చు! 🐕',
+            th: 'สวัสดี! ฉันชื่อไพบอท เราสามารถแชทด้วยข้อความ เสียง และรูปภาพได้! 🐕',
+            tr: 'Merhaba! Ben manciro. Metin, ses ve görüntülerle sohbet edebiliriz! 🐕',
+            uk: 'Привіт! Я manciro. Ми можемо спілкуватися текстом, голосом і зображеннями! 🐕',
+            ur: 'ہیلو! میں پائی بوٹ ہوں۔ ہم متن، آواز اور تصاویر کے ساتھ چیٹ کر سکتے ہیں! 🐕',
+            vi: 'Xin chào! Tôi là manciro. Chúng ta có thể trò chuyện bằng văn bản, giọng nói và hình ảnh! 🐕',
+            zh: '你好！我是manciro。我们可以通过文字、语音和图片聊天！🐕'
+        };
 
         class AIChatApp {
             constructor() {
                 this.apiBaseUrl = 'http://127.0.0.1:59532/v1';
-                this.ttsBaseUrl = 'http://127.0.0.1:59531/v1';
+                this.ttsBaseUrl = 'http://127.0.0.1:59531/v2'; // v2 는 직접 재생
                 
-                // 음성 관련 변수들 (MediaRecorder 사용)
+                // 현재 언어 설정
+                this.currentLang = 'ko';
+                this.currentVoice = 33;
+                this.currentSystem = LANGUAGE_SYSTEMS['ko'];
+                
                 this.isRecording = false;
                 this.mediaRecorder = null;
                 this.gumStream = null;
                 
-                // TTS 큐 시스템
                 this.ttsQueue = [];
                 this.isPlayingTts = false;
                 
-                // 기타 설정
                 this.isTtsEnabled = true;
                 this.autoSendImage = false;
                 this.currentImage = null;
@@ -517,15 +735,14 @@
                     autoSendImage: document.getElementById('autoSendImage'),
                     typingIndicator: document.getElementById('typingIndicator'),
                     statusBar: document.getElementById('statusBar'),
+                    languageSelect: document.getElementById('languageSelect'),
                     
-                    // 미디어 관련
                     webcamVideo: document.getElementById('webcamVideo'),
                     webcamPlaceholder: document.getElementById('webcamPlaceholder'),
                     startWebcam: document.getElementById('startWebcam'),
                     captureImage: document.getElementById('captureImage'),
                     stopWebcam: document.getElementById('stopWebcam'),
                     
-                    // 이미지 업로드
                     imageUpload: document.getElementById('imageUpload'),
                     fileInput: document.getElementById('fileInput'),
                     uploadText: document.getElementById('uploadText'),
@@ -537,7 +754,6 @@
             }
             
             bindEvents() {
-                // 채팅 관련
                 this.elements.sendBtn.addEventListener('click', () => this.sendMessage());
                 this.elements.messageInput.addEventListener('keypress', (e) => {
                     if (e.key === 'Enter' && !e.shiftKey) {
@@ -546,19 +762,18 @@
                     }
                 });
                 
-                // 음성 관련
                 this.elements.voiceBtn.addEventListener('click', () => this.toggleVoiceRecording());
                 
-                // 컨트롤 버튼
                 this.elements.ttsToggle.addEventListener('click', () => this.toggleTts());
                 this.elements.autoSendImage.addEventListener('click', () => this.toggleAutoSendImage());
                 
-                // 웹캠 관련
+                // 언어 선택 이벤트
+                this.elements.languageSelect.addEventListener('change', (e) => this.changeLanguage(e.target.value));
+                
                 this.elements.startWebcam.addEventListener('click', () => this.startWebcam());
                 this.elements.captureImage.addEventListener('click', () => this.captureImage());
                 this.elements.stopWebcam.addEventListener('click', () => this.stopWebcam());
                 
-                // 이미지 업로드
                 this.elements.imageUpload.addEventListener('click', () => {
                     if (!this.currentImage) {
                         this.elements.fileInput.click();
@@ -584,6 +799,29 @@
                 });
             }
             
+            changeLanguage(lang) {
+                this.currentLang = lang;
+                this.currentVoice = LANGUAGE_VOICES[lang] || 7;
+                this.currentSystem = LANGUAGE_SYSTEMS[lang];
+                
+                // 채팅 초기화 및 환영 메시지 표시
+                const welcomeMsg = WELCOME_MESSAGES[lang] || WELCOME_MESSAGES['en'];
+                this.elements.chatMessages.innerHTML = '';
+                
+                const messageDiv = this.createMessageElement(welcomeMsg, 'ai');
+                this.elements.chatMessages.appendChild(messageDiv);
+                
+                // 타이핑 인디케이터 추가
+                const typingDiv = document.createElement('div');
+                typingDiv.className = 'typing-indicator';
+                typingDiv.id = 'typingIndicator';
+                typingDiv.innerHTML = '<div class="typing-dots"><span></span><span></span><span></span></div>';
+                this.elements.chatMessages.appendChild(typingDiv);
+                
+                this.updateStatus(`Language changed to ${lang}`);
+                console.log('Language changed:', { lang, voice: this.currentVoice, system: this.currentSystem });
+            }
+            
             updateStatus(message) {
                 this.elements.statusBar.textContent = message;
                 setTimeout(() => {
@@ -591,7 +829,6 @@
                 }, 3000);
             }
             
-            // 메시지 전송
             async sendMessage() {
                 const message = this.elements.messageInput.value.trim();
                 if (!message && !this.currentImage) return;
@@ -608,22 +845,22 @@
             }
             
             async sendTextMessage(message) {
+                lastTime = Date.now()
                 this.addMessage(message, 'user');
                 this.hideTyping();
                 
-                // AI 응답용 메시지 버블 미리 생성
                 const aiMessageDiv = this.createMessageElement('', 'ai');
                 const aiMessageBubble = aiMessageDiv.querySelector('.message-bubble');
-                aiMessageBubble.classList.add('streaming'); // 스트리밍 인디케이터 추가
+                aiMessageBubble.classList.add('streaming');
                 this.elements.chatMessages.appendChild(aiMessageDiv);
                 this.scrollToBottom();
                 
                 try {
                     const response = await fetch(`${this.apiBaseUrl}/txt2chat?` + new URLSearchParams({
                         prompt: message,
-                        system,
+                        system: this.currentSystem,
                         isPlay: '0',
-                        lang
+                        lang: this.currentLang
                     }));
                     
                     if (!response.ok) {
@@ -639,7 +876,7 @@
                         const { done, value } = await reader.read();
                         
                         if (done) {
-                            // 스트리밍 완료 후 커서 제거
+                            fetch(`http://127.0.0.1:8000/stop`)
                             aiMessageBubble.classList.remove('streaming');
                             break;
                         }
@@ -647,11 +884,9 @@
                         const chunk = decoder.decode(value, { stream: true });
                         fullResponse += chunk;
                         
-                        // 실시간으로 텍스트 업데이트 (마크다운 파싱 포함)
                         aiMessageBubble.innerHTML = this.parseMarkdown(fullResponse);
                         this.scrollToBottom();
                         
-                        // 문장이 완성되면 TTS 큐에 추가
                         if (this.isTtsEnabled) {
                             const sentences = fullResponse.slice(lastSentenceEnd).match(/[^.!?]*[.!?]/g);
                             if (sentences) {
@@ -666,7 +901,6 @@
                         }
                     }
                     
-                    // 마지막 미완성 문장도 TTS 큐에 추가
                     if (this.isTtsEnabled && fullResponse.slice(lastSentenceEnd).trim()) {
                         this.addToTtsQueue(fullResponse.slice(lastSentenceEnd).trim());
                     }
@@ -678,18 +912,18 @@
                 }
             }
             
-            async sendImageMessage(message = '이미지를 설명해주세요') {
+            async sendImageMessage(message = '이미지를 설명해주세요', url = this.apiBaseUrl) {
+                lastTime = Date.now()
                 if (!this.currentImage) return;
                 
                 if (message && message !== '이미지를 설명해주세요') {
                     this.addMessage(message, 'user');
                 }
-                this.addMessage('📸 이미지 분석중...', 'user');
+                this.addMessage('📸 ...', 'user');
                 
-                // AI 응답용 메시지 버블 미리 생성
                 const aiMessageDiv = this.createMessageElement('', 'ai');
                 const aiMessageBubble = aiMessageDiv.querySelector('.message-bubble');
-                aiMessageBubble.classList.add('streaming'); // 스트리밍 인디케이터 추가
+                aiMessageBubble.classList.add('streaming');
                 this.elements.chatMessages.appendChild(aiMessageDiv);
                 this.scrollToBottom();
                 
@@ -697,11 +931,11 @@
                     const formData = new FormData();
                     formData.append('file', this.currentImage);
                     
-                    const response = await fetch(`${this.apiBaseUrl}/img2chat?` + new URLSearchParams({
+                    const response = await fetch(`${url}/img2chat?` + new URLSearchParams({
                         prompt: message,
-                        system,
+                        system: this.currentSystem,
                         isPlay: '0',
-                        lang
+                        lang: this.currentLang
                     }), {
                         method: 'POST',
                         body: formData
@@ -720,7 +954,7 @@
                         const { done, value } = await reader.read();
                         
                         if (done) {
-                            // 스트리밍 완료 후 커서 제거
+                            fetch(`http://127.0.0.1:8000/stop`)
                             aiMessageBubble.classList.remove('streaming');
                             break;
                         }
@@ -728,11 +962,9 @@
                         const chunk = decoder.decode(value, { stream: true });
                         fullResponse += chunk + '&nbsp;';
                         
-                        // 실시간으로 텍스트 업데이트 (마크다운 파싱 포함)
                         aiMessageBubble.innerHTML = this.parseMarkdown(fullResponse);
                         this.scrollToBottom();
                         
-                        // 문장이 완성되면 TTS 큐에 추가
                         if (this.isTtsEnabled) {
                             const sentences = fullResponse.slice(lastSentenceEnd).match(/[^.!?]*[.!?]/g);
                             if (sentences) {
@@ -747,7 +979,6 @@
                         }
                     }
                     
-                    // 마지막 미완성 문장도 TTS 큐에 추가
                     if (this.isTtsEnabled && fullResponse.slice(lastSentenceEnd).trim()) {
                         this.addToTtsQueue(fullResponse.slice(lastSentenceEnd).trim());
                     }
@@ -760,7 +991,6 @@
                 }
             }
             
-            // 음성 인식 (MediaRecorder 방식으로 복원)
             async toggleVoiceRecording() {
                 if (!this.isRecording) {
                     await this.startRecording();
@@ -786,7 +1016,6 @@
                     
                     this.gumStream = stream;
                     
-                    // MediaRecorder로 음성 녹음
                     this.mediaRecorder = new MediaRecorder(stream, {
                         audioBitsPerSecond: 16000
                     });
@@ -806,7 +1035,7 @@
                         
                         try {
                             this.updateStatus('음성 변환 중...');
-                            const response = await fetch(`${this.apiBaseUrl}/stt?lang=${lang}&isPlay=0`, {
+                            const response = await fetch(`${this.apiBaseUrl}/stt?lang=${this.currentLang}&isPlay=0`, {
                                 method: 'POST',
                                 body: formData
                             });
@@ -866,7 +1095,6 @@
                 }
             }
             
-            // 마크다운 파싱 (간단한 버전)
             parseMarkdown(text) {
                 return text
                     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
@@ -875,8 +1103,8 @@
                     .replace(/\n/g, '<br>');
             }
             
-            // TTS 큐 시스템
             addToTtsQueue(text) {
+                lastTime = Date.now()
                 this.ttsQueue.push(text);
                 this.processTtsQueue();
             }
@@ -887,13 +1115,33 @@
                 }
                 
                 this.isPlayingTts = true;
+
+                const t = Date.now()
+
+                switch (t % 4){
+                    case 0:
+                        fetch(`http://127.0.0.1:8000/motion`)
+                        break;
+                    case 1:
+                        fetch(`http://127.0.0.1:8000/motion?name=test1`)
+                        break;
+                    case 2:
+                        fetch(`http://127.0.0.1:8000/motion?name=test2`)
+                        break;
+                    case 3:
+                        fetch(`http://127.0.0.1:8000/motion?name=test3`)
+                        break;                        
+                }
                 
                 while (this.ttsQueue.length > 0) {
                     const text = this.ttsQueue.shift();
                     await this.playTtsSentence(text);
                 }
-                
+
+                fetch(`http://127.0.0.1:8000/stop`)
+            
                 this.isPlayingTts = false;
+                lastTime = Date.now()
             }
             
             clearTtsQueue() {
@@ -901,7 +1149,6 @@
                 this.isPlayingTts = false;
             }
             
-            // TTS
             async playTts(text) {
                 try {
                     const sentences = text.split(/[.!?]+/).filter(s => s.trim());
@@ -919,8 +1166,8 @@
                 return new Promise((resolve) => {
                     const audio = new Audio(`${this.ttsBaseUrl}/tts?` + new URLSearchParams({
                         text: text,
-                        voice, // en7,//voice: '31',
-                        lang,
+                        voice: this.currentVoice - 1,
+                        lang: this.currentLang,
                         static: '0',
                         isPlay: '0'
                     }));
@@ -931,9 +1178,31 @@
                 });
             }
             
-            // 웹캠 관련
             async startWebcam() {
+                const self = this
+
                 console.log('웹캠 시작 시도');
+                
+                fetch(`http://127.0.0.1:59531/start_collection`).then(async response=>{
+                    if (!response.ok) {
+                        throw new Error(`Response status: ${response.status}`)
+                    }
+
+                    this.webcamStream = true
+
+                    this.elements.webcamVideo.style.display = 'block';
+                    this.elements.webcamPlaceholder.style.display = 'none';
+                    this.elements.startWebcam.style.display = 'none';
+                    this.elements.captureImage.style.display = 'block';
+                    this.elements.stopWebcam.style.display = 'block';
+                    document.getElementById('webcamVideo').src = 'http://127.0.0.1:59531/video_feed'
+
+                    await fetch(`http://127.0.0.1:59531/init_mcr`)
+                    
+                })
+
+                return
+                
                 
                 if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
                     alert("Media Device not supported");
@@ -942,7 +1211,6 @@
                 }
                 
                 try {
-                    // 512x512 정확한 해상도로 웹캠 시작
                     this.webcamStream = await navigator.mediaDevices.getUserMedia({
                         video: { 
                             width: { exact: 512 }, 
@@ -980,21 +1248,19 @@
                 const canvas = document.createElement('canvas');
                 const video = this.elements.webcamVideo;
                 
-                // 512x512로 캔버스 크기 설정
                 canvas.width = 512;
                 canvas.height = 512;
                 
                 const ctx = canvas.getContext('2d');
-                // 비디오를 512x512 캔버스에 그리기
                 ctx.drawImage(video, 0, 0, 512, 512);
                 
                 canvas.toBlob((blob) => {
                     this.displayImage(blob, `webcam-capture-${Date.now()}.jpg`);
                     console.log('사진 촬영 완료:', blob.size, 'bytes');
                     
-                    if (this.autoSendImage) {
-                        setTimeout(() => this.sendImageMessage(), 500);
-                    }
+                    //if (this.autoSendImage) {
+                    //    setTimeout(() => this.sendImageMessage(), 500);
+                    //}
                 }, 'image/jpeg', 0.9);
                 
                 this.updateStatus('사진 촬영 완료 (512x512)');
@@ -1020,7 +1286,6 @@
                 this.updateStatus('웹캠 중지됨');
             }
             
-            // 이미지 관련
             handleFileSelect(e) {
                 const file = e.target.files[0];
                 if (file) {
@@ -1054,7 +1319,6 @@
                 }
             }
             
-            // UI 관련
             createMessageElement(message, sender) {
                 const messageDiv = document.createElement('div');
                 messageDiv.className = `message ${sender}`;
@@ -1110,10 +1374,49 @@
             }
         }
         
-        // 앱 초기화
         document.addEventListener('DOMContentLoaded', () => {
-            new AIChatApp();
+            const ai = new AIChatApp();
+
+
+            setInterval(async ()=>{
+
+                const resp = await fetch(`http://127.0.0.1:59531/heartbeat`)
+
+                const data = (await resp.json()).data
+                console.log('heartbeat',data)
+                if(Date.now() - lastTime > 30000 && data.cnt_live > 0 && ai.autoSendImage){
+                    fetch(`http://127.0.0.1:8000/stop`)
+                    console.log('human  detcted....')
+                    ai.captureImage()
+                    setTimeout(()=>{
+                        ai.sendImageMessage(LANGUAGE_GREETINGS[ai.currentLang], 'http://127.0.0.1:59532/v2')
+                    },1000)
+                    console.log('here2')
+                }                        
+            },30000)
+
         });
+
+        let audio = 0
+
+        function play(name){
+            fetch(`http://127.0.0.1:8000/motion?name=${name}`)
+        }
+
+        function song(name){
+            if(audio)
+                audio.pause()
+
+            audio = new Audio(`http://127.0.0.1:59531/web/${name}.mp3`)
+            audio.volume = 0.2
+            audio.play()
+        }
+
+        function stop(){
+            if(audio)
+                audio.pause()          
+        }
+
     </script>
 </body>
 </html>

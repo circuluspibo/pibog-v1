@@ -1,0 +1,1009 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Robot Motion Editor - Intel Style</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #0f1419;
+            color: #ffffff;
+            overflow: hidden;
+        }
+
+        .container {
+            display: grid;
+            grid-template-columns: 350px 1fr 320px;
+            grid-template-rows: 60px 1fr;
+            height: 100vh;
+            gap: 0;
+        }
+
+        /* Header */
+        .header {
+            grid-column: 1 / -1;
+            background: linear-gradient(135deg, #0071c5 0%, #0066b2 100%);
+            padding: 0 30px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 2px 10px rgba(0, 113, 197, 0.3);
+        }
+
+        .logo {
+            font-size: 24px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+
+        .status {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+
+        .status-indicator {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #4ade80;
+            box-shadow: 0 0 10px rgba(74, 222, 128, 0.5);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* Controls Panel */
+        .controls-panel {
+            background: #1a1f2e;
+            padding: 20px;
+            overflow-y: auto;
+            border-right: 1px solid #2a3447;
+        }
+
+        .panel-section {
+            margin-bottom: 25px;
+        }
+
+        .section-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #0071c5;
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .control-group {
+            margin-bottom: 15px;
+        }
+
+        .control-label {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-size: 13px;
+            color: #a8b3cf;
+        }
+
+        .control-value {
+            color: #0071c5;
+            font-weight: 600;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            height: 6px;
+            border-radius: 3px;
+            background: #2a3447;
+            outline: none;
+            -webkit-appearance: none;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #0071c5;
+            cursor: pointer;
+            box-shadow: 0 0 8px rgba(0, 113, 197, 0.5);
+        }
+
+        input[type="range"]::-moz-range-thumb {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #0071c5;
+            cursor: pointer;
+            border: none;
+            box-shadow: 0 0 8px rgba(0, 113, 197, 0.5);
+        }
+
+        .radio-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 8px;
+        }
+
+        .radio-option {
+            flex: 1;
+            padding: 8px;
+            text-align: center;
+            background: #2a3447;
+            border: 2px solid transparent;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.2s;
+        }
+
+        .radio-option.active {
+            background: #0071c5;
+            border-color: #0071c5;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 12px;
+            background: #0071c5;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 14px;
+            transition: all 0.2s;
+            margin-top: 10px;
+        }
+
+        .btn:hover {
+            background: #005a9e;
+            transform: translateY(-1px);
+        }
+
+        .btn-secondary {
+            background: #2a3447;
+        }
+
+        .btn-secondary:hover {
+            background: #3a4557;
+        }
+
+        /* 3D Viewer */
+        .viewer {
+            background: linear-gradient(135deg, #0a0e1a 0%, #1a1f2e 100%);
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #canvas3d {
+            width: 100%;
+            height: 100%;
+        }
+
+        .viewer-overlay {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(26, 31, 46, 0.9);
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 12px;
+            backdrop-filter: blur(10px);
+        }
+
+        /* Timeline Panel */
+        .timeline-panel {
+            background: #1a1f2e;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            border-left: 1px solid #2a3447;
+        }
+
+        .timeline-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .timeline-controls {
+            display: flex;
+            gap: 8px;
+        }
+
+        .icon-btn {
+            width: 36px;
+            height: 36px;
+            background: #2a3447;
+            border: none;
+            border-radius: 6px;
+            color: white;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+
+        .icon-btn:hover {
+            background: #0071c5;
+            transform: scale(1.05);
+        }
+
+        .motion-list {
+            flex: 1;
+            overflow-y: auto;
+            background: #0f1419;
+            border-radius: 8px;
+            padding: 10px;
+        }
+
+        .motion-item {
+            background: #2a3447;
+            padding: 12px;
+            margin-bottom: 8px;
+            border-radius: 6px;
+            border-left: 4px solid #0071c5;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .motion-item:hover {
+            background: #3a4557;
+            transform: translateX(4px);
+        }
+
+        .motion-info {
+            flex: 1;
+        }
+
+        .motion-name {
+            font-size: 13px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .motion-duration {
+            font-size: 11px;
+            color: #a8b3cf;
+        }
+
+        .motion-actions {
+            display: flex;
+            gap: 5px;
+        }
+
+        .motion-actions button {
+            background: none;
+            border: none;
+            color: #a8b3cf;
+            cursor: pointer;
+            padding: 4px;
+            transition: color 0.2s;
+        }
+
+        .motion-actions button:hover {
+            color: #0071c5;
+        }
+
+        .sequence-controls {
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #2a3447;
+        }
+
+        input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            background: #2a3447;
+            border: 1px solid #3a4557;
+            border-radius: 6px;
+            color: white;
+            font-size: 13px;
+            margin-bottom: 10px;
+        }
+
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #0071c5;
+        }
+
+        .saved-sequences {
+            margin-top: 15px;
+        }
+
+        .sequence-item {
+            background: #2a3447;
+            padding: 10px;
+            margin-bottom: 6px;
+            border-radius: 6px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 12px;
+        }
+
+        .sequence-item:hover {
+            background: #3a4557;
+        }
+
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #0f1419;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #2a3447;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #3a4557;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <div class="logo">Intel® Robot Motion Editor</div>
+            <div class="status">
+                <span>Server Connected</span>
+                <div class="status-indicator"></div>
+            </div>
+        </div>
+
+        <!-- Controls Panel -->
+        <div class="controls-panel">
+            <div class="panel-section">
+                <div class="section-title">Arm Selection</div>
+                <div class="radio-group">
+                    <div class="radio-option active" data-arm="255">Both</div>
+                    <div class="radio-option" data-arm="253">Left</div>
+                    <div class="radio-option" data-arm="254">Right</div>
+                </div>
+            </div>
+
+            <div class="panel-section">
+                <div class="section-title">Shoulder Joint</div>
+                <div class="control-group">
+                    <div class="control-label">
+                        <span>Front (전방)</span>
+                        <span class="control-value" id="shoulder-front-value">90°</span>
+                    </div>
+                    <input type="range" id="shoulder-front" min="0" max="160" value="90">
+                </div>
+                <div class="control-group">
+                    <div class="control-label">
+                        <span>Side (측방)</span>
+                        <span class="control-value" id="shoulder-side-value">0°</span>
+                    </div>
+                    <input type="range" id="shoulder-side" min="0" max="100" value="0">
+                </div>
+            </div>
+
+            <div class="panel-section">
+                <div class="section-title">Elbow Joint</div>
+                <div class="control-group">
+                    <div class="control-label">
+                        <span>Front (전방)</span>
+                        <span class="control-value" id="elbow-front-value">0°</span>
+                    </div>
+                    <input type="range" id="elbow-front" min="0" max="115" value="0">
+                </div>
+                <div class="control-group">
+                    <div class="control-label">
+                        <span>Side (측방)</span>
+                        <span class="control-value" id="elbow-side-value">80°</span>
+                    </div>
+                    <input type="range" id="elbow-side" min="0" max="160" value="80">
+                </div>
+            </div>
+
+            <div class="panel-section">
+                <div class="section-title">Hand Control</div>
+                <div class="control-group">
+                    <div class="control-label">
+                        <span>Finger Action</span>
+                        <span class="control-value" id="finger-value">Wait</span>
+                    </div>
+                    <input type="range" id="finger" min="0" max="6" value="0" step="1">
+                </div>
+            </div>
+
+            <div class="panel-section">
+                <div class="section-title">Duration</div>
+                <div class="control-group">
+                    <div class="control-label">
+                        <span>Time</span>
+                        <span class="control-value" id="duration-value">1.0s</span>
+                    </div>
+                    <input type="range" id="duration" min="0.1" max="5" value="1" step="0.1">
+                </div>
+            </div>
+
+            <button class="btn" id="add-motion">Add Motion to Timeline</button>
+            <button class="btn btn-secondary" id="test-motion">Test Current Motion</button>
+        </div>
+
+        <!-- 3D Viewer -->
+        <div class="viewer">
+            <canvas id="canvas3d"></canvas>
+            <div class="viewer-overlay">
+                <div><strong>Camera Controls:</strong></div>
+                <div>• Drag: Rotate</div>
+                <div>• Scroll: Zoom</div>
+                <div>• Right-drag: Pan</div>
+            </div>
+        </div>
+
+        <!-- Timeline Panel -->
+        <div class="timeline-panel">
+            <div class="timeline-header">
+                <div class="section-title" style="margin: 0;">Timeline</div>
+                <div class="timeline-controls">
+                    <button class="icon-btn" id="play-sequence" title="Play">▶</button>
+                    <button class="icon-btn" id="clear-timeline" title="Clear">🗑</button>
+                </div>
+            </div>
+
+            <div class="motion-list" id="motion-list">
+                <div style="text-align: center; color: #a8b3cf; padding: 20px; font-size: 13px;">
+                    No motions added yet
+                </div>
+            </div>
+
+            <div class="sequence-controls">
+                <input type="text" id="sequence-name" placeholder="Sequence name...">
+                <button class="btn" id="save-sequence">Save Sequence</button>
+                <button class="btn btn-secondary" id="load-sequences">Load Sequences</button>
+                
+                <div class="saved-sequences" id="saved-sequences"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        const API_BASE = 'http://localhost:8000';
+        
+        // Motion state
+        let currentMotion = {
+            arm: 255,
+            shoulder_front: 90,
+            shoulder_side: 0,
+            elbow_front: 0,
+            elbow_side: 80,
+            finger: 0,
+            duration: 1.0
+        };
+        
+        let motionTimeline = [];
+        
+        // Three.js setup
+        let scene, camera, renderer, robot;
+        
+        function initThreeJS() {
+            const canvas = document.getElementById('canvas3d');
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x0a0e1a);
+            
+            camera = new THREE.PerspectiveCamera(50, canvas.offsetWidth / canvas.offsetHeight, 0.1, 1000);
+            camera.position.set(5, 3, 5);
+            camera.lookAt(0, 2, 0);
+            
+            renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+            renderer.setSize(canvas.offsetWidth, canvas.offsetHeight);
+            renderer.shadowMap.enabled = true;
+            
+            // Lighting
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+            scene.add(ambientLight);
+            
+            const directionalLight = new THREE.DirectionalLight(0x0071c5, 0.8);
+            directionalLight.position.set(5, 10, 5);
+            directionalLight.castShadow = true;
+            scene.add(directionalLight);
+            
+            const fillLight = new THREE.DirectionalLight(0x4080ff, 0.3);
+            fillLight.position.set(-5, 5, -5);
+            scene.add(fillLight);
+            
+            // Grid
+            const gridHelper = new THREE.GridHelper(10, 10, 0x0071c5, 0x2a3447);
+            scene.add(gridHelper);
+            
+            // Create robot
+            createRobot();
+            
+            // Mouse controls
+            let isDragging = false;
+            let previousMousePosition = { x: 0, y: 0 };
+            
+            canvas.addEventListener('mousedown', (e) => {
+                isDragging = true;
+            });
+            
+            canvas.addEventListener('mousemove', (e) => {
+                if (isDragging) {
+                    const deltaX = e.clientX - previousMousePosition.x;
+                    const deltaY = e.clientY - previousMousePosition.y;
+                    
+                    camera.position.x += deltaX * 0.01;
+                    camera.position.y -= deltaY * 0.01;
+                    camera.lookAt(0, 2, 0);
+                }
+                previousMousePosition = { x: e.clientX, y: e.clientY };
+            });
+            
+            canvas.addEventListener('mouseup', () => {
+                isDragging = false;
+            });
+            
+            canvas.addEventListener('wheel', (e) => {
+                e.preventDefault();
+                const delta = e.deltaY * 0.001;
+                camera.position.z += delta;
+            });
+            
+            window.addEventListener('resize', () => {
+                camera.aspect = canvas.offsetWidth / canvas.offsetHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(canvas.offsetWidth, canvas.offsetHeight);
+            });
+            
+            animate();
+        }
+        
+        function createRobot() {
+            robot = {
+                torso: null,
+                leftShoulder: null,
+                leftUpperArm: null,
+                leftElbow: null,
+                leftForearm: null,
+                leftHand: null,
+                rightShoulder: null,
+                rightUpperArm: null,
+                rightElbow: null,
+                rightForearm: null,
+                rightHand: null
+            };
+            
+            // Torso
+            const torsoGeometry = new THREE.BoxGeometry(1, 2, 0.5);
+            const torsoMaterial = new THREE.MeshPhongMaterial({ color: 0x0071c5 });
+            robot.torso = new THREE.Mesh(torsoGeometry, torsoMaterial);
+            robot.torso.position.y = 2;
+            robot.torso.castShadow = true;
+            scene.add(robot.torso);
+            
+            // Create left arm
+            createArm('left');
+            createArm('right');
+        }
+        
+        function createArm(side) {
+            const xPos = side === 'left' ? -0.65 : 0.65;
+            const prefix = side === 'left' ? 'left' : 'right';
+            
+            // Shoulder joint
+            const shoulderGeometry = new THREE.SphereGeometry(0.15);
+            const jointMaterial = new THREE.MeshPhongMaterial({ color: 0x00a8ff });
+            robot[prefix + 'Shoulder'] = new THREE.Mesh(shoulderGeometry, jointMaterial);
+            robot[prefix + 'Shoulder'].position.set(xPos, 2.8, 0);
+            scene.add(robot[prefix + 'Shoulder']);
+            
+            // Upper arm
+            const upperArmGeometry = new THREE.CylinderGeometry(0.1, 0.1, 1.2);
+            const armMaterial = new THREE.MeshPhongMaterial({ color: 0x0071c5 });
+            robot[prefix + 'UpperArm'] = new THREE.Mesh(upperArmGeometry, armMaterial);
+            robot[prefix + 'UpperArm'].position.set(0, -0.6, 0);
+            robot[prefix + 'UpperArm'].castShadow = true;
+            robot[prefix + 'Shoulder'].add(robot[prefix + 'UpperArm']);
+            
+            // Elbow joint
+            robot[prefix + 'Elbow'] = new THREE.Mesh(shoulderGeometry, jointMaterial);
+            robot[prefix + 'Elbow'].position.set(0, -0.6, 0);
+            robot[prefix + 'UpperArm'].add(robot[prefix + 'Elbow']);
+            
+            // Forearm
+            const forearmGeometry = new THREE.CylinderGeometry(0.08, 0.08, 1);
+            robot[prefix + 'Forearm'] = new THREE.Mesh(forearmGeometry, armMaterial);
+            robot[prefix + 'Forearm'].position.set(0, -0.5, 0);
+            robot[prefix + 'Forearm'].castShadow = true;
+            robot[prefix + 'Elbow'].add(robot[prefix + 'Forearm']);
+            
+            // Hand
+            const handGeometry = new THREE.BoxGeometry(0.15, 0.25, 0.08);
+            const handMaterial = new THREE.MeshPhongMaterial({ color: 0x00a8ff });
+            robot[prefix + 'Hand'] = new THREE.Mesh(handGeometry, handMaterial);
+            robot[prefix + 'Hand'].position.set(0, -0.625, 0);
+            robot[prefix + 'Hand'].castShadow = true;
+            robot[prefix + 'Forearm'].add(robot[prefix + 'Hand']);
+        }
+        
+        function updateRobot() {
+            const shoulderFront = (currentMotion.shoulder_front - 90) * Math.PI / 180;
+            const shoulderSide = currentMotion.shoulder_side * Math.PI / 180;
+            const elbowFront = currentMotion.elbow_front * Math.PI / 180;
+            const elbowSide = (currentMotion.elbow_side - 80) * Math.PI / 180;
+            
+            // Update left arm
+            if (currentMotion.arm === 255 || currentMotion.arm === 253) {
+                robot.leftShoulder.rotation.z = shoulderFront;
+                robot.leftShoulder.rotation.x = shoulderSide;
+                robot.leftElbow.rotation.z = elbowFront;
+                robot.leftElbow.rotation.y = elbowSide;
+            }
+            
+            // Update right arm
+            if (currentMotion.arm === 255 || currentMotion.arm === 254) {
+                robot.rightShoulder.rotation.z = -shoulderFront;
+                robot.rightShoulder.rotation.x = -shoulderSide;
+                robot.rightElbow.rotation.z = -elbowFront;
+                robot.rightElbow.rotation.y = -elbowSide;
+            }
+            
+            // Hand animation based on finger control
+            const fingerActions = ['Wait', 'Thumb Grip', 'Thumb Release', 'Fingers Grip', '', '', 'Fingers Open'];
+            document.getElementById('finger-value').textContent = fingerActions[currentMotion.finger];
+        }
+        
+        function animate() {
+            requestAnimationFrame(animate);
+            renderer.render(scene, camera);
+        }
+        
+        // UI Controls
+        function initControls() {
+            // Arm selection
+            document.querySelectorAll('.radio-option').forEach(option => {
+                option.addEventListener('click', function() {
+                    document.querySelectorAll('.radio-option').forEach(o => o.classList.remove('active'));
+                    this.classList.add('active');
+                    currentMotion.arm = parseInt(this.dataset.arm);
+                    updateRobot();
+                });
+            });
+            
+            // Sliders
+            const sliders = [
+                { id: 'shoulder-front', key: 'shoulder_front', suffix: '°' },
+                { id: 'shoulder-side', key: 'shoulder_side', suffix: '°' },
+                { id: 'elbow-front', key: 'elbow_front', suffix: '°' },
+                { id: 'elbow-side', key: 'elbow_side', suffix: '°' },
+                { id: 'finger', key: 'finger', suffix: '' },
+                { id: 'duration', key: 'duration', suffix: 's' }
+            ];
+            
+            sliders.forEach(slider => {
+                const element = document.getElementById(slider.id);
+                const valueElement = document.getElementById(slider.id + '-value');
+                
+                element.addEventListener('input', function() {
+                    const value = parseFloat(this.value);
+                    currentMotion[slider.key] = value;
+                    
+                    if (slider.id === 'finger') {
+                        const fingerActions = ['Wait', 'Thumb Grip', 'Thumb Release', 'Fingers Grip', '', '', 'Fingers Open'];
+                        valueElement.textContent = fingerActions[value];
+                    } else {
+                        valueElement.textContent = value + slider.suffix;
+                    }
+                    
+                    if (slider.key !== 'duration') {
+                        updateRobot();
+                    }
+                });
+            });
+            
+            // Add motion button
+            document.getElementById('add-motion').addEventListener('click', addMotionToTimeline);
+            
+            // Test motion button
+            document.getElementById('test-motion').addEventListener('click', testCurrentMotion);
+            
+            // Play sequence button
+            document.getElementById('play-sequence').addEventListener('click', playSequence);
+            
+            // Clear timeline button
+            document.getElementById('clear-timeline').addEventListener('click', clearTimeline);
+            
+            // Save sequence button
+            document.getElementById('save-sequence').addEventListener('click', saveSequence);
+            
+            // Load sequences button
+            document.getElementById('load-sequences').addEventListener('click', loadSequences);
+        }
+        
+        function addMotionToTimeline() {
+            const motion = { ...currentMotion };
+            motionTimeline.push(motion);
+            renderTimeline();
+        }
+        
+        function renderTimeline() {
+            const listElement = document.getElementById('motion-list');
+            
+            if (motionTimeline.length === 0) {
+                listElement.innerHTML = '<div style="text-align: center; color: #a8b3cf; padding: 20px; font-size: 13px;">No motions added yet</div>';
+                return;
+            }
+            
+            listElement.innerHTML = '';
+            
+            motionTimeline.forEach((motion, index) => {
+                const item = document.createElement('div');
+                item.className = 'motion-item';
+                
+                const armNames = { 255: 'Both', 253: 'Left', 254: 'Right' };
+                
+                item.innerHTML = `
+                    <div class="motion-info">
+                        <div class="motion-name">#${index + 1} - ${armNames[motion.arm]} Arm</div>
+                        <div class="motion-duration">Duration: ${motion.duration}s | Shoulder: ${motion.shoulder_front}°/${motion.shoulder_side}° | Elbow: ${motion.elbow_front}°/${motion.elbow_side}°</div>
+                    </div>
+                    <div class="motion-actions">
+                        <button onclick="previewMotion(${index})" title="Preview">👁</button>
+                        <button onclick="deleteMotion(${index})" title="Delete">✕</button>
+                    </div>
+                `;
+                
+                listElement.appendChild(item);
+            });
+        }
+        
+        window.previewMotion = function(index) {
+            const motion = motionTimeline[index];
+            currentMotion = { ...motion };
+            
+            // Update UI
+            document.getElementById('shoulder-front').value = motion.shoulder_front;
+            document.getElementById('shoulder-side').value = motion.shoulder_side;
+            document.getElementById('elbow-front').value = motion.elbow_front;
+            document.getElementById('elbow-side').value = motion.elbow_side;
+            document.getElementById('finger').value = motion.finger;
+            document.getElementById('duration').value = motion.duration;
+            
+            document.getElementById('shoulder-front-value').textContent = motion.shoulder_front + '°';
+            document.getElementById('shoulder-side-value').textContent = motion.shoulder_side + '°';
+            document.getElementById('elbow-front-value').textContent = motion.elbow_front + '°';
+            document.getElementById('elbow-side-value').textContent = motion.elbow_side + '°';
+            document.getElementById('duration-value').textContent = motion.duration + 's';
+            
+            document.querySelectorAll('.radio-option').forEach(o => {
+                o.classList.remove('active');
+                if (parseInt(o.dataset.arm) === motion.arm) {
+                    o.classList.add('active');
+                }
+            });
+            
+            updateRobot();
+        };
+        
+        window.deleteMotion = function(index) {
+            motionTimeline.splice(index, 1);
+            renderTimeline();
+        };
+        
+        function clearTimeline() {
+            if (confirm('Clear all motions from timeline?')) {
+                motionTimeline = [];
+                renderTimeline();
+            }
+        }
+        
+        async function testCurrentMotion() {
+            try {
+                const response = await fetch(`${API_BASE}/motion/execute`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(currentMotion)
+                });
+                
+                const data = await response.json();
+                if (response.ok) {
+                    console.log('Motion executed successfully');
+                } else {
+                    alert('Error: ' + data.detail);
+                }
+            } catch (error) {
+                alert('Failed to connect to server: ' + error.message);
+            }
+        }
+        
+        async function playSequence() {
+            if (motionTimeline.length === 0) {
+                alert('Timeline is empty');
+                return;
+            }
+            
+            try {
+                const sequence = {
+                    name: 'temp_sequence',
+                    motions: motionTimeline
+                };
+                
+                const response = await fetch(`${API_BASE}/sequence/execute`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(sequence)
+                });
+                
+                const data = await response.json();
+                if (response.ok) {
+                    console.log('Sequence executed successfully');
+                } else {
+                    alert('Error: ' + data.detail);
+                }
+            } catch (error) {
+                alert('Failed to connect to server: ' + error.message);
+            }
+        }
+        
+        async function saveSequence() {
+            const name = document.getElementById('sequence-name').value.trim();
+            
+            if (!name) {
+                alert('Please enter a sequence name');
+                return;
+            }
+            
+            if (motionTimeline.length === 0) {
+                alert('Timeline is empty');
+                return;
+            }
+            
+            try {
+                const sequence = {
+                    name: name,
+                    motions: motionTimeline
+                };
+                
+                const response = await fetch(`${API_BASE}/sequence/save`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(sequence)
+                });
+                
+                const data = await response.json();
+                if (response.ok) {
+                    alert('Sequence saved successfully!');
+                    document.getElementById('sequence-name').value = '';
+                    loadSequences();
+                } else {
+                    alert('Error: ' + data.detail);
+                }
+            } catch (error) {
+                alert('Failed to connect to server: ' + error.message);
+            }
+        }
+        
+        async function loadSequences() {
+            try {
+                const response = await fetch(`${API_BASE}/sequence/list`);
+                const data = await response.json();
+                
+                const container = document.getElementById('saved-sequences');
+                container.innerHTML = '';
+                
+                if (data.sequences && data.sequences.length > 0) {
+                    data.sequences.forEach(name => {
+                        const item = document.createElement('div');
+                        item.className = 'sequence-item';
+                        item.innerHTML = `
+                            <span>${name}</span>
+                            <div>
+                                <button class="icon-btn" style="width: 28px; height: 28px; margin-right: 4px;" onclick="loadSequenceToTimeline('${name}')" title="Load">📥</button>
+                                <button class="icon-btn" style="width: 28px; height: 28px; margin-right: 4px;" onclick="executeSequence('${name}')" title="Execute">▶</button>
+                                <button class="icon-btn" style="width: 28px; height: 28px;" onclick="deleteSequence('${name}')" title="Delete">🗑</button>
+                            </div>
+                        `;
+                        container.appendChild(item);
+                    });
+                } else {
+                    container.innerHTML = '<div style="text-align: center; color: #a8b3cf; padding: 10px; font-size: 12px;">No saved sequences</div>';
+                }
+            } catch (error) {
+                alert('Failed to load sequences: ' + error.message);
+            }
+        }
+        
+        window.loadSequenceToTimeline = async function(name) {
+            try {
+                const response = await fetch(`${API_BASE}/sequence/${name}`);
+                const data = await response.json();
+                
+                if (response.ok) {
+                    motionTimeline = data.motions;
+                    renderTimeline();
+                    document.getElementById('sequence-name').value = name;
+                } else {
+                    alert('Error: ' + data.detail);
+                }
+            } catch (error) {
+                alert('Failed to load sequence: ' + error.message);
+            }
+        };
+        
+        window.executeSequence = async function(name) {
+            try {
+                const response = await fetch(`${API_BASE}/sequence/${name}`);
+                const data = await response.json();
+                
+                if (response.ok) {
+                    const sequence = {
+                        name: name,
+                        motions: data.motions
+                    };
+                    
+                    const execResponse = await fetch(`${API_BASE}/sequence/execute`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(sequence)
+                    });
+                    
+                    const execData = await execResponse.json();
+                    if (execResponse.ok) {
+                        console.log('Sequence executed successfully');
+                    } else {
+                        alert('Error: ' + execData.detail);
+                    }
+                } else {
+                    alert('Error: ' + data.detail);
+                }
+            } catch (error) {
+                alert('Failed to execute sequence: ' + error.message);
+            }
+        };
+        
+        window.deleteSequence = async function(name) {
+            if (!confirm(`Delete sequence "${name}"?`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/sequence/${name}`, {
+                    method: 'DELETE'
+                });
+                
+                const data = await response.json();
+                if (response.ok) {
+                    loadSequences();
+                } else {
+                    alert('Error: ' + data.detail);
+                }
+            } catch (error) {
+                alert('Failed to delete sequence: ' + error.message);
+            }
+        };
+        
+        // Initialize
+        initThreeJS();
+        initControls();
+        loadSequences();
+    </script>
+</body>
+</html>

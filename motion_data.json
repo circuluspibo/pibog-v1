@@ -1,0 +1,736 @@
+{
+  "test1": {
+    "name": "test1",
+    "motions": [
+      {
+        "arm": 255,
+        "shoulder_front": 20,
+        "shoulder_side": 0,
+        "elbow_front": 35,
+        "elbow_side": 40,
+        "finger": 0,
+        "duration": 1.0
+      },
+      {
+        "arm": 253,
+        "shoulder_front": 58,
+        "shoulder_side": 0,
+        "elbow_front": 35,
+        "elbow_side": 40,
+        "finger": 0,
+        "duration": 1.0
+      },
+      {
+        "arm": 253,
+        "shoulder_front": 58,
+        "shoulder_side": 0,
+        "elbow_front": 61,
+        "elbow_side": 73,
+        "finger": 0,
+        "duration": 1.0
+      },
+      {
+        "arm": 254,
+        "shoulder_front": 58,
+        "shoulder_side": 0,
+        "elbow_front": 61,
+        "elbow_side": 73,
+        "finger": 0,
+        "duration": 1.0
+      },
+      {
+        "arm": 255,
+        "shoulder_front": 58,
+        "shoulder_side": 0,
+        "elbow_front": 61,
+        "elbow_side": 109,
+        "finger": 0,
+        "duration": 1.0
+      },
+      {
+        "arm": 255,
+        "shoulder_front": 58,
+        "shoulder_side": 0,
+        "elbow_front": 61,
+        "elbow_side": 48,
+        "finger": 0,
+        "duration": 1.0
+      },
+      {
+        "arm": 255,
+        "shoulder_front": 20,
+        "shoulder_side": 0,
+        "elbow_front": 0,
+        "elbow_side": 80,
+        "finger": 0,
+        "duration": 1.0
+      }
+    ]
+  },
+  "test2": {
+    "name": "test2",
+    "motions": [
+      {
+        "arm": 253,
+        "shoulder_front": 91,
+        "shoulder_side": 0,
+        "elbow_front": 90,
+        "elbow_side": 90,
+        "finger": 0,
+        "duration": 1.5
+      },
+      {
+        "arm": 253,
+        "shoulder_front": 91,
+        "shoulder_side": 0,
+        "elbow_front": 90,
+        "elbow_side": 100,
+        "finger": 0,
+        "duration": 1.0
+      },
+      {
+        "arm": 253,
+        "shoulder_front": 91,
+        "shoulder_side": 0,
+        "elbow_front": 90,
+        "elbow_side": 80,
+        "finger": 0,
+        "duration": 1.0
+      },
+      {
+        "arm": 253,
+        "shoulder_front": 91,
+        "shoulder_side": 0,
+        "elbow_front": 90,
+        "elbow_side": 100,
+        "finger": 0,
+        "duration": 1.0
+      },
+      {
+        "arm": 253,
+        "shoulder_front": 91,
+        "shoulder_side": 0,
+        "elbow_front": 90,
+        "elbow_side": 80,
+        "finger": 0,
+        "duration": 1.0
+      },
+      {
+        "arm": 253,
+        "shoulder_front": 91,
+        "shoulder_side": 0,
+        "elbow_front": 90,
+        "elbow_side": 100,
+        "finger": 0,
+        "duration": 1.0
+      },
+      {
+        "arm": 253,
+        "shoulder_front": 91,
+        "shoulder_side": 0,
+        "elbow_front": 90,
+        "elbow_side": 80,
+        "finger": 0,
+        "duration": 1.0
+      },
+      {
+        "arm": 255,
+        "shoulder_front": 20,
+        "shoulder_side": 0,
+        "elbow_front": 0,
+        "elbow_side": 80,
+        "finger": 0,
+        "duration": 1.0
+      }
+    ]
+  },
+  "test3": {
+    "name": "test3",
+    "motions": [
+      {
+        "arm": 254,
+        "shoulder_front": 70,
+        "shoulder_side": 15,
+        "elbow_front": 100,
+        "elbow_side": 78,
+        "finger": 0,
+        "duration": 2.0
+      },
+      {
+        "arm": 253,
+        "shoulder_front": 70,
+        "shoulder_side": 15,
+        "elbow_front": 100,
+        "elbow_side": 78,
+        "finger": 0,
+        "duration": 2.0
+      },
+      {
+        "arm": 255,
+        "shoulder_front": 70,
+        "shoulder_side": 15,
+        "elbow_front": 60,
+        "elbow_side": 78,
+        "finger": 0,
+        "duration": 1.0
+      },
+      {
+        "arm": 255,
+        "shoulder_front": 70,
+        "shoulder_side": 15,
+        "elbow_front": 100,
+        "elbow_side": 78,
+        "finger": 0,
+        "duration": 1.0
+      },
+      {
+        "arm": 255,
+        "shoulder_front": 70,
+        "shoulder_side": 15,
+        "elbow_front": 60,
+        "elbow_side": 78,
+        "finger": 0,
+        "duration": 1.0
+      },
+      {
+        "arm": 255,
+        "shoulder_front": 70,
+        "shoulder_side": 15,
+        "elbow_front": 90,
+        "elbow_side": 78,
+        "finger": 0,
+        "duration": 1.0
+      },
+      {
+        "arm": 255,
+        "shoulder_front": 70,
+        "shoulder_side": 15,
+        "elbow_front": 90,
+        "elbow_side": 50,
+        "finger": 0,
+        "duration": 1.0
+      },
+      {
+        "arm": 255,
+        "shoulder_front": 70,
+        "shoulder_side": 15,
+        "elbow_front": 90,
+        "elbow_side": 100,
+        "finger": 0,
+        "duration": 1.0
+      },
+      {
+        "arm": 255,
+        "shoulder_front": 70,
+        "shoulder_side": 15,
+        "elbow_front": 90,
+        "elbow_side": 60,
+        "finger": 0,
+        "duration": 1.0
+      },
+      {
+        "arm": 255,
+        "shoulder_front": 70,
+        "shoulder_side": 15,
+        "elbow_front": 90,
+        "elbow_side": 100,
+        "finger": 0,
+        "duration": 1.0
+      },
+      {
+        "arm": 255,
+        "shoulder_front": 20,
+        "shoulder_side": 0,
+        "elbow_front": 0,
+        "elbow_side": 80,
+        "finger": 0,
+        "duration": 1.0
+      }
+    ]
+  },
+  "hello": {
+    "name": "hello",
+    "motions": [
+      {
+        "arm": 253,
+        "shoulder_front": 90,
+        "shoulder_side": 0,
+        "elbow_front": 90,
+        "elbow_side": 80,
+        "finger": 0,
+        "duration": 1.0
+      },
+      {
+        "arm": 253,
+        "shoulder_front": 90,
+        "shoulder_side": 0,
+        "elbow_front": 90,
+        "elbow_side": 110,
+        "finger": 0,
+        "duration": 0.5
+      },
+      {
+        "arm": 253,
+        "shoulder_front": 90,
+        "shoulder_side": 0,
+        "elbow_front": 90,
+        "elbow_side": 70,
+        "finger": 0,
+        "duration": 0.5
+      },
+      {
+        "arm": 253,
+        "shoulder_front": 90,
+        "shoulder_side": 0,
+        "elbow_front": 90,
+        "elbow_side": 110,
+        "finger": 0,
+        "duration": 0.5
+      },
+      {
+        "arm": 253,
+        "shoulder_front": 90,
+        "shoulder_side": 0,
+        "elbow_front": 90,
+        "elbow_side": 70,
+        "finger": 0,
+        "duration": 0.5
+      },
+      {
+        "arm": 253,
+        "shoulder_front": 90,
+        "shoulder_side": 0,
+        "elbow_front": 90,
+        "elbow_side": 110,
+        "finger": 0,
+        "duration": 0.5
+      },
+      {
+        "arm": 253,
+        "shoulder_front": 90,
+        "shoulder_side": 0,
+        "elbow_front": 90,
+        "elbow_side": 80,
+        "finger": 0,
+        "duration": 0.5
+      },
+      {
+        "arm": 255,
+        "shoulder_front": 20,
+        "shoulder_side": 0,
+        "elbow_front": 0,
+        "elbow_side": 80,
+        "finger": 0,
+        "duration": 1.0
+      }
+    ]
+  },
+  "bye": {
+    "name": "bye",
+    "motions": [
+      {
+        "arm": 255,
+        "shoulder_front": 90,
+        "shoulder_side": 0,
+        "elbow_front": 90,
+        "elbow_side": 90,
+        "finger": 0,
+        "duration": 2.0
+      },
+      {
+        "arm": 255,
+        "shoulder_front": 90,
+        "shoulder_side": 0,
+        "elbow_front": 90,
+        "elbow_side": 70,
+        "finger": 0,
+        "duration": 1.0
+      },
+      {
+        "arm": 255,
+        "shoulder_front": 90,
+        "shoulder_side": 0,
+        "elbow_front": 90,
+        "elbow_side": 110,
+        "finger": 0,
+        "duration": 1.0
+      },
+      {
+        "arm": 255,
+        "shoulder_front": 90,
+        "shoulder_side": 0,
+        "elbow_front": 90,
+        "elbow_side": 70,
+        "finger": 0,
+        "duration": 1.0
+      },
+      {
+        "arm": 255,
+        "shoulder_front": 90,
+        "shoulder_side": 0,
+        "elbow_front": 90,
+        "elbow_side": 110,
+        "finger": 0,
+        "duration": 1.0
+      },
+      {
+        "arm": 255,
+        "shoulder_front": 90,
+        "shoulder_side": 0,
+        "elbow_front": 90,
+        "elbow_side": 70,
+        "finger": 0,
+        "duration": 1.0
+      },
+      {
+        "arm": 255,
+        "shoulder_front": 90,
+        "shoulder_side": 0,
+        "elbow_front": 90,
+        "elbow_side": 110,
+        "finger": 0,
+        "duration": 1.0
+      },
+      {
+        "arm": 255,
+        "shoulder_front": 20,
+        "shoulder_side": 0,
+        "elbow_front": 0,
+        "elbow_side": 80,
+        "finger": 0,
+        "duration": 2.0
+      }
+    ]
+  },
+  "left": {
+    "name": "left",
+    "motions": [
+      {
+        "arm": 254,
+        "shoulder_front": 160,
+        "shoulder_side": 0,
+        "elbow_front": 0,
+        "elbow_side": 0,
+        "finger": 0,
+        "duration": 2.0
+      },
+      {
+        "arm": 254,
+        "shoulder_front": 160,
+        "shoulder_side": 15,
+        "elbow_front": 0,
+        "elbow_side": 0,
+        "finger": 0,
+        "duration": 1.0
+      },
+      {
+        "arm": 254,
+        "shoulder_front": 160,
+        "shoulder_side": 0,
+        "elbow_front": 0,
+        "elbow_side": 0,
+        "finger": 0,
+        "duration": 1.0
+      },
+      {
+        "arm": 254,
+        "shoulder_front": 160,
+        "shoulder_side": 15,
+        "elbow_front": 0,
+        "elbow_side": 0,
+        "finger": 0,
+        "duration": 1.0
+      },
+      {
+        "arm": 254,
+        "shoulder_front": 160,
+        "shoulder_side": 0,
+        "elbow_front": 0,
+        "elbow_side": 0,
+        "finger": 0,
+        "duration": 1.0
+      },
+      {
+        "arm": 254,
+        "shoulder_front": 160,
+        "shoulder_side": 15,
+        "elbow_front": 0,
+        "elbow_side": 0,
+        "finger": 0,
+        "duration": 1.0
+      },
+      {
+        "arm": 254,
+        "shoulder_front": 160,
+        "shoulder_side": 0,
+        "elbow_front": 0,
+        "elbow_side": 0,
+        "finger": 0,
+        "duration": 1.0
+      },
+      {
+        "arm": 255,
+        "shoulder_front": 20,
+        "shoulder_side": 0,
+        "elbow_front": 0,
+        "elbow_side": 80,
+        "finger": 0,
+        "duration": 2.0
+      }
+    ]
+  },
+  "right": {
+    "name": "right",
+    "motions": [
+      {
+        "arm": 253,
+        "shoulder_front": 160,
+        "shoulder_side": 0,
+        "elbow_front": 0,
+        "elbow_side": 0,
+        "finger": 0,
+        "duration": 2.0
+      },
+      {
+        "arm": 253,
+        "shoulder_front": 160,
+        "shoulder_side": 15,
+        "elbow_front": 0,
+        "elbow_side": 0,
+        "finger": 0,
+        "duration": 1.0
+      },
+      {
+        "arm": 253,
+        "shoulder_front": 160,
+        "shoulder_side": 0,
+        "elbow_front": 0,
+        "elbow_side": 0,
+        "finger": 0,
+        "duration": 1.0
+      },
+      {
+        "arm": 253,
+        "shoulder_front": 160,
+        "shoulder_side": 15,
+        "elbow_front": 0,
+        "elbow_side": 0,
+        "finger": 0,
+        "duration": 1.0
+      },
+      {
+        "arm": 253,
+        "shoulder_front": 160,
+        "shoulder_side": 0,
+        "elbow_front": 0,
+        "elbow_side": 0,
+        "finger": 0,
+        "duration": 1.0
+      },
+      {
+        "arm": 253,
+        "shoulder_front": 160,
+        "shoulder_side": 15,
+        "elbow_front": 0,
+        "elbow_side": 0,
+        "finger": 0,
+        "duration": 1.0
+      },
+      {
+        "arm": 253,
+        "shoulder_front": 160,
+        "shoulder_side": 0,
+        "elbow_front": 0,
+        "elbow_side": 0,
+        "finger": 0,
+        "duration": 1.0
+      },
+      {
+        "arm": 255,
+        "shoulder_front": 20,
+        "shoulder_side": 0,
+        "elbow_front": 0,
+        "elbow_side": 80,
+        "finger": 0,
+        "duration": 2.0
+      }
+    ]
+  },
+  "stretch": {
+    "name": "stretch",
+    "motions": [
+      {
+        "arm": 255,
+        "shoulder_front": 160,
+        "shoulder_side": 60,
+        "elbow_front": 0,
+        "elbow_side": 80,
+        "finger": 0,
+        "duration": 3.0
+      },
+      {
+        "arm": 255,
+        "shoulder_front": 160,
+        "shoulder_side": 80,
+        "elbow_front": 0,
+        "elbow_side": 80,
+        "finger": 0,
+        "duration": 1.0
+      },
+      {
+        "arm": 255,
+        "shoulder_front": 160,
+        "shoulder_side": 60,
+        "elbow_front": 0,
+        "elbow_side": 80,
+        "finger": 0,
+        "duration": 1.0
+      },
+      {
+        "arm": 255,
+        "shoulder_front": 160,
+        "shoulder_side": 80,
+        "elbow_front": 0,
+        "elbow_side": 80,
+        "finger": 0,
+        "duration": 1.0
+      },
+      {
+        "arm": 255,
+        "shoulder_front": 160,
+        "shoulder_side": 60,
+        "elbow_front": 0,
+        "elbow_side": 80,
+        "finger": 0,
+        "duration": 1.0
+      },
+      {
+        "arm": 255,
+        "shoulder_front": 160,
+        "shoulder_side": 80,
+        "elbow_front": 0,
+        "elbow_side": 80,
+        "finger": 0,
+        "duration": 1.0
+      },
+      {
+        "arm": 255,
+        "shoulder_front": 160,
+        "shoulder_side": 60,
+        "elbow_front": 0,
+        "elbow_side": 80,
+        "finger": 0,
+        "duration": 1.0
+      },
+      {
+        "arm": 255,
+        "shoulder_front": 20,
+        "shoulder_side": 0,
+        "elbow_front": 0,
+        "elbow_side": 80,
+        "finger": 0,
+        "duration": 2.0
+      }
+    ]
+  },
+  "clap": {
+    "name": "clap",
+    "motions": [
+      {
+        "arm": 255,
+        "shoulder_front": 60,
+        "shoulder_side": 0,
+        "elbow_front": 60,
+        "elbow_side": 80,
+        "finger": 0,
+        "duration": 2.0
+      },
+      {
+        "arm": 255,
+        "shoulder_front": 60,
+        "shoulder_side": 0,
+        "elbow_front": 60,
+        "elbow_side": 40,
+        "finger": 0,
+        "duration": 1.0
+      },
+      {
+        "arm": 255,
+        "shoulder_front": 60,
+        "shoulder_side": 0,
+        "elbow_front": 60,
+        "elbow_side": 80,
+        "finger": 0,
+        "duration": 1.0
+      },
+      {
+        "arm": 255,
+        "shoulder_front": 60,
+        "shoulder_side": 0,
+        "elbow_front": 60,
+        "elbow_side": 40,
+        "finger": 0,
+        "duration": 1.0
+      },
+      {
+        "arm": 255,
+        "shoulder_front": 60,
+        "shoulder_side": 0,
+        "elbow_front": 60,
+        "elbow_side": 80,
+        "finger": 0,
+        "duration": 1.0
+      },
+      {
+        "arm": 255,
+        "shoulder_front": 60,
+        "shoulder_side": 0,
+        "elbow_front": 60,
+        "elbow_side": 40,
+        "finger": 0,
+        "duration": 1.0
+      },
+      {
+        "arm": 255,
+        "shoulder_front": 20,
+        "shoulder_side": 0,
+        "elbow_front": 0,
+        "elbow_side": 80,
+        "finger": 0,
+        "duration": 1.0
+      }
+    ]
+  },
+  "up": {
+    "name": "up",
+    "motions": [
+      {
+        "arm": 253,
+        "shoulder_front": 160,
+        "shoulder_side": 0,
+        "elbow_front": 0,
+        "elbow_side": 80,
+        "finger": 0,
+        "duration": 3.0
+      },
+      {
+        "arm": 254,
+        "shoulder_front": 160,
+        "shoulder_side": 0,
+        "elbow_front": 0,
+        "elbow_side": 80,
+        "finger": 0,
+        "duration": 3.0
+      },
+      {
+        "arm": 255,
+        "shoulder_front": 20,
+        "shoulder_side": 0,
+        "elbow_front": 0,
+        "elbow_side": 80,
+        "finger": 0,
+        "duration": 3.0
+      }
+    ]
+  }
+}
