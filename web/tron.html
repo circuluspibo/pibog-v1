@@ -87,16 +87,17 @@
             box-shadow: 0 0 30px var(--primary-glow);
         }
 
+        /* 채팅 섹션 배경 그리드 효과 */
         .chat-section::before {
-            content : '';
-            position : absolute;
-            top : 0;
-            left : 0;
-            right : 0 ;
-            bottom : 0;
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
             background-image: 
-                linear-gradient(0deg, transparent 49%, var(--grid-color, rgba(0,200,255,0.15)) 50%, transparent 51% ),
-                linear-gradient(90deg, transparent 49%, var(--grid-color, rgba(0,200,255,0.15)) 50%, transparent 51% );
+                linear-gradient(0deg, transparent 49%, var(--grid-color, rgba(0, 200, 255, 0.15)) 50%, transparent 51%),
+                linear-gradient(90deg, transparent 49%, var(--grid-color, rgba(0, 200, 255, 0.15)) 50%, transparent 51%);
             background-size: 40px 40px;
             pointer-events: none;
             z-index: 0;
