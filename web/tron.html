@@ -434,6 +434,23 @@
             position: relative;
         }
 
+        /* 미디어 섹션 배경 그리드 효과 */
+        .media-section::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-image: 
+                linear-gradient(0deg, transparent 49%, var(--grid-color, rgba(0, 200, 255, 0.15)) 50%, transparent 51%),
+                linear-gradient(90deg, transparent 49%, var(--grid-color, rgba(0, 200, 255, 0.15)) 50%, transparent 51%);
+            background-size: 40px 40px;
+            pointer-events: none;
+            z-index: 0;
+            opacity: 0.5;
+        }
+
         .media-header {
             padding: 20px;
             background: rgba(0, 0, 0, 0.95);
@@ -443,7 +460,9 @@
             display: flex;
             gap: 10px;
             flex-wrap: wrap;
-            justify-content: left;
+            justify-content: flex-start;
+            position: relative;
+            z-index: 1;
         }
 
         .media-container {
@@ -452,6 +471,8 @@
             flex-direction: column;
             padding: 20px;
             gap: 20px;
+            position: relative;
+            z-index: 1;
         }
 
         .webcam-container {
@@ -465,6 +486,7 @@
             box-shadow: 0 0 30px var(--primary-glow), inset 0 0 50px rgba(0, 0, 0, 0.5);
         }
 
+        /* 웹캠 컨테이너 스캔라인 효과 - 항상 표시 */
         .webcam-container::before {
             content: '';
             position: absolute;
@@ -476,17 +498,53 @@
                 0deg,
                 transparent,
                 transparent 2px,
-                rgba(0, 0, 0, 0.1) 2px,
-                rgba(0, 0, 0, 0.1) 4px
+                rgba(0, 0, 0, 0.3) 2px,
+                rgba(0, 0, 0, 0.3) 4px
             );
             pointer-events: none;
             z-index: 1;
         }
 
+        /* 웹캠 컨테이너 수직 스캔라인 애니메이션 - 항상 동작 */
+        .webcam-container::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 5px;
+            background: linear-gradient(180deg, transparent, var(--primary-color) 50%, transparent);
+            animation: verticalScan 4s linear infinite;
+            pointer-events: none;
+            z-index: 10;
+            box-shadow: 0 0 20px var(--primary-glow), 0 0 40px var(--primary-glow);
+            filter: blur(1px);
+        }
+
+        /* 수직 스캔라인 애니메이션 */
+        @keyframes verticalScan {
+            0% { 
+                top: -10px;
+                opacity: 0;
+            }
+            10% {
+                opacity: 1;
+            }
+            90% {
+                opacity: 1;
+            }
+            100% { 
+                top: 100%;
+                opacity: 0;
+            }
+        }
+
         .webcam-video {
             width: 100%;
             height: 100%;
-            /* object-fit: cover; */
+            object-fit: cover;
+            position: relative;
+            z-index: 0;
         }
 
         .webcam-placeholder {
@@ -499,15 +557,18 @@
             text-align: center;
             text-transform: uppercase;
             letter-spacing: 2px;
+            position: relative;
+            z-index: 0;
         }
 
+        /* 웹캠 컨트롤 버튼 - 스캔라인 위에 표시 */
         .webcam-controls {
             position: absolute;
             bottom: 15px;
             right: 15px;
             display: flex;
             gap: 10px;
-            z-index: 2;
+            z-index: 20;
         }
 
         .webcam-btn {
@@ -596,6 +657,8 @@
             text-transform: uppercase;
             letter-spacing: 2px;
             box-shadow: 0 0 20px var(--primary-glow);
+            position: relative;
+            z-index: 1;
         }
 
         /* 모드 인디케이터 */
