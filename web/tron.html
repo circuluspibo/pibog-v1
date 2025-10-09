@@ -169,53 +169,57 @@
             scrollbar-width: thin;
             scrollbar-color: var(--primary-color) transparent;
             position: relative;
-            z-index : 1;
+            z-index: 1;
         }
 
+        /* 채팅 메시지 영역 3D 원근 그리드 배경 - 전체 화면 채우기 */
         .chat-messages::after {
-            content :'';
-            position : absolute;
-            top : 0;
-            left : 0;
-            right : 0;
-            bottom : 0;
-            height :100%;
-            width : 100%;
-            background-image:
-                linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.5) 100%),
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            height: 100%;
+            width: 100%;
+            background-image: 
+                linear-gradient(to bottom, transparent 0%, rgba(0, 0, 0, 0.5) 100%),
                 repeating-linear-gradient(
                     0deg,
                     transparent,
                     transparent 39px,
                     var(--primary-color) 39px,
-                    var(--primary-color) 41px,
+                    var(--primary-color) 41px
                 ),
                 repeating-linear-gradient(
                     90deg,
                     transparent,
                     transparent calc(10% - 1px),
                     var(--primary-color) calc(10% - 1px),
-                    var(--primary-color) calc(10% + 1px),
+                    var(--primary-color) calc(10% + 1px)
                 );
-            background-size:  10% 100%, 100% 40px, 100% 40px;
+            background-size: 100% 100%, 100% 40px, 100% 40px;
             background-position: center center;
             transform: perspective(400px) rotateX(65deg) scale(1.5);
-            transform-origin : center center;
-            pointer-events:  none;
+            transform-origin: center center;
+            pointer-events: none;
             z-index: -1;
             opacity: 0.4;
         }
 
+        /* 채팅 영역 수평 스캔라인 애니메이션 - 항상 동작 */
         .chat-messages::before {
             content: '';
             position: absolute;
             top: 0;
             left: 0;
             right: 0;
-            height: 2px;
+            height: 3px;
             background: linear-gradient(90deg, transparent, var(--primary-color), transparent);
             animation: scanline 3s linear infinite;
             pointer-events: none;
+            box-shadow: 0 0 10px var(--primary-glow);
+            z-index: 10;
         }
 
         .chat-messages::-webkit-scrollbar {
