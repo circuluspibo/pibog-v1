@@ -22,8 +22,9 @@
         }
 
         @keyframes scanline {
-            0% { transform: translateY(-100%); }
-            100% { transform: translateY(100%); }
+            0% { transform: translateY(-100%); opacity: 0;}
+            50% { transform: translateY(0%); opacity: 1;}
+            100% { transform: translateY(100%); opacity: 0;}
         }
 
         body {
@@ -108,12 +109,27 @@
             padding: 20px;
             background: linear-gradient(180deg, rgba(0, 0, 0, 0.95) 0%, rgba(0, 0, 0, 0.8) 100%);
             text-align: center;
-            border-bottom: 2px solid var(--border-color);
-            box-shadow: 0 0 20px var(--primary-glow);
+            /* border-bottom: 2px solid var(--border-color); */
+            border-bottom: 2px solid transparent;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            position: relative;
+            /* position: relative; */
+        }
+
+                /* 채팅 영역 수평 스캔라인 애니메이션 - 항상 동작 */
+        .chat-header::before {
+            content: '';
+            position: absolute;
+            top: 72px;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, transparent, var(--primary-color), transparent);
+            animation: scanline 3s linear infinite;
+            pointer-events: none;
+            box-shadow: 0 0 10px var(--primary-glow);
+            z-index: 10;
         }
 
         .chat-header::after {
@@ -142,6 +158,7 @@
             display: flex;
             align-items: center;
             gap: 10px;
+            color: var(--primary-color);
         }
 
         .language-selector select {
@@ -166,6 +183,7 @@
         .chat-messages {
             flex: 1;
             overflow-y: auto;
+            overflow-x: clip;
             padding: 20px;
             scrollbar-width: thin;
             scrollbar-color: var(--primary-color) transparent;
@@ -174,6 +192,7 @@
         }
 
         /* 채팅 메시지 영역 3D 원근 그리드 배경 - 전체 화면 채우기 */
+        /*
         .chat-messages::after {
             content: '';
             position: absolute;
@@ -201,27 +220,14 @@
                 );
             background-size: 100% 100%, 100% 40px, 100% 40px;
             background-position: center center;
-            transform: perspective(400px) rotateX(65deg) scale(1.5);
+            transform: perspective(400px) rotateX(0deg) scale(1.5);
             transform-origin: center center;
             pointer-events: none;
             z-index: -1;
             opacity: 0.4;
         }
+        */
 
-        /* 채팅 영역 수평 스캔라인 애니메이션 - 항상 동작 */
-        .chat-messages::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 3px;
-            background: linear-gradient(90deg, transparent, var(--primary-color), transparent);
-            animation: scanline 3s linear infinite;
-            pointer-events: none;
-            box-shadow: 0 0 10px var(--primary-glow);
-            z-index: 10;
-        }
 
         .chat-messages::-webkit-scrollbar {
             width: 6px;
@@ -547,7 +553,6 @@
         .webcam-video {
             width: 100%;
             height: 100%;
-            object-fit: cover;
             position: relative;
             z-index: 0;
         }
@@ -1128,7 +1133,7 @@
                         }
                         
                         const chunk = decoder.decode(value, { stream: true });
-                        fullResponse += chunk;
+                        fullResponse += chunk + '\n';
                         
                         aiMessageBubble.innerHTML = this.parseMarkdown(fullResponse);
                         this.scrollToBottom();
@@ -1206,7 +1211,7 @@
                         }
                         
                         const chunk = decoder.decode(value, { stream: true });
-                        fullResponse += chunk + '&nbsp;';
+                        fullResponse += chunk + '\n';
                         
                         aiMessageBubble.innerHTML = this.parseMarkdown(fullResponse);
                         this.scrollToBottom();
