@@ -2,37 +2,198 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi import FastAPI
 from fastapi.responses import FileResponse, StreamingResponse
 import time
-from huggingface_hub import snapshot_download, hf_hub_download
 import time as t
 import numpy as np
-import openvino_genai as ov_genai
-import utils
 import subprocess
-from scipy.io.wavfile import write
-from text import text_to_sequence
 import collections
 from pydub import AudioSegment
 from serverinfo import si
 import asyncio
 import logging
 from aiortc import MediaStreamTrack
-from requests import get
 import time
 import cv2
 from openvino import Core
 from fastapi.staticfiles import StaticFiles
 from queue import Queue
-from ultralytics import YOLO, FastSAM
-import openvino as ov
-from mandro import HadnControler
+from ultralytics import YOLO
 import threading
-from scipy.interpolate import splprep, splev
 from fastapi.middleware.cors import CORSMiddleware
 import hashlib
 import asyncio
-#optimum-cli export openvino --weight-format int4 --task text-generation-with-past --model growdle/HyperCLOVAX-SEED-Text-Instruct-1.5B ./CLOVAX-1.5B-ov-int4
-#kakaocorp/kanana-1.5-2.1b-instruct-2505
-#https://github.com/Unitree-Go2-Robot/go2_robot
+import pyrealsense2 as rs
+
+
+ov = Core()
+
+FACE_DETECTION_MODEL_XML = "./models/face-detection-retail-0005/FP16-INT8/face-detection-retail-0005.xml"
+AGE_GENDER_MODEL_XML = "./models/age-gender-recognition-retail-0013/FP16-INT8/age-gender-recognition-retail-0013.xml"
+EMOTION_MODEL_XML = "./models/emotions-recognition-retail-0003/FP16-INT8/emotions-recognition-retail-0003.xml"
+
+DEVICE = "NPU"
+# 생명체로 간주할 클래스명 (클래스 이름은 모델에 따라 다를 수 있음!)
+LIVING_CLASSES = {'person', 'cat', 'dog', 'bird', 'teddy bear', 'cow', 'sheep', 'horse'}
+EMOTIONS = ['neutral', 'happy', 'sad', 'surprise', 'anger']
+
+# 얼굴 탐지 모델
+face_det_model = ov.read_model(model=FACE_DETECTION_MODEL_XML)
+face_det_compiled_model = ov.compile_model(model=face_det_model, device_name=DEVICE)
+face_det_input_layer = face_det_compiled_model.input(0)
+face_det_output_layer = face_det_compiled_model.output(0)
+face_det_height, face_det_width = list(face_det_input_layer.shape)[2:]
+
+# 나이/성별 모델
+age_gender_model = ov.read_model(model=AGE_GENDER_MODEL_XML)
+age_gender_compiled_model = ov.compile_model(model=age_gender_model, device_name=DEVICE)
+age_gender_input_layer = age_gender_compiled_model.input(0)
+age_output_layer = age_gender_compiled_model.output("age_conv3")
+gender_output_layer = age_gender_compiled_model.output("prob")
+age_gender_height, age_gender_width = list(age_gender_input_layer.shape)[2:]
+
+# 감정 모델
+emotion_model = ov.read_model(model=EMOTION_MODEL_XML)
+emotion_compiled_model = ov.compile_model(model=emotion_model, device_name=DEVICE)
+emotion_input_layer = emotion_compiled_model.input(0)
+emotion_output_layer = emotion_compiled_model.output(0)
+emotion_height, emotion_width = list(emotion_input_layer.shape)[2:]
+
+det_model = YOLO('./models/yolo11s-seg_int8_openvino_model')
+det_model("capture.jpg", device='intel:cpu', imgsz=640) # error 방지용
+class_names = det_model.names
+
+
+
+def visualize_face(frame,face_det_results):
+    h, w, _ = frame.shape
+
+    for detection in face_det_results[0][0]:  # OpenVINO 출력 형식에 맞게 인덱싱
+        confidence = detection[2]  # 신뢰도
+        if confidence > 0.5:  # 신뢰도 임계값
+            xmin = int(detection[3] * w)
+            ymin = int(detection[4] * h)
+            xmax = int(detection[5] * w)
+            ymax = int(detection[6] * h)
+            
+            # 얼굴 이미지 자르기 (유효한 범위 내에서)
+            xmin = max(0, xmin)
+            ymin = max(0, ymin)
+            xmax = min(w, xmax)
+            ymax = min(h, ymax)
+            face_img = frame[ymin:ymax, xmin:xmax]
+            
+            if face_img.size > 0:
+                # 나이/성별 모델 추론
+                resized_age_gender = cv2.resize(face_img, (age_gender_width, age_gender_height))
+                # 입력 형태: [1, 3, H, W]
+                ag_input_tensor = np.expand_dims(resized_age_gender.transpose((2, 0, 1)), 0)
+                ag_results = age_gender_compiled_model(ag_input_tensor)
+                
+                # 결과 파싱
+                age_pred = int(ag_results[age_output_layer].reshape(1)[0] * 100) # OpenVINO age-gender 모델은 나이값을 100으로 나눈 값으로 출력.
+                gender_prob = ag_results[gender_output_layer].reshape(-1) # [female_prob, male_prob] 형태로 변환
+                
+                # OpenVINO documentation: prob output across 2 type classes [0 - female, 1 - male].
+                gender_idx = np.argmax(gender_prob)
+                gender = "W" if gender_idx == 0 else "M"
+                
+                # 감정 모델 추론
+                resized_emotion = cv2.resize(face_img, (emotion_width, emotion_height))
+                emotion_input_tensor = np.expand_dims(resized_emotion.transpose((2, 0, 1)), 0)
+                emotion_results = emotion_compiled_model(emotion_input_tensor)
+                
+                # 결과 파싱
+                emotion_prob = emotion_results[emotion_output_layer].reshape(-1)
+                emotion = EMOTIONS[np.argmax(emotion_prob)]
+                
+                # 결과값으로 박스 및 텍스트 그리기
+                cv2.rectangle(frame, (xmin, ymin), (xmax, ymax), (0, 255, 255), 2)
+                text = f"{gender}, {age_pred}y, {emotion}"
+                cv2.putText(frame, text, (xmin, ymax - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
+      
+    return frame      
+
+
+def visualize_segmentation(frame, masks, boxes, classes, scores, depths, class_names, alpha=0.5):
+    overlay = frame.copy()
+    for mask, box, cls_idx, score, depth in zip(masks, boxes, classes, scores, depths):
+        class_name = class_names[cls_idx]
+
+        is_living = class_name in LIVING_CLASSES
+        color = (0, 0, 255) if is_living else (0, 255, 0)  # 빨강 vs 초록
+
+        """
+        x1, y1, x2, y2 = map(int, box.xyxy[0].tolist())
+
+        position = ""
+
+        if class_name == "person":
+            rgb_color = (0, 0, 255)
+            cnt_live += 1
+            lastTime = time.time()
+
+            # 중심 좌표 계산
+            cx = (x1 + x2) // 2
+            cy = (y1 + y2) // 2
+
+            # 위치 계산 (grid 3x3)
+            if cy < cell_h:
+                row = 'T'
+            elif cy < 2 * cell_h:
+                row = 'C'
+            else:
+                row = 'B'
+
+            if cx < cell_w:
+                col = 'L'
+            elif cx < 2 * cell_w:
+                col = 'C'
+            else:
+                col = 'R'
+
+            position = row + col  # ex: "TC", "BR", etc.
+
+        else:
+            rgb_color = (255, 255, 0)
+            cnt_object += 1        
+
+        boxes.append({
+            'class': cls_name,
+            'confidence': round(conf, 2),
+            'bbox': {'x1': x1, 'y1': y1, 'x2': x2, 'y2': y2},
+            'position': position  # 위치 정보 추가
+        }) 
+        """
+
+        # 마스크 적용
+        overlay[mask == 1] = (overlay[mask == 1] * (1 - alpha) + np.array(color) * alpha).astype(np.uint8)
+        x1, y1, x2, y2 = map(int, box)
+        cv2.rectangle(overlay, (x1, y1), (x2, y2), color, 2)
+
+        label = f"{class_name}:{score:.2f} | {depth:.2f}m"
+        cv2.putText(overlay, label, (x1, max(15, y1 - 10)),cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
+    return overlay
+
+def get_mask_depths(masks, depth_frame, low_percentile=5):
+    depths = []
+    depth_image = np.asanyarray(depth_frame.get_data())
+    for mask in masks:
+        if mask.sum() == 0:
+            depths.append(0.0)
+            continue
+        depth_values = depth_image[mask == 1]
+        valid = depth_values[depth_values > 0]
+        if len(valid) > 0:
+            low_thresh = np.percentile(valid, low_percentile)  # 예: 5번째 백분위수
+            filtered = valid[valid >= low_thresh]
+            if len(filtered) > 0:
+                closest_depth_m = np.min(filtered) / 1000.0
+            else:
+                closest_depth_m = np.min(valid) / 1000.0
+        else:
+            closest_depth_m = 0.0
+        depths.append(closest_depth_m)
+    return depths
+
 
 ser = None
 
@@ -43,40 +204,15 @@ def getHash(text):
 
 hL = None
 hR = None
-core = ov.Core()
 
-det_ov_model = core.read_model('yolo12m_int8_openvino_model/yolo12m.xml')
-det_model = YOLO('yolo12m_int8_openvino_model', task='detect')
-sam_model = FastSAM("./FastSAM-s_int8_openvino_model")  # or FastSAM-x.pt
-
-det_ov_model.reshape({0: [1, 3, 384, 640]})
-#det_ov_model.reshape({0: [1, 3, 480, 640]})
-
-compiled_model = core.compile_model(det_ov_model, 'NPU')
-
-if det_model.predictor is None:
-    custom = {"conf": 0.25, "batch": 1, "save": False, "mode": "predict"}  # method defaults
-    args = {**det_model.overrides, **custom}
-    det_model.predictor = det_model._smart_load("predictor")(overrides=args, _callbacks=det_model.callbacks)
-    det_model.predictor.setup_model(model=det_model.model)
-
-det_model.predictor.model.ov_compiled_model = compiled_model
-
-# Enable logging for debugging
 logging.basicConfig(level=logging.ERROR)
 logger = logging.getLogger(__name__)
 
 _IP = "127.0.0.1" #si.getIP()
 _PORT = int(open("port.txt", 'r').read())
 
-conn = None
-audio_hub = None
-track = None
-lastColor = 'cyan'
 state = { "charge" : 0, "temp" : 0, "voltage" : 0, "cnt_live" : 0, "cnt_object" : 0,  "boxes" : []}
 
-
-frame_queue = Queue(maxsize=5)
 processed_frame_queue = Queue(maxsize=5)
 
 cnt_live = 0
@@ -97,155 +233,74 @@ app.add_middleware(
     allow_headers=["*"],  # 모든 헤더 허용
 )
 
-
-core = Core()
-config = {"PERFORMANCE_HINT": "LATENCY"}
-path_tts = snapshot_download(repo_id="rippertnt/on-vits2-multi-tts-v1", allow_patterns="*ov*")
-pipe_tts = core.compile_model(core.read_model(model=f"{path_tts}/all_base_ov.xml"), device_name="CPU", config=config)
-conf_tts = utils.get_hparams_from_file(hf_hub_download(repo_id="rippertnt/on-vits2-multi-tts-v1", filename="all_base.json"))
-
-
-#from concurrent.futures import ThreadPoolExecutor
-
-# 멀티스레드 executor 생성
-#executor = ThreadPoolExecutor(max_workers=4)
-
-def process_detect(image):
-    # 모델 추론 및 후처리
-    results = det_model(image, verbose=False)[0]
-    return results
-
 def processing_thread():
     global cnt_live, cnt_object, lastTime, state, cnt_image
-    processing_times = collections.deque()
 
-    print("============= processing....")
-    highlight_classes = ['person', 'dog', 'cat', 'horse', 'cow', 'sheep', 'bird', 'elephant', 'bear', 'zebra', 'giraffe','teddy bear']
-    names = det_model.names
-    img_w, img_h = 640, 384  # 해상도 명시 (또는 image.shape에서 추출)
+    pipeline = rs.pipeline()
+    config = rs.config()
 
-    cell_w = img_w // 3  # 213
-    cell_h = img_h // 3  # 128    
+    config.enable_stream(rs.stream.depth, 640, 480, rs.format.z16, 30)
+    config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 30)
+    pipeline.start(config)
+
+    print("============= processing....")  
 
     while True:
-        if not frame_queue.empty():
-            image = np.array(frame_queue.get())
-            cnt_live = 0
-            cnt_object = 0
-            boxes = []
+        cnt_live = 0
+        cnt_object = 0
+        boxes = []
 
-            #frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        frames = pipeline.wait_for_frames()
+        depth_frame = frames.get_depth_frame()
+        color_frame = frames.get_color_frame()
+        if not depth_frame or not color_frame:
+            continue
 
-            if cnt_image % 100 == 0:
-              cv2.imwrite("capture.jpg", image) #cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+        frame = np.asanyarray(color_frame.get_data())        
 
-            cnt_image = cnt_image + 1
+        if cnt_image % 100 == 0:
+            cv2.imwrite("capture.jpg", frame) #cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
 
-            start_time = time.time()
+        cnt_image = cnt_image + 1
 
-            #future = executor.submit(process_detect, image)  # 모델 추론을 비동기적으로 처리
-            #results = future.result()  # 결과가 나올 때까지 대기
+        start_time = time.time()
 
-            results = det_model(image, verbose=False)[0]
-            #result = sam_model(image, verbose=False, device="intel:npu", retina_masks=True, imgsz=640, conf=0.6, iou=0.9)[0]
-            stop_time = time.time()
+        results = det_model(frame, device="intel:npu", imgsz=640, verbose=False, conf=0.3)  # 작을수록 빠름
+        res = results[0]
 
-            # 결과 처리 (Bounding box, mask 등)
-            output = image.copy()
-            for box in results.boxes:
-                cls_id = int(box.cls.item())
-                cls_name = names[cls_id]
-                conf = box.conf.item()
-                x1, y1, x2, y2 = map(int, box.xyxy[0].tolist())
-
-                position = ""
-
-                if cls_name in highlight_classes:
-                    rgb_color = (0, 0, 255)
-                    cnt_live += 1
-                    lastTime = time.time()
-
-                    # 중심 좌표 계산
-                    cx = (x1 + x2) // 2
-                    cy = (y1 + y2) // 2
-
-                    # 위치 계산 (grid 3x3)
-                    if cy < cell_h:
-                        row = 'T'
-                    elif cy < 2 * cell_h:
-                        row = 'C'
-                    else:
-                        row = 'B'
-
-                    if cx < cell_w:
-                        col = 'L'
-                    elif cx < 2 * cell_w:
-                        col = 'C'
-                    else:
-                        col = 'R'
-
-                    position = row + col  # ex: "TC", "BR", etc.
-
-                else:
-                    rgb_color = (255, 255, 0)
-                    cnt_object += 1        
-
-                boxes.append({
-                    'class': cls_name,
-                    'confidence': round(conf, 2),
-                    'bbox': {'x1': x1, 'y1': y1, 'x2': x2, 'y2': y2},
-                    'highlight': cls_name in highlight_classes,
-                    'position': position  # 위치 정보 추가
-                }) 
-
-                cv2.rectangle(output, (x1, y1), (x2, y2), rgb_color, 2)
-                cv2.putText(output, f'{cls_name} {conf:.2f}', (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, rgb_color, 2)
-
-            state["cnt_live"] = cnt_live
-            state["cnt_object"] = cnt_object
-            state['boxes'] = boxes
-
-            """
-            if result.masks is not None:
-                masks = result.masks.data.cpu().numpy()
-                for mask in masks:
-                    #mask = (mask * 255).astype(np.uint8)
-                    #contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-                    #cv2.drawContours(output, contours, -1, (0, 255, 0), 3)
-
-                    colored_mask = (mask * 255).astype(np.uint8)
-
-                    # 컬러 마스크 생성
-                    color_layer = np.zeros_like(output, dtype=np.uint8)
-                    color_layer[:, :] = (0, 255, 0) 
-
-                    # 마스크 적용
-                    mask_3ch = cv2.merge([colored_mask] * 3)
-                    masked_color = cv2.bitwise_and(color_layer, mask_3ch)
-
-                    # 오버레이에 컬러 마스크 반영
-                    output = np.where(mask_3ch > 0, cv2.addWeighted(output, 1 - 0.3, masked_color, 0.3, 0), output)
-
-                # 윤곽선 그리기 (선택 사항)
-                #contours, _ = cv2.findContours(colored_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-                #cv2.drawContours(output, contours, -1, (0, 0, 255), 2)
-            """
-
-            processing_times.append(stop_time - start_time)
-            if len(processing_times) > 200:
-                processing_times.popleft()
-
-            _, f_width = output.shape[:2]
-            processing_time = np.mean(processing_times) * 1000
-            fps = 1000 / processing_time
-            cv2.putText(output,f"{processing_time:.1f}ms ({fps:.1f} FPS)",(20, 40),cv2.FONT_HERSHEY_COMPLEX,f_width / 1000,(0, 0, 255),1,cv2.LINE_AA)
-
-            if processed_frame_queue.full():
-              processed_frame_queue.get()  # 가장 오래된 프레임 제거   
-
-            processed_frame_queue.put(output)
+        if hasattr(res, 'masks') and res.masks is not None:
+            masks = res.masks.data.cpu().numpy().astype(np.uint8)
         else:
-            time.sleep(0.001)
+            masks = []
+
+        boxes = res.boxes.xyxy.cpu().numpy()
+        classes = res.boxes.cls.cpu().numpy().astype(int)
+        scores = res.boxes.conf.cpu().numpy()
+
+        # 시각화
+        out = visualize_segmentation(frame, masks, boxes, classes, scores, get_mask_depths(masks, depth_frame), class_names)
+
+        # 얼굴 감지 모델 추론
+        resized_frame = cv2.resize(frame, (face_det_width, face_det_height))
+        input_tensor = np.expand_dims(resized_frame.transpose((2, 0, 1)), 0)
+        face_det_results = face_det_compiled_model(input_tensor)[face_det_output_layer]
+
+        out = visualize_face(out, face_det_results)
+
+        # FPS 계산 및 표시
+        curr_time = time.time()
+        fps = 1.0 / (curr_time - start_time)
+        cv2.putText(out, f"FPS: {fps:.2f}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
+
+        state["cnt_live"] = cnt_live
+        state["cnt_object"] = cnt_object
+        state['boxes'] = boxes
+        
+        if processed_frame_queue.full():
+            processed_frame_queue.get()  # 가장 오래된 프레임 제거   
+
+        processed_frame_queue.put(out)
+
 
 
 @app.get("/")
@@ -532,113 +587,6 @@ def parse_mjpeg_boundary(buffer):
     
     return frames, remaining_buffer
 
-async def collect_frames():
-    """원본 서버에서 프레임을 수집하여 큐에 저장"""
-    global is_collecting
-    
-    buffer = b""
-    frame_count = 0
-    chunk_count = 0
-    
-    try:
-        print("비디오 스트림 연결 시작...")
-        
-        # 더 긴 타임아웃 설정
-        timeout = httpx.Timeout(connect=10.0, read=60.0, write=10.0, pool=10.0)
-        
-        async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
-            print(f"연결 시도: {SOURCE_VIDEO_URL}")
-            
-            async with client.stream("GET", SOURCE_VIDEO_URL) as response:
-                print(f"응답 상태: {response.status_code}")
-                print(f"응답 헤더: {dict(response.headers)}")
-                
-                if response.status_code != 200:
-                    print(f"HTTP 오류: {response.status_code}")
-                    return
-                
-                response.raise_for_status()
-                
-                print("스트림 읽기 시작...")
-                
-                async for chunk in response.aiter_bytes(chunk_size=4096):
-                    if not is_collecting:
-                        print("수집 중지 요청")
-                        break
-                    
-                    chunk_count += 1
-                    buffer += chunk
-                    
-                    # 5초마다 상태 출력
-                    if chunk_count % 100 == 0:
-                        #print(f"청크 {chunk_count}개 수신, 버퍼 크기: {len(buffer)} bytes")
-                        
-                        # 버퍼에서 boundary 패턴 확인 (디버깅용)
-                        if b'--frame' in buffer:
-                            boundary_count = buffer.count(b'--frame')
-                            #print(f"발견된 boundary 개수: {boundary_count}")
-                        
-                        # 버퍼의 처음 200바이트 출력 (디버깅용)
-                        if len(buffer) > 200:
-                            sample = buffer[:200]
-                            #print(f"버퍼 샘플: {sample[:100]}")
-                            #if b'Content-Type' in sample:
-                            #    print("Content-Type 헤더 발견")
-                    
-                    # 버퍼가 너무 커지지 않도록 제한
-                    if len(buffer) > 2 * 1024 * 1024:  # 2MB 제한
-                        #print("버퍼 크기 제한, 일부 제거")
-                        # 버퍼의 앞쪽 절반 제거
-                        buffer = buffer[len(buffer)//2:]
-                    
-                    # 최소 버퍼 크기에 도달했을 때만 파싱 시도
-                    if len(buffer) > 1000:  # 최소 1KB
-                        try:
-                            frames, buffer = parse_mjpeg_boundary(buffer)
-                            
-                            for frame in frames:
-                                frame_count += 1
-                                
-                                # 큐가 꽉 찬 경우 오래된 프레임 제거
-                                while frame_queue.full():
-                                    try:
-                                        dropped = frame_queue.get_nowait()
-                                        #print("오래된 프레임 드랍")
-                                    except frame_queue.Empty:
-                                        break
-                                
-                                try:
-                                    frame = cv2.resize(frame, (640, 384)) 
-                                    frame_queue.put_nowait(frame)
-                                    #print(f"✓ 프레임 #{frame_count} 큐에 추가 (크기: {frame_queue.qsize()}/{frame_queue.maxsize})")
-                                except frame_queue.Full:
-                                    print("큐 풀 - 프레임 스킵")
-                        
-                        except Exception as e:
-                            print(f"프레임 파싱 오류: {e}")
-                            # 파싱 오류시 버퍼 일부 제거
-                            if len(buffer) > 5000:
-                                buffer = buffer[1000:]
-                    
-                    # CPU 사용률 조절
-                    if chunk_count % 50 == 0:
-                        await asyncio.sleep(0.01)
-                        
-                print("스트림 종료")
-                    
-    except httpx.TimeoutException as e:
-        print(f"타임아웃 오류: {e}")
-    except httpx.ConnectError as e:
-        print(f"연결 오류: {e}")
-    except httpx.RequestError as e:
-        print(f"요청 오류: {e}")
-    except Exception as e:
-        print(f"예상치 못한 오류: {e}")
-        import traceback
-        print(traceback.format_exc())
-    finally:
-        is_collecting = False
-        print(f"프레임 수집 종료. 총 {frame_count}개 프레임 처리됨")
 
 @app.get("/start_collection")
 async def start_frame_collection():
@@ -660,7 +608,6 @@ async def start_frame_collection():
     print(f"큐 초기화: {cleared}개 프레임 제거")
     
     is_collecting = True
-    task1 = asyncio.create_task(collect_frames())
     threading.Thread(target=processing_thread, daemon=True).start()
 
     return {"message": "프레임 수집을 시작했습니다"}
