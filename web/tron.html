@@ -960,7 +960,7 @@
         class AIChatApp {
             constructor() {
                 this.apiBaseUrl = 'http://127.0.0.1:59532/v1';
-                this.ttsBaseUrl = 'http://127.0.0.1:59531/v2';
+                this.ttsBaseUrl = 'http://127.0.0.1:59530/v2';
                 
                 this.currentLang = 'ko';
                 this.currentVoice = 33;
@@ -1422,7 +1422,7 @@
                     this.elements.stopWebcam.style.display = 'block';
                     document.getElementById('webcamVideo').src = 'http://127.0.0.1:59531/video_feed'
 
-                    await fetch(`http://127.0.0.1:59531/init_mcr`)
+                    await fetch(`http://127.0.0.1:8000/init_mcr`)
                     this.updateStatus('CAMERA ONLINE');
                 })
             }
@@ -1570,6 +1570,8 @@
             setInterval(async ()=>{
                 const resp = await fetch(`http://127.0.0.1:59531/heartbeat`)
                 const data = (await resp.json()).data
+
+                console.log(data.human.position,data)
                 
                 if(Date.now() - lastTime > 30000 && data.cnt_live > 0 && ai.autoSendImage){
                     fetch(`http://127.0.0.1:8000/stop`)
@@ -1578,7 +1580,7 @@
                         ai.sendImageMessage(LANGUAGE_GREETINGS[ai.currentLang], 'http://127.0.0.1:59532/v2')
                     },1000)
                 }                        
-            },30000)
+            },3000)
         });
 
         let audio = 0

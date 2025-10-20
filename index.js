@@ -1,13 +1,21 @@
-const fastify = require('fastify')({ logger: true });
-const fastifyStatic = require('@fastify/static');
-const fastifyCors = require('@fastify/cors');
-const fastifyWebsocket = require('@fastify/websocket');
-const fastifySwagger = require('@fastify/swagger');
-const fastifySwaggerUi = require('@fastify/swagger-ui');
-const { SerialPort } = require('serialport');
-const fs = require('fs').promises;
-const path = require('path');
-const crypto = require('crypto');
+// 1. CommonJS require() 대신 ES Module import 사용
+import fastify from 'fastify';
+import fastifyStatic from '@fastify/static';
+import fastifyCors from '@fastify/cors';
+import fastifyWebsocket from '@fastify/websocket';
+import fastifySwagger from '@fastify/swagger';
+import fastifySwaggerUi from '@fastify/swagger-ui';
+import { SerialPort } from 'serialport';
+import fs from 'fs/promises';
+import path from 'path';
+import crypto from 'crypto';
+import { fileURLToPath } from 'url';
+
+// __dirname 대체 (ESM 환경에서는 __dirname이 정의되지 않음)
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const app = fastify({ logger: true });
 
 // 전역 변수
 let ser = null;
@@ -84,7 +92,7 @@ async function move(data, delay = 1000) {
 }
 
 // CORS 설정
-fastify.register(fastifyCors, {
+app.register(fastifyCors, {
   origin: '*',
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
@@ -92,7 +100,7 @@ fastify.register(fastifyCors, {
 });
 
 // Swagger 설정
-fastify.register(fastifySwagger, {
+app.register(fastifySwagger, {
   openapi: {
     info: {
       title: 'Robot Motion Control API',
@@ -115,8 +123,8 @@ fastify.register(fastifySwagger, {
   }
 });
 
-fastify.register(fastifySwaggerUi, {
-  routePrefix: '/documentation',
+app.register(fastifySwaggerUi, {
+  routePrefix: '/docs',
   uiConfig: {
     docExpansion: 'list',
     deepLinking: false
@@ -126,22 +134,22 @@ fastify.register(fastifySwaggerUi, {
 });
 
 // 정적 파일 서빙
-fastify.register(fastifyStatic, {
+app.register(fastifyStatic, {
   root: path.join(__dirname, 'web'),
   prefix: '/web/'
 });
 
-fastify.register(fastifyStatic, {
+app.register(fastifyStatic, {
   root: path.join(__dirname, 'webfonts'),
   prefix: '/webfonts/',
   decorateReply: false
 });
 
 // WebSocket 지원
-fastify.register(fastifyWebsocket);
+app.register(fastifyWebsocket);
 
 // 서버 시작시 초기화
-fastify.addHook('onReady', async () => {
+app.addHook('onReady', async () => {
   await initSerial();
   
   // 모션 데이터 파일이 없으면 생성
@@ -153,14 +161,14 @@ fastify.addHook('onReady', async () => {
 });
 
 // 서버 종료시 시리얼 포트 닫기
-fastify.addHook('onClose', async () => {
+app.addHook('onClose', async () => {
   if (ser && ser.isOpen) {
     ser.close();
   }
 });
 
 // 라우트 정의
-fastify.get('/', {
+app.get('/', {
   schema: {
     tags: ['System'],
     description: 'API 서버 상태 확인',
@@ -178,16 +186,7 @@ fastify.get('/', {
   return { message: 'Robot Motion Control API', status: 'running' };
 });
 
-// 포트 번호 읽기 (포트 파일이 있다면)
-let PORT = 3000;
-try {
-  const portContent = await fs.readFile('port.txt', 'utf-8');
-  PORT = parseInt(portContent.trim());
-} catch {
-  console.log('port.txt not found, using default port 3000');
-}
-
-// Swagger 스키마 정의
+// Swagger 스키마 정의 (생략 없이 그대로 유지)
 const RobotMotionSchema = {
   type: 'object',
   required: ['arm', 'head_tilt', 'head_pan', 'shoulder_front', 'shoulder_side', 'elbow_front', 'elbow_side', 'finger', 'duration'],
@@ -278,8 +277,10 @@ const ErrorResponseSchema = {
   }
 };
 
+// --- 라우트 정의 시작 (나머지 라우트들은 원본 코드와 동일) ---
+
 // 단일 모션 실행
-fastify.post('/motion/execute', {
+app.post('/motion/execute', {
   schema: {
     tags: ['Motion'],
     description: '단일 모션 명령 실행',
@@ -318,7 +319,7 @@ fastify.post('/motion/execute', {
 });
 
 // 시퀀스 조회
-fastify.get('/sequence/:name', {
+app.get('/sequence/:name', {
   schema: {
     tags: ['Sequence'],
     description: '특정 시퀀스 조회',
@@ -350,7 +351,7 @@ fastify.get('/sequence/:name', {
 });
 
 // 시퀀스 실행
-fastify.get('/sequence/play/:name', {
+app.get('/sequence/play/:name', {
   schema: {
     tags: ['Sequence'],
     description: '저장된 시퀀스 실행',
@@ -393,7 +394,7 @@ fastify.get('/sequence/play/:name', {
 });
 
 // 시퀀스 실행 (POST)
-fastify.post('/sequence/execute', {
+app.post('/sequence/execute', {
   schema: {
     tags: ['Sequence'],
     description: '모션 시퀀스 즉시 실행',
@@ -424,7 +425,7 @@ fastify.post('/sequence/execute', {
 });
 
 // 시퀀스 저장
-fastify.post('/sequence/save', {
+app.post('/sequence/save', {
   schema: {
     tags: ['Sequence'],
     description: '모션 시퀀스 저장',
@@ -448,7 +449,7 @@ fastify.post('/sequence/save', {
 });
 
 // 시퀀스 목록 조회
-fastify.get('/sequence/list', {
+app.get('/sequence/list', {
   schema: {
     tags: ['Sequence'],
     description: '저장된 시퀀스 목록 조회',
@@ -475,7 +476,7 @@ fastify.get('/sequence/list', {
 });
 
 // 시퀀스 삭제
-fastify.delete('/sequence/:name', {
+app.delete('/sequence/:name', {
   schema: {
     tags: ['Sequence'],
     description: '시퀀스 삭제',
@@ -509,7 +510,7 @@ fastify.delete('/sequence/:name', {
 });
 
 // Heartbeat
-fastify.get('/heartbeat', {
+app.get('/heartbeat', {
   schema: {
     tags: ['System'],
     description: '서버 하트비트 체크',
@@ -529,7 +530,7 @@ fastify.get('/heartbeat', {
 });
 
 // MCR 초기화
-fastify.get('/init_mcr', {
+app.get('/init_mcr', {
   schema: {
     tags: ['System'],
     description: 'MCR(Motor Control Robot) 시리얼 초기화',
@@ -553,11 +554,11 @@ fastify.get('/init_mcr', {
 });
 
 // 기본 모션
-fastify.get('/motion', async (request, reply) => {
+app.get('/motion', async (request, reply) => {
   const { name } = request.query;
   
   if (name) {
-    return await fastify.inject({
+    return await app.inject({
       method: 'GET',
       url: `/sequence/play/${name}`
     });
@@ -605,8 +606,8 @@ fastify.get('/motion', async (request, reply) => {
   return { result: true };
 });
 
-// 제스처 API들
-fastify.get('/kiss_one_hand', {
+// 제스처 API들 (생략 없이 그대로 유지)
+app.get('/kiss_one_hand', {
   schema: {
     tags: ['Gestures'],
     description: '💋 한 손 키스 날리기',
@@ -626,7 +627,7 @@ fastify.get('/kiss_one_hand', {
   return { result: true };
 });
 
-fastify.get('/carry_with_one_hand', {
+app.get('/carry_with_one_hand', {
   schema: {
     tags: ['Gestures'],
     description: '📦 한 손으로 짐 나르기',
@@ -644,7 +645,7 @@ fastify.get('/carry_with_one_hand', {
   return { result: true };
 });
 
-fastify.get('/carry_box_both_hands', {
+app.get('/carry_box_both_hands', {
   schema: {
     tags: ['Gestures'],
     description: '📥 양손 박스 운반',
@@ -662,7 +663,7 @@ fastify.get('/carry_box_both_hands', {
   return { result: true };
 });
 
-fastify.get('/make_heart', {
+app.get('/make_heart', {
   schema: {
     tags: ['Gestures'],
     description: '💖 하트 만들기',
@@ -680,7 +681,7 @@ fastify.get('/make_heart', {
   return { result: true };
 });
 
-fastify.get('/wave_in_front_of_face', {
+app.get('/wave_in_front_of_face', {
   schema: {
     tags: ['Gestures'],
     description: '👋 얼굴 앞 손 흔들기',
@@ -706,7 +707,7 @@ fastify.get('/wave_in_front_of_face', {
   return { result: true };
 });
 
-fastify.get('/wave_above_head', {
+app.get('/wave_above_head', {
   schema: {
     tags: ['Gestures'],
     description: '🙆 머리 위 손 흔들기',
@@ -732,7 +733,7 @@ fastify.get('/wave_above_head', {
   return { result: true };
 });
 
-fastify.get('/raise_left_hand', {
+app.get('/raise_left_hand', {
   schema: {
     tags: ['Gestures'],
     description: '🙋‍♀️ 왼손 들기',
@@ -750,7 +751,7 @@ fastify.get('/raise_left_hand', {
   return { result: true };
 });
 
-fastify.get('/raise_right_hand', {
+app.get('/raise_right_hand', {
   schema: {
     tags: ['Gestures'],
     description: '🙋‍♂️ 오른손 들기',
@@ -768,7 +769,7 @@ fastify.get('/raise_right_hand', {
   return { result: true };
 });
 
-fastify.get('/make_x_pose', {
+app.get('/make_x_pose', {
   schema: {
     tags: ['Gestures'],
     description: '❌ 팔 X자 모양 만들기',
@@ -786,7 +787,7 @@ fastify.get('/make_x_pose', {
   return { result: true };
 });
 
-fastify.get('/clap', {
+app.get('/clap', {
   schema: {
     tags: ['Gestures'],
     description: '👏 박수치기',
@@ -810,7 +811,7 @@ fastify.get('/clap', {
   return { result: true };
 });
 
-fastify.get('/spread_arms', {
+app.get('/spread_arms', {
   schema: {
     tags: ['Gestures'],
     description: '👐 팔 벌리기',
@@ -828,7 +829,7 @@ fastify.get('/spread_arms', {
   return { result: true };
 });
 
-fastify.get('/raise_both_arms', {
+app.get('/raise_both_arms', {
   schema: {
     tags: ['Gestures'],
     description: '🙌 양손 위로 들기',
@@ -846,7 +847,7 @@ fastify.get('/raise_both_arms', {
   return { result: true };
 });
 
-fastify.get('/default_pose', {
+app.get('/default_pose', {
   schema: {
     tags: ['Gestures'],
     description: '🧍 기본자세 (팔 내림)',
@@ -864,7 +865,7 @@ fastify.get('/default_pose', {
   return { result: true };
 });
 
-fastify.get('/left_arm_out_right_up', {
+app.get('/left_arm_out_right_up', {
   schema: {
     tags: ['Gestures'],
     description: '🔀 왼팔 펴고 오른팔 위로',
@@ -885,7 +886,7 @@ fastify.get('/left_arm_out_right_up', {
   return { result: true };
 });
 
-fastify.get('/right_arm_out_left_up', {
+app.get('/right_arm_out_left_up', {
   schema: {
     tags: ['Gestures'],
     description: '🔁 오른팔 펴고 왼팔 위로',
@@ -906,7 +907,7 @@ fastify.get('/right_arm_out_left_up', {
   return { result: true };
 });
 
-fastify.get('/stop', {
+app.get('/stop', {
   schema: {
     tags: ['Gestures'],
     description: '⏹️ 정지',
@@ -925,10 +926,11 @@ fastify.get('/stop', {
 });
 
 // WebSocket 제어
-fastify.register(async function (fastify) {
+app.register(async function (fastify) {
   fastify.get('/ws/control', { websocket: true }, (connection, req) => {
     connection.socket.on('message', async (message) => {
       try {
+        // message.toString() 대신 message.toString()을 사용합니다.
         const msg = JSON.parse(message.toString());
         
         if (msg.frame && Array.isArray(msg.frame)) {
@@ -952,13 +954,13 @@ fastify.register(async function (fastify) {
 });
 
 // 모션 저장 / 플레이 API
-fastify.post('/api/save_motion', async (request, reply) => {
+app.post('/api/save_motion', async (request, reply) => {
   const frames = request.body;
   await fs.writeFile('motion_data.json', JSON.stringify(frames, null, 2));
   return { status: 'saved', count: frames.length };
 });
 
-fastify.post('/api/play_motion', async (request, reply) => {
+app.post('/api/play_motion', async (request, reply) => {
   try {
     const frames = JSON.parse(await fs.readFile('motion_data.json', 'utf-8'));
     
@@ -977,14 +979,27 @@ fastify.post('/api/play_motion', async (request, reply) => {
 
 // 서버 시작
 const start = async () => {
+  let PORT = 8000;
+  
+  // 2. 최상위 await (top-level await)를 사용하여 포트 파일을 읽어옴 (ESM에서 지원됨)
+  /*
   try {
-    await fastify.listen({ port: PORT, host: '0.0.0.0' });
+    const portContent = await fs.readFile('port.txt', 'utf-8');
+    PORT = parseInt(portContent.trim());
+  } catch {
+    console.log('port.txt not found, using default port 3000');
+  }
+  */
+
+  try {
+    await app.listen({ port: PORT, host: '0.0.0.0' });
     console.log('Loading Complete');
     console.log(`Server listening on http://0.0.0.0:${PORT}`);
+    console.log(`Swagger UI: http://0.0.0.0:${PORT}/docs`);
   } catch (err) {
-    fastify.log.error(err);
+    app.log.error(err);
     process.exit(1);
   }
 };
 
-start();
+await start(); // 3. 최상위 await로 start 함수 호출

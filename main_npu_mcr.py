@@ -23,6 +23,8 @@ import hashlib
 import asyncio
 import pyrealsense2 as rs
 
+is_collecting = False
+collection_task = None
 
 ov = Core()
 
@@ -61,9 +63,11 @@ det_model = YOLO('./models/yolo11s-seg_int8_openvino_model')
 det_model("capture.jpg", device='intel:cpu', imgsz=640) # error 방지용
 class_names = det_model.names
 
-
+state = { "charge" : 0, "temp" : 0, "voltage" : 0, "cnt_live" : 0, "cnt_object" : 0,  "boxes" : [], 
+         "human" : { "age" : "", "gender" : "", "emotion" : "", "position" : ""} }
 
 def visualize_face(frame,face_det_results):
+    global state
     h, w, _ = frame.shape
 
     for detection in face_det_results[0][0]:  # OpenVINO 출력 형식에 맞게 인덱싱
@@ -110,67 +114,82 @@ def visualize_face(frame,face_det_results):
                 text = f"{gender}, {age_pred}y, {emotion}"
                 cv2.putText(frame, text, (xmin, ymax - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
       
+
+                state["human"]["gender"] = gender
+                state["human"]["age"] = age_pred
+                state["human"]["emotion"] = emotion
     return frame      
 
 
 def visualize_segmentation(frame, masks, boxes, classes, scores, depths, class_names, alpha=0.5):
+    global state
     overlay = frame.copy()
+
+    state['boxes'] = []
+    state["cnt_object"] = 0
+    state["cnt_live"] = 0
+
     for mask, box, cls_idx, score, depth in zip(masks, boxes, classes, scores, depths):
         class_name = class_names[cls_idx]
 
         is_living = class_name in LIVING_CLASSES
         color = (0, 0, 255) if is_living else (0, 255, 0)  # 빨강 vs 초록
 
-        """
-        x1, y1, x2, y2 = map(int, box.xyxy[0].tolist())
-
-        position = ""
-
-        if class_name == "person":
-            rgb_color = (0, 0, 255)
-            cnt_live += 1
-            lastTime = time.time()
-
-            # 중심 좌표 계산
-            cx = (x1 + x2) // 2
-            cy = (y1 + y2) // 2
-
-            # 위치 계산 (grid 3x3)
-            if cy < cell_h:
-                row = 'T'
-            elif cy < 2 * cell_h:
-                row = 'C'
-            else:
-                row = 'B'
-
-            if cx < cell_w:
-                col = 'L'
-            elif cx < 2 * cell_w:
-                col = 'C'
-            else:
-                col = 'R'
-
-            position = row + col  # ex: "TC", "BR", etc.
-
-        else:
-            rgb_color = (255, 255, 0)
-            cnt_object += 1        
-
-        boxes.append({
-            'class': cls_name,
-            'confidence': round(conf, 2),
-            'bbox': {'x1': x1, 'y1': y1, 'x2': x2, 'y2': y2},
-            'position': position  # 위치 정보 추가
-        }) 
-        """
-
         # 마스크 적용
         overlay[mask == 1] = (overlay[mask == 1] * (1 - alpha) + np.array(color) * alpha).astype(np.uint8)
         x1, y1, x2, y2 = map(int, box)
         cv2.rectangle(overlay, (x1, y1), (x2, y2), color, 2)
 
+        position = ""
+
+        height, width, channels = frame.shape # 이 부분은 이미 있다고 가정합니다.
+
+        # 3x3 그리드를 위한 cell 높이와 너비 계산
+        # 정수 나누기를 사용하여 픽셀 단위로 구합니다.
+        cell_h = height // 3
+        cell_w = width // 3
+
+        lastTime = time.time()
+
+        # 중심 좌표 계산
+        cx = (x1 + x2) // 2
+        cy = (y1 + y2) // 2
+
+        # 위치 계산 (grid 3x3)
+        if cy < cell_h:
+            row = 'T'
+        elif cy < 2 * cell_h:
+            row = 'C'
+        else:
+            row = 'B'
+
+        if cx < cell_w:
+            col = 'L'
+        elif cx < 2 * cell_w:
+            col = 'C'
+        else:
+            col = 'R'
+
+        position = row + col  # ex: "TC", "BR", etc.
+
+        if is_living:  
+            state["cnt_live"] += 1          
+            state["human"]["depth"] = depth
+            state["human"]["position"] = position
+        else:
+            state["cnt_object"] += 1        
+
+        state['boxes'].append({
+            'class': class_name,
+            'score': round(float(score), 2),
+            'bbox': {'x1': x1, 'y1': y1, 'x2': x2, 'y2': y2},
+            'position': position,  # 위치 정보 추가
+            'depth' : depth
+        }) 
+
         label = f"{class_name}:{score:.2f} | {depth:.2f}m"
         cv2.putText(overlay, label, (x1, max(15, y1 - 10)),cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
+
     return overlay
 
 def get_mask_depths(masks, depth_frame, low_percentile=5):
@@ -202,16 +221,11 @@ def getHash(text):
   hash_func.update(text.encode('utf-8'))
   return hash_func.hexdigest()
 
-hL = None
-hR = None
-
 logging.basicConfig(level=logging.ERROR)
 logger = logging.getLogger(__name__)
 
 _IP = "127.0.0.1" #si.getIP()
 _PORT = int(open("port.txt", 'r').read())
-
-state = { "charge" : 0, "temp" : 0, "voltage" : 0, "cnt_live" : 0, "cnt_object" : 0,  "boxes" : []}
 
 processed_frame_queue = Queue(maxsize=5)
 
@@ -292,10 +306,6 @@ def processing_thread():
         fps = 1.0 / (curr_time - start_time)
         cv2.putText(out, f"FPS: {fps:.2f}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
 
-        state["cnt_live"] = cnt_live
-        state["cnt_object"] = cnt_object
-        state['boxes'] = boxes
-        
         if processed_frame_queue.full():
             processed_frame_queue.get()  # 가장 오래된 프레임 제거   
 
