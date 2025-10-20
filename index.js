@@ -318,6 +318,60 @@ app.post('/motion/execute', {
   }
 });
 
+let pos_w = 90 // HEAD RIGHT-LEFT
+let pos_h = 10 // HEAD UP-DOWN 
+
+// head 처리
+app.get('/head/:name', {
+  schema: {
+    tags: ['head'],
+    description: '헤드 위치 조정',
+    params: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'up / down/ left/ right' }
+      }
+    },
+    response: {
+      200: MotionSequenceSchema,
+      404: ErrorResponseSchema,
+      500: ErrorResponseSchema
+    }
+  }
+}, async (request, reply) => {
+  try {
+    const data = JSON.parse(await fs.readFile(MOTION_DATA_PATH, 'utf-8'));
+    const { name } = request.params;
+    
+    let cmd = 0
+
+    switch(name){
+      case 'up':
+        if (pos_h > 2)
+          pos_h -= 1                
+        break
+      case 'down':
+        if (pos_h < 43)
+            pos_h += 1                
+        break
+      case 'left':
+        if (pos_w > 11)
+            pos_w -= 1  
+        break;      
+      case 'right':
+        if (pos_w < 169)
+            pos_w += 1                
+        break
+      }
+
+      const headCommand = createHeadCommand({ head_tilt : pos_h, head_pan :pos_w})
+      ser.write(headCommand);
+    
+  } catch (e) {
+    return reply.code(500).send({ error: `조회 실패: ${e.message}` });
+  }
+});
+
 // 시퀀스 조회
 app.get('/sequence/:name', {
   schema: {
@@ -606,306 +660,6 @@ app.get('/motion', async (request, reply) => {
   return { result: true };
 });
 
-// 제스처 API들 (생략 없이 그대로 유지)
-app.get('/kiss_one_hand', {
-  schema: {
-    tags: ['Gestures'],
-    description: '💋 한 손 키스 날리기',
-    response: {
-      200: {
-        type: 'object',
-        properties: {
-          result: { type: 'boolean' }
-        }
-      }
-    }
-  }
-}, async (request, reply) => {
-  await move(Buffer.from([0xFE, 0x60, 0x30, 0x50, 0x50, 0x01]), 800);
-  await move(Buffer.from([0xFE, 0x60, 0x30, 0x50, 0x50, 0x03]), 800);
-  await move(Buffer.from([0xFE, 0x60, 0x30, 0x50, 0x50, 0x06]), 1000);
-  return { result: true };
-});
-
-app.get('/carry_with_one_hand', {
-  schema: {
-    tags: ['Gestures'],
-    description: '📦 한 손으로 짐 나르기',
-    response: {
-      200: {
-        type: 'object',
-        properties: {
-          result: { type: 'boolean' }
-        }
-      }
-    }
-  }
-}, async (request, reply) => {
-  await move(Buffer.from([0xFE, 0x70, 0x10, 0x40, 0x50, 0x03]), 1500);
-  return { result: true };
-});
-
-app.get('/carry_box_both_hands', {
-  schema: {
-    tags: ['Gestures'],
-    description: '📥 양손 박스 운반',
-    response: {
-      200: {
-        type: 'object',
-        properties: {
-          result: { type: 'boolean' }
-        }
-      }
-    }
-  }
-}, async (request, reply) => {
-  await move(Buffer.from([0xFF, 0x70, 0x10, 0x50, 0x50, 0x03]), 1500);
-  return { result: true };
-});
-
-app.get('/make_heart', {
-  schema: {
-    tags: ['Gestures'],
-    description: '💖 하트 만들기',
-    response: {
-      200: {
-        type: 'object',
-        properties: {
-          result: { type: 'boolean' }
-        }
-      }
-    }
-  }
-}, async (request, reply) => {
-  await move(Buffer.from([0xFF, 0x90, 0x30, 0x60, 0x40, 0x06]), 2000);
-  return { result: true };
-});
-
-app.get('/wave_in_front_of_face', {
-  schema: {
-    tags: ['Gestures'],
-    description: '👋 얼굴 앞 손 흔들기',
-    response: {
-      200: {
-        type: 'object',
-        properties: {
-          result: { type: 'boolean' }
-        }
-      }
-    }
-  }
-}, async (request, reply) => {
-  const base = Buffer.from([0xFE, 0x60, 0x10, 0x40, 0x40, 0x00]);
-  const left = Buffer.from([0xFE, 0x60, 0x10, 0x40, 0x30, 0x00]);
-  const right = Buffer.from([0xFE, 0x60, 0x10, 0x40, 0x50, 0x00]);
-  
-  await move(base, 1000);
-  for (let i = 0; i < 10; i++) {
-    await move(left, 400);
-    await move(right, 400);
-  }
-  return { result: true };
-});
-
-app.get('/wave_above_head', {
-  schema: {
-    tags: ['Gestures'],
-    description: '🙆 머리 위 손 흔들기',
-    response: {
-      200: {
-        type: 'object',
-        properties: {
-          result: { type: 'boolean' }
-        }
-      }
-    }
-  }
-}, async (request, reply) => {
-  const base = Buffer.from([0xFE, 0xA0, 0x30, 0x50, 0x40, 0x00]);
-  const left = Buffer.from([0xFE, 0xA0, 0x30, 0x50, 0x30, 0x00]);
-  const right = Buffer.from([0xFE, 0xA0, 0x30, 0x50, 0x50, 0x00]);
-  
-  await move(base, 1000);
-  for (let i = 0; i < 5; i++) {
-    await move(left, 1000);
-    await move(right, 1000);
-  }
-  return { result: true };
-});
-
-app.get('/raise_left_hand', {
-  schema: {
-    tags: ['Gestures'],
-    description: '🙋‍♀️ 왼손 들기',
-    response: {
-      200: {
-        type: 'object',
-        properties: {
-          result: { type: 'boolean' }
-        }
-      }
-    }
-  }
-}, async (request, reply) => {
-  await move(Buffer.from([0xFD, 0x90, 0x00, 0x50, 0x30, 0x00]), 1500);
-  return { result: true };
-});
-
-app.get('/raise_right_hand', {
-  schema: {
-    tags: ['Gestures'],
-    description: '🙋‍♂️ 오른손 들기',
-    response: {
-      200: {
-        type: 'object',
-        properties: {
-          result: { type: 'boolean' }
-        }
-      }
-    }
-  }
-}, async (request, reply) => {
-  await move(Buffer.from([0xFE, 0x90, 0x00, 0x50, 0x30, 0x00]), 1500);
-  return { result: true };
-});
-
-app.get('/make_x_pose', {
-  schema: {
-    tags: ['Gestures'],
-    description: '❌ 팔 X자 모양 만들기',
-    response: {
-      200: {
-        type: 'object',
-        properties: {
-          result: { type: 'boolean' }
-        }
-      }
-    }
-  }
-}, async (request, reply) => {
-  await move(Buffer.from([0xFF, 0x80, 0x40, 0x50, 0x20, 0x00]), 2000);
-  return { result: true };
-});
-
-app.get('/clap', {
-  schema: {
-    tags: ['Gestures'],
-    description: '👏 박수치기',
-    response: {
-      200: {
-        type: 'object',
-        properties: {
-          result: { type: 'boolean' }
-        }
-      }
-    }
-  }
-}, async (request, reply) => {
-  const close = Buffer.from([0xFF, 0x60, 0x10, 0x60, 0x30, 0x03]);
-  const open = Buffer.from([0xFF, 0x60, 0x10, 0x60, 0x60, 0x06]);
-  
-  for (let i = 0; i < 5; i++) {
-    await move(close, 1000);
-    await move(open, 1000);
-  }
-  return { result: true };
-});
-
-app.get('/spread_arms', {
-  schema: {
-    tags: ['Gestures'],
-    description: '👐 팔 벌리기',
-    response: {
-      200: {
-        type: 'object',
-        properties: {
-          result: { type: 'boolean' }
-        }
-      }
-    }
-  }
-}, async (request, reply) => {
-  await move(Buffer.from([0xFF, 0x40, 0x80, 0x30, 0x30, 0x00]), 1500);
-  return { result: true };
-});
-
-app.get('/raise_both_arms', {
-  schema: {
-    tags: ['Gestures'],
-    description: '🙌 양손 위로 들기',
-    response: {
-      200: {
-        type: 'object',
-        properties: {
-          result: { type: 'boolean' }
-        }
-      }
-    }
-  }
-}, async (request, reply) => {
-  await move(Buffer.from([0xFF, 0xA0, 0x10, 0x50, 0x40, 0x00]), 2000);
-  return { result: true };
-});
-
-app.get('/default_pose', {
-  schema: {
-    tags: ['Gestures'],
-    description: '🧍 기본자세 (팔 내림)',
-    response: {
-      200: {
-        type: 'object',
-        properties: {
-          result: { type: 'boolean' }
-        }
-      }
-    }
-  }
-}, async (request, reply) => {
-  await move(Buffer.from([0xFF, 0x20, 0x00, 0x00, 0x00, 0x00]), 1500);
-  return { result: true };
-});
-
-app.get('/left_arm_out_right_up', {
-  schema: {
-    tags: ['Gestures'],
-    description: '🔀 왼팔 펴고 오른팔 위로',
-    response: {
-      200: {
-        type: 'object',
-        properties: {
-          result: { type: 'boolean' }
-        }
-      }
-    }
-  }
-}, async (request, reply) => {
-  const left = Buffer.from([0xFD, 0x50, 0x70, 0x30, 0x40, 0x00]);
-  const right = Buffer.from([0xFE, 0xA0, 0x10, 0x50, 0x30, 0x00]);
-  await move(left, 500);
-  await move(right, 1500);
-  return { result: true };
-});
-
-app.get('/right_arm_out_left_up', {
-  schema: {
-    tags: ['Gestures'],
-    description: '🔁 오른팔 펴고 왼팔 위로',
-    response: {
-      200: {
-        type: 'object',
-        properties: {
-          result: { type: 'boolean' }
-        }
-      }
-    }
-  }
-}, async (request, reply) => {
-  const right = Buffer.from([0xFE, 0x50, 0x70, 0x30, 0x40, 0x00]);
-  const left = Buffer.from([0xFD, 0xA0, 0x10, 0x50, 0x30, 0x00]);
-  await move(right, 500);
-  await move(left, 1500);
-  return { result: true };
-});
 
 app.get('/stop', {
   schema: {

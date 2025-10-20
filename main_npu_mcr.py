@@ -70,6 +70,10 @@ def visualize_face(frame,face_det_results):
     global state
     h, w, _ = frame.shape
 
+    state["human"]["gender"] = ""
+    state["human"]["age"] = ""
+    state["human"]["emotion"] = ""   
+
     for detection in face_det_results[0][0]:  # OpenVINO 출력 형식에 맞게 인덱싱
         confidence = detection[2]  # 신뢰도
         if confidence > 0.5:  # 신뢰도 임계값
@@ -128,6 +132,9 @@ def visualize_segmentation(frame, masks, boxes, classes, scores, depths, class_n
     state['boxes'] = []
     state["cnt_object"] = 0
     state["cnt_live"] = 0
+
+    state["human"]["depth"] = ""
+    state["human"]["position"] = ""
 
     for mask, box, cls_idx, score, depth in zip(masks, boxes, classes, scores, depths):
         class_name = class_names[cls_idx]

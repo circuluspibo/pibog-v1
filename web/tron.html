@@ -881,39 +881,39 @@
         };
 
         const LANGUAGE_GREETINGS = {
-            ar: 'مرحبًا! شو عم تعمل هون؟',
-            cs: 'Ahoj! Co tady děláš?',
-            de: 'Hey! Was machst du hier?',
-            en: 'Hey! What are you up to?',
-            es: '¡Hola! ¿Qué haces por aquí?',
-            fa: 'سلام! اینجا چی کار می‌کنی؟',
-            fi: 'Moikka! Mitä sä teet täällä?',
-            fil: 'Uy! Anong ginagawa mo dito?',
-            fr: 'Salut ! Tu fais quoi ici ?',
-            hi: 'अरे! यहाँ क्या कर रहे हो?',
-            hu: 'Szia! Mit csinálsz itt?',
-            id: 'Hei! Ngapain di sini?',
-            it: 'Ehi! Che ci fai qui?',
-            ja: 'やあ！ここで何してるの？',
-            km: 'សួស្តី! អ្នកកំពុងធ្វើអ្វីនៅទីនេះ?',
-            ko: '어! 여기서 뭐 해?',
-            mn: 'Сайн уу! Энд юу хийж байна вэ?',
-            ms: 'Hai! Buat apa kat sini?',
-            nl: 'Hoi! Wat doe je hier?',
-            pl: 'Hej! Co tu robisz?',
-            pt: 'Oi! O que você tá fazendo aqui?',
-            ru: 'Привет! Что ты здесь делаешь?',
-            si: 'හෙයි! ඔයා මෙතන කරනේ මොකද්ද?',
-            sv: 'Hej! Vad gör du här?',
-            ta: 'ஹேய்! இங்கே என்ன செய்கிறாய்?',
-            te: 'హాయ్! ఇక్కడ ఏమి చేస్తున్నావు?',
-            th: 'หวัดดี! มาทำอะไรที่นี่เหรอ?',
-            tr: 'Hey! Burada ne yapıyorsun?',
-            uk: 'Привіт! Що ти тут робиш?',
-            ur: 'ہیلو! آپ یہاں کیا کر رہے ہیں؟',
-            vi: 'Chào! Bạn đang làm gì ở đây thế?',
-            zh: '嘿！你在这儿干嘛？'
-        };
+            "ar": "مرحبًا! كيف الحال؟",
+            "cs": "Ahoj! Jak se vede?",
+            "de": "Hey! Alles klar?",
+            "en": "Hey there! How’s it going?",
+            "es": "¡Hola! ¿Cómo estás?",
+            "fa": "سلام! حالت چطوره؟",
+            "fi": "Moikka! Miten menee?",
+            "fil": "Uy! Kamusta ka?",
+            "fr": "Salut ! Ça va ?",
+            "hi": "अरे! कैसे हो?",
+            "hu": "Szia! Hogy vagy?",
+            "id": "Hai! Apa kabar?",
+            "it": "Ehi! Come va?",
+            "ja": "やあ！元気？",
+            "km": "សួស្តី! សុខសប្បាយរបស់អ្នកជាដូចម្តេច?",
+            "ko": "안녕! 잘 지내?",
+            "mn": "Сайн уу! Юу байна?",
+            "ms": "Hai! Apa khabar?",
+            "nl": "Hoi! Alles goed?",
+            "pl": "Hej! Jak się masz?",
+            "pt": "Oi! Tudo bem?",
+            "ru": "Привет! Как дела?",
+            "si": "හෙලෝ! කොහොමද?",
+            "sv": "Hej! Hur är läget?",
+            "ta": "ஹாய்! எப்படி இருக்கிறீர்கள்?",
+            "te": "హాయ్! ఎలా ఉన్నావు?",
+            "th": "หวัดดี! สบายดีไหม?",
+            "tr": "Selam! Nasılsın?",
+            "uk": "Привіт! Як справи?",
+            "ur": "ہیلو! کیسے ہو؟",
+            "vi": "Chào! Dạo này sao rồi?",
+            "zh": "嘿！最近怎么样？"
+        }
 
         const LANGUAGE_VOICES = {
             ar: 2, cs: 4, de: 6, en: 8, es: 11, fa: 13, fi: 15, fil: 17, fr: 19, hi: 21,
@@ -1563,7 +1563,15 @@
                 }
             }
         }
-        
+
+/*{
+    "age": 39,
+    "gender": "M",
+    "emotion": "happy",
+    "position": "BC",
+    "depth": 0.313
+}*/        
+
         document.addEventListener('DOMContentLoaded', () => {
             const ai = new AIChatApp();
 
@@ -1572,15 +1580,28 @@
                 const data = (await resp.json()).data
 
                 console.log(data.human.position,data)
+
+                const pos = data.human.position
+
+                if(pos.startsWith('T'))
+                    fetch(`http://127.0.0.1:8000/head/down`)
+                else if(pos.startsWith('B')) 
+                    fetch(`http://127.0.0.1:8000/head/up`)
+                
+                if(pos.endsWith('L'))
+                    fetch(`http://127.0.0.1:8000/head/right`)
+                else if(pos.endsWith('R'))
+                    fetch(`http://127.0.0.1:8000/head/left`)
                 
                 if(Date.now() - lastTime > 30000 && data.cnt_live > 0 && ai.autoSendImage){
+                    lastTime = Date.now()
                     fetch(`http://127.0.0.1:8000/stop`)
                     ai.captureImage()
                     setTimeout(()=>{
-                        ai.sendImageMessage(LANGUAGE_GREETINGS[ai.currentLang], 'http://127.0.0.1:59532/v2')
+                        ai.sendImageMessage(LANGUAGE_GREETINGS[ai.currentLang] + ` ${data.human.gender == 'M' ? 'Male' : 'Female'}, ${data.human.age} years, ${data.human.emotion}`, 'http://127.0.0.1:59532/v2')
                     },1000)
                 }                        
-            },3000)
+            },1000)
         });
 
         let audio = 0
