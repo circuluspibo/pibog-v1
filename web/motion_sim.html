@@ -454,20 +454,20 @@
             </div>
 
             <div class="panel-section">
-                <div class="section-title">Head Control (Preview)</div>
+                <div class="section-title">Head Control</div>
                 <div class="control-group">
                     <div class="control-label">
                         <span>Pan (좌우)</span>
-                        <span class="control-value" id="head-pan-value">0°</span>
+                        <span class="control-value" id="head-pan-value">90°</span>
                     </div>
-                    <input type="range" id="head-pan" min="-90" max="90" value="0">
+                     <input type="range" id="head-pan" min="10" max="170" value="90">
                 </div>
                 <div class="control-group">
                     <div class="control-label">
                         <span>Tilt (상하)</span>
-                        <span class="control-value" id="head-tilt-value">0°</span>
+                        <span class="control-value" id="head-tilt-value">10°</span>
                     </div>
-                    <input type="range" id="head-tilt" min="-45" max="45" value="0">
+                    <input type="range" id="head-tilt" min="0" max="40" value="10">
                 </div>
             </div>
 
@@ -514,7 +514,12 @@
                         <span>Finger Action</span>
                         <span class="control-value" id="finger-value">Wait</span>
                     </div>
-                    <input type="range" id="finger" min="0" max="6" value="0" step="1">
+                    <input type="range" id="finger1" min="0" max="1" value="0" step="1">
+                    <input type="range" id="finger2" min="0" max="1" value="0" step="1">
+                    <input type="range" id="finger3" min="0" max="1" value="0" step="1">
+                    <input type="range" id="finger4" min="0" max="1" value="0" step="1">
+                    <input type="range" id="finger5" min="0" max="1" value="0" step="1">
+                    <input type="range" id="finger6" min="0" max="1" value="0" step="1">                    
                 </div>
             </div>
 
@@ -585,8 +590,8 @@
         // Motion state
         let currentMotion = {
             arm: 255,
-            head_pan: 0,
-            head_tilt: 0,
+            head_pan: 90,
+            head_tilt: 10,
             shoulder_front: 0, //90
             shoulder_side: 0,
             elbow_front: 0,
@@ -773,8 +778,8 @@
         
         function updateRobot() {
             // Head movement
-            const headPan = currentMotion.head_pan * Math.PI / 180;
-            const headTilt = currentMotion.head_tilt * Math.PI / 180;
+            const headPan = (currentMotion.head_pan - 80) * Math.PI / 180;
+            const headTilt = -(currentMotion.head_tilt - 20) * Math.PI / 180;
             robot.neck.rotation.y = headPan;
             robot.head.rotation.x = headTilt;
             
@@ -812,8 +817,8 @@
         function resetPosition() {
             currentMotion = {
                 arm: 255,
-                head_pan: 0,
-                head_tilt: 0,
+                head_pan: 90,
+                head_tilt: 10,
                 shoulder_front: 20,
                 shoulder_side: 0,
                 elbow_front: 0,
@@ -846,6 +851,16 @@
             updateRobot();
         }
         
+
+        const finger = {
+            finger1: [ 0, 1],
+            finger2: [ 0, 2],
+            finger3: [ 0, 4],
+            finger4: [ 0, 8],
+            finger5: [ 0, 16],
+            finger6: [ 0, 32],            
+        }
+
         // UI Controls
         function initControls() {
             // Realtime toggle
@@ -875,24 +890,43 @@
                 { id: 'shoulder-side', key: 'shoulder_side', suffix: '°' },
                 { id: 'elbow-front', key: 'elbow_front', suffix: '°' },
                 { id: 'elbow-side', key: 'elbow_side', suffix: '°' },
-                { id: 'finger', key: 'finger', suffix: '' },
+                { id: 'finger1', key: 'finger1', suffix: '' },
+                { id: 'finger2', key: 'finger2', suffix: '' },
+                { id: 'finger3', key: 'finger3', suffix: '' },
+                { id: 'finger4', key: 'finger4', suffix: '' },
+                { id: 'finger5', key: 'finger5', suffix: '' },
+                { id: 'finger6', key: 'finger6', suffix: '' },
                 { id: 'duration', key: 'duration', suffix: 's' }
             ];
-            
+
             sliders.forEach(slider => {
                 const element = document.getElementById(slider.id);
                 const valueElement = document.getElementById(slider.id + '-value');
                 
+            currentMotion['finger'] = 0
+
                 element.addEventListener('input', function() {
                     const value = parseFloat(this.value);
-                    currentMotion[slider.key] = value;
-                    
-                    if (slider.id === 'finger') {
-                        const fingerActions = ['Wait', 'Thumb Grip', 'Thumb Release', 'Fingers Grip', '', '', 'Fingers Open'];
-                        valueElement.textContent = fingerActions[value];
-                    } else {
-                        valueElement.textContent = value + slider.suffix;
+
+                    if (!slider.id.startsWith("finger")) 
+                        currentMotion[slider.key] = value;
+                    else if (slider.id.startsWith("finger")){ // 다시 다 더해야 한다..
+                        currentMotion['finger'] = 0
+                        
+                        currentMotion['finger'] += finger["finger1"][document.getElementById("finger1").value]
+                        currentMotion['finger'] += finger["finger2"][document.getElementById("finger2").value]
+                        currentMotion['finger'] += finger["finger3"][document.getElementById("finger3").value]
+                        currentMotion['finger'] += finger["finger4"][document.getElementById("finger4").value]
+                        currentMotion['finger'] += finger["finger5"][document.getElementById("finger5").value]
+                        currentMotion['finger'] += finger["finger6"][document.getElementById("finger6").value]                        
+
+                        console.log('finger',currentMotion['finger'])
+
                     }
+                    
+                    if (!slider.id.startsWith("finger")) 
+                        valueElement.textContent = value + slider.suffix;
+                    
                     
                     if (slider.key !== 'duration') {
                         updateRobot();
@@ -976,6 +1010,8 @@
             const motion = motionTimeline[index];
             currentMotion = { 
                 ...currentMotion,
+                head_pan : motion.head_pan,
+                head_tilt : motion.head_tilt,
                 arm: motion.arm,
                 shoulder_front: motion.shoulder_front,
                 shoulder_side: motion.shoulder_side,
@@ -1024,6 +1060,8 @@
         async function sendMotionToRobot() {
             try {
                 const motion = {
+                    head_tilt : currentMotion.head_tilt,
+                    head_pan : currentMotion.head_pan,
                     arm: currentMotion.arm,
                     shoulder_front: currentMotion.shoulder_front,
                     shoulder_side: currentMotion.shoulder_side,
