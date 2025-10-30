@@ -17,6 +17,7 @@ let state = 'Walk_G1'
 var AudioContext = window.AudioContext || window.webkitAudioContext;
 var audioContext //new audio context to help us record
 let lastTime = 0
+let interval = 0
 
 function listen(){
   //if (document.documentElement.requestFullscreen) 
@@ -297,7 +298,7 @@ document.addEventListener("keyup", (event) => {
 });
 */
 
-let mode = 'normal'
+let mode =  true //'normal'
 
 document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('object-speed').textContent = multi
@@ -378,10 +379,21 @@ document.addEventListener('DOMContentLoaded', function() {
                     play("환영합니다. 저는 휴머노이드 로봇 파이온입니다.")
                     break;
                 case 'tts-poet':
-                    cmd = `/arm?cmd=Refuse`
-                    play("저는 업무를 처리중이므로, 가까이 오시면 위험합니다.")
+                    //cmd = `/arm?cmd=Refuse`
+                    cmd = 'http://127.0.0.1:59532/v2/img2chat?isPlay=1&lang=ko&prompt="이 장면에 적합한 인사말을 해 주겠니?"'
+                    //play("저는 업무를 처리중이므로, 가까이 오시면 위험합니다.")
                     break;    
                 case 'mode':
+                    if(mode){
+                        document.getElementById("mode").textContent = 'mode'
+                        mode = false
+                    } else {
+                        document.getElementById("mode").textContent = 'auto'
+                        mode = true      
+                    }
+
+                    return
+                    /*
                     if(mode == 'Step_G1'){
                         mode = 'Stand_G1'
                         cmd = '/balanceG1?cmd=Stand_G1'
@@ -391,6 +403,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         cmd = '/balanceG1?cmd=Step_G1'
                         multi = 2
                     }
+                    */
                     break;     
                 case 'connect':
 
@@ -411,6 +424,34 @@ document.addEventListener('DOMContentLoaded', function() {
 
                         const json = await response.json()
                         console.log('connect ok',json)
+
+                        clearInterval(interval)
+                        interval = setInterval(async ()=>{
+                            const resp = await fetch(`http://127.0.0.1:59531/heartbeat`)
+                            const data = (await resp.json()).data
+
+                            console.log(data.human.position,data)
+
+                            const pos = data.human.position
+                            /*
+                            if(pos.startsWith('T'))
+                                fetch(`http://127.0.0.1:8000/head/down`)
+                            else if(pos.startsWith('B')) 
+                                fetch(`http://127.0.0.1:8000/head/up`)
+                            
+                            if(pos.endsWith('L'))
+                                fetch(`http://127.0.0.1:8000/head/right`)
+                            else if(pos.endsWith('R'))
+                                fetch(`http://127.0.0.1:8000/head/left`)
+                            */
+
+                            if(Date.now() - lastTime > 30000 && data.cnt_live > 0 && mode){
+                                lastTime = Date.now()
+                                fetch('http://127.0.0.1:59532/v2/img2chat?isPlay=1&lang=ko&prompt="이 장면에 뭐가 보이는지 설명해주고? 이런 상황에서는 뭘 사람과 하면 좋을것 같니?"')
+                            }                        
+                        },1000)
+
+
                     })
                     break;
                 case 'prepare':

@@ -119,7 +119,7 @@ async def process_stream(streamer, isStream=True, isPlay=0, lang='en'):
           break  # Stop stream (don't yield)
         
     if isStream:
-      #print(new_token)
+      #print(new_token)덷
       yield new_token
       #await asyncio.sleep(0) 
     elif "." in new_token or "\n" in new_token:
@@ -129,7 +129,7 @@ async def process_stream(streamer, isStream=True, isPlay=0, lang='en'):
         sentence = sentence.strip()
 
         if int(isPlay) > 0:
-          get("http://127.0.0.1:59531/v2/tts", params={"text": sentence, "lang" : lang})          
+          get("http://127.0.0.1:59531/v2/tts", params={"text": sentence, "lang" : lang, "voice" : 31})         #korean
 
         print(sentence)
         yield sentence
@@ -183,7 +183,7 @@ def txt2chat(prompt : str ,system = _SYSTEM, isPlay = 0, lang='en'): # gen or me
       beam_size=1,
       do_sample=False, #fast for beam-search
       speculative_decoding=True,
-      #repetition_penalty=1.1,
+      repetition_penalty=1.1,
       #top_k=50,
       #top_p=0.9,
   )
@@ -243,7 +243,7 @@ def img2chat2(prompt = "" ,system = _SYSTEM, isPlay = 0, lang='en'): # gen or me
       beam_size=1,
       do_sample=False, #fast for beam-search
       speculative_decoding=True,
-      #repetition_penalty=1.1,
+      repetition_penalty=1.1,
       #top_k=50,
       #top_p=0.9,
   )
