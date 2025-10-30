@@ -32,17 +32,6 @@ logger = logging.getLogger(__name__)
 _IP = "127.0.0.1" #si.getIP()
 _PORT = int(open("port.txt", 'r').read())
 
-
-state = { "charge" : 0, "temp" : 0, "voltage" : 0, "cnt_live" : 0, "cnt_object" : 0 }
-
-frame_queue = Queue(maxsize=5)
-processed_frame_queue = Queue(maxsize=5)
-
-cnt_live = 0
-cnt_object = 0
-lastTime = 0
-cnt_image = 0
-
 app = FastAPI()
 
 app.mount("/web", StaticFiles(directory="web"), name="web")

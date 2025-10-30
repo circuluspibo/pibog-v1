@@ -1,36 +1,21 @@
 from fastapi.middleware.cors import CORSMiddleware
 from serverinfo import si
-import librosa
 from fastapi import FastAPI, File, UploadFile
-from transformers import AutoTokenizer
 from fastapi.responses import FileResponse, StreamingResponse
-import langid
-import random
-import ctranslate2
-from PIL import Image
-from transformers import AutoTokenizer
 from huggingface_hub import snapshot_download, hf_hub_download
 import time as t
 import collections
-from transformers import AutoTokenizer
 from pydantic import BaseModel, Field
 import numpy as np
-import openvino_genai as ov_genai
 import utils
-import commons
+from playsound import playsound
 from scipy.io.wavfile import write
 from text import text_to_sequence
-import torch
 import json
 from pydub import AudioSegment
 from serverinfo import si
-#import onnxruntime as rt
-#import onnxruntime_genai as og
-#from llama_cpp import Llama
-import asyncio
 from go2_webrtc_driver.webrtc_audiohub import WebRTCAudioHub
 import logging
-import asyncio
 from go2_webrtc_driver.webrtc_driver import Go2WebRTCConnection, WebRTCConnectionMethod
 from go2_webrtc_driver.constants import RTC_TOPIC, VUI_COLOR, SPORT_CMD
 from aiortc import MediaStreamTrack
@@ -45,21 +30,10 @@ import openvino as ov
 #from playsound import playsound
 from mandro import HadnControler
 import threading
-from threading import Event, Thread
-from transformers import AutoTokenizer
-from pydantic import BaseModel, Field
-from iterator import IterableStreamer
-from skimage.morphology import skeletonize
-from scipy.interpolate import splprep, splev
 from fastapi.middleware.cors import CORSMiddleware
 import hashlib
-import aiohttp
 import asyncio
 import requests
-#optimum-cli export openvino --weight-format int4 --task text-generation-with-past --model growdle/HyperCLOVAX-SEED-Text-Instruct-1.5B ./CLOVAX-1.5B-ov-int4
-#kakaocorp/kanana-1.5-2.1b-instruct-2505
-#https://github.com/Unitree-Go2-Robot/go2_robot
-
 
 def getHash(text):
   hash_func = hashlib.new('md5')
@@ -68,24 +42,43 @@ def getHash(text):
 
 hL = None
 hR = None
-core = ov.Core()
 
-det_ov_model = core.read_model('yolo12m_int8_openvino_model/yolo12m.xml')
-det_model = YOLO('yolo12m_int8_openvino_model', task='detect')
-sam_model = FastSAM("./FastSAM-s_int8_openvino_model")  # or FastSAM-x.pt
+ov = Core()
 
-det_ov_model.reshape({0: [1, 3, 384, 640]})
-#det_ov_model.reshape({0: [1, 3, 480, 640]})
+FACE_DETECTION_MODEL_XML = "./models/face-detection-retail-0005/FP16-INT8/face-detection-retail-0005.xml"
+AGE_GENDER_MODEL_XML = "./models/age-gender-recognition-retail-0013/FP16-INT8/age-gender-recognition-retail-0013.xml"
+EMOTION_MODEL_XML = "./models/emotions-recognition-retail-0003/FP16-INT8/emotions-recognition-retail-0003.xml"
 
-compiled_model = core.compile_model(det_ov_model, 'NPU')
+DEVICE = "NPU"
+# 생명체로 간주할 클래스명 (클래스 이름은 모델에 따라 다를 수 있음!)
+LIVING_CLASSES = {'person', 'cat', 'dog', 'bird', 'teddy bear', 'cow', 'sheep', 'horse'}
+EMOTIONS = ['neutral', 'happy', 'sad', 'surprise', 'anger']
 
-if det_model.predictor is None:
-    custom = {"conf": 0.25, "batch": 1, "save": False, "mode": "predict"}  # method defaults
-    args = {**det_model.overrides, **custom}
-    det_model.predictor = det_model._smart_load("predictor")(overrides=args, _callbacks=det_model.callbacks)
-    det_model.predictor.setup_model(model=det_model.model)
+# 얼굴 탐지 모델
+face_det_model = ov.read_model(model=FACE_DETECTION_MODEL_XML)
+face_det_compiled_model = ov.compile_model(model=face_det_model, device_name=DEVICE)
+face_det_input_layer = face_det_compiled_model.input(0)
+face_det_output_layer = face_det_compiled_model.output(0)
+face_det_height, face_det_width = list(face_det_input_layer.shape)[2:]
 
-det_model.predictor.model.ov_compiled_model = compiled_model
+# 나이/성별 모델
+age_gender_model = ov.read_model(model=AGE_GENDER_MODEL_XML)
+age_gender_compiled_model = ov.compile_model(model=age_gender_model, device_name=DEVICE)
+age_gender_input_layer = age_gender_compiled_model.input(0)
+age_output_layer = age_gender_compiled_model.output("age_conv3")
+gender_output_layer = age_gender_compiled_model.output("prob")
+age_gender_height, age_gender_width = list(age_gender_input_layer.shape)[2:]
+
+# 감정 모델
+emotion_model = ov.read_model(model=EMOTION_MODEL_XML)
+emotion_compiled_model = ov.compile_model(model=emotion_model, device_name=DEVICE)
+emotion_input_layer = emotion_compiled_model.input(0)
+emotion_output_layer = emotion_compiled_model.output(0)
+emotion_height, emotion_width = list(emotion_input_layer.shape)[2:]
+
+det_model = YOLO('./models/yolo11s-seg_int8_openvino_model')
+det_model("capture.jpg", device='intel:cpu', imgsz=640) # error 방지용
+class_names = det_model.names
 
 # Enable logging for debugging
 logging.basicConfig(level=logging.ERROR)
@@ -163,6 +156,160 @@ path_tts = snapshot_download(repo_id="rippertnt/on-vits2-multi-tts-v1", allow_pa
 pipe_tts = core.compile_model(core.read_model(model=f"{path_tts}/all_base_ov.xml"), device_name="CPU", config=config)
 conf_tts = utils.get_hparams_from_file(hf_hub_download(repo_id="rippertnt/on-vits2-multi-tts-v1", filename="all_base.json"))
 
+def visualize_face(frame,face_det_results):
+    global state
+    h, w, _ = frame.shape
+
+    state["human"]["gender"] = ""
+    state["human"]["age"] = ""
+    state["human"]["emotion"] = ""   
+
+    for detection in face_det_results[0][0]:  # OpenVINO 출력 형식에 맞게 인덱싱
+        confidence = detection[2]  # 신뢰도
+        if confidence > 0.5:  # 신뢰도 임계값
+            xmin = int(detection[3] * w)
+            ymin = int(detection[4] * h)
+            xmax = int(detection[5] * w)
+            ymax = int(detection[6] * h)
+            
+            # 얼굴 이미지 자르기 (유효한 범위 내에서)
+            xmin = max(0, xmin)
+            ymin = max(0, ymin)
+            xmax = min(w, xmax)
+            ymax = min(h, ymax)
+            face_img = frame[ymin:ymax, xmin:xmax]
+            
+            if face_img.size > 0:
+                # 나이/성별 모델 추론
+                resized_age_gender = cv2.resize(face_img, (age_gender_width, age_gender_height))
+                # 입력 형태: [1, 3, H, W]
+                ag_input_tensor = np.expand_dims(resized_age_gender.transpose((2, 0, 1)), 0)
+                ag_results = age_gender_compiled_model(ag_input_tensor)
+                
+                # 결과 파싱
+                age_pred = int(ag_results[age_output_layer].reshape(1)[0] * 100) # OpenVINO age-gender 모델은 나이값을 100으로 나눈 값으로 출력.
+                gender_prob = ag_results[gender_output_layer].reshape(-1) # [female_prob, male_prob] 형태로 변환
+                
+                # OpenVINO documentation: prob output across 2 type classes [0 - female, 1 - male].
+                gender_idx = np.argmax(gender_prob)
+                gender = "W" if gender_idx == 0 else "M"
+                
+                # 감정 모델 추론
+                resized_emotion = cv2.resize(face_img, (emotion_width, emotion_height))
+                emotion_input_tensor = np.expand_dims(resized_emotion.transpose((2, 0, 1)), 0)
+                emotion_results = emotion_compiled_model(emotion_input_tensor)
+                
+                # 결과 파싱
+                emotion_prob = emotion_results[emotion_output_layer].reshape(-1)
+                emotion = EMOTIONS[np.argmax(emotion_prob)]
+                
+                # 결과값으로 박스 및 텍스트 그리기
+                cv2.rectangle(frame, (xmin, ymin), (xmax, ymax), (0, 255, 255), 2)
+                text = f"{gender}, {age_pred}y, {emotion}"
+                cv2.putText(frame, text, (xmin, ymax - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
+      
+
+                state["human"]["gender"] = gender
+                state["human"]["age"] = age_pred
+                state["human"]["emotion"] = emotion
+    return frame      
+
+
+def visualize_segmentation(frame, masks, boxes, classes, scores, depths, class_names, alpha=0.5):
+    global state
+    overlay = frame.copy()
+
+    state['boxes'] = []
+    state["cnt_object"] = 0
+    state["cnt_live"] = 0
+
+    state["human"]["depth"] = ""
+    state["human"]["position"] = ""
+
+    for mask, box, cls_idx, score in zip(masks, boxes, classes, scores):
+        class_name = class_names[cls_idx]
+
+        is_living = class_name in LIVING_CLASSES
+        color = (0, 0, 255) if is_living else (0, 255, 0)  # 빨강 vs 초록
+
+        # 마스크 적용
+        overlay[mask == 1] = (overlay[mask == 1] * (1 - alpha) + np.array(color) * alpha).astype(np.uint8)
+        x1, y1, x2, y2 = map(int, box)
+        cv2.rectangle(overlay, (x1, y1), (x2, y2), color, 2)
+
+        position = ""
+
+        height, width, channels = frame.shape # 이 부분은 이미 있다고 가정합니다.
+
+        # 3x3 그리드를 위한 cell 높이와 너비 계산
+        # 정수 나누기를 사용하여 픽셀 단위로 구합니다.
+        cell_h = height // 3
+        cell_w = width // 3
+
+        lastTime = time.time()
+
+        # 중심 좌표 계산
+        cx = (x1 + x2) // 2
+        cy = (y1 + y2) // 2
+
+        # 위치 계산 (grid 3x3)
+        if cy < cell_h:
+            row = 'T'
+        elif cy < 2 * cell_h:
+            row = 'C'
+        else:
+            row = 'B'
+
+        if cx < cell_w:
+            col = 'L'
+        elif cx < 2 * cell_w:
+            col = 'C'
+        else:
+            col = 'R'
+
+        position = row + col  # ex: "TC", "BR", etc.
+
+        if is_living:  
+            state["cnt_live"] += 1          
+            #state["human"]["depth"] = depth
+            state["human"]["position"] = position
+        else:
+            state["cnt_object"] += 1        
+
+        state['boxes'].append({
+            'class': class_name,
+            'score': round(float(score), 2),
+            'bbox': {'x1': x1, 'y1': y1, 'x2': x2, 'y2': y2},
+            'position': position,  # 위치 정보 추가
+            #'depth' : depth
+        }) 
+
+        label = f"{class_name}:{score:.2f}"
+        cv2.putText(overlay, label, (x1, max(15, y1 - 10)),cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
+
+    return overlay
+
+def get_mask_depths(masks, depth_frame, low_percentile=5):
+    depths = []
+    depth_image = np.asanyarray(depth_frame.get_data())
+    for mask in masks:
+        if mask.sum() == 0:
+            depths.append(0.0)
+            continue
+        depth_values = depth_image[mask == 1]
+        valid = depth_values[depth_values > 0]
+        if len(valid) > 0:
+            low_thresh = np.percentile(valid, low_percentile)  # 예: 5번째 백분위수
+            filtered = valid[valid >= low_thresh]
+            if len(filtered) > 0:
+                closest_depth_m = np.min(filtered) / 1000.0
+            else:
+                closest_depth_m = np.min(valid) / 1000.0
+        else:
+            closest_depth_m = 0.0
+        depths.append(closest_depth_m)
+    return depths
+
 def processing_thread():
     global cnt_live, cnt_object, lastTime, state, cnt_image
     processing_times = collections.deque()
@@ -171,121 +318,56 @@ def processing_thread():
 
     while True:
         if not frame_queue.empty():
-            image = np.array(frame_queue.get())
-            cnt_live = 0
-            cnt_object = 0
+          frame = np.array(frame_queue.get())
+          cnt_live = 0
+          cnt_object = 0
 
-            #frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+          if cnt_image % 100 == 0:
+            cv2.imwrite("capture.jpg", frame) #cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
 
-            if cnt_image % 100 == 0:
-              cv2.imwrite("capture.jpg", image)
+          cnt_image = cnt_image + 1
 
-            cnt_image = cnt_image + 1
+          start_time = time.time()
 
-            start_time = time.time()
-            results = det_model(image, verbose=False)[0]
-            result = sam_model(image, verbose=False, device="intel:npu", retina_masks=True, imgsz=640, conf=0.6, iou=0.9)[0]
-            stop_time = time.time()
+          results = det_model(frame, device="intel:npu", imgsz=640, verbose=False, conf=0.3)  # 작을수록 빠름
+          res = results[0]
 
-            # 결과 처리 (Bounding box, mask 등)
-            names = det_model.names
-            output = image.copy()
+          if hasattr(res, 'masks') and res.masks is not None:
+              masks = res.masks.data.cpu().numpy().astype(np.uint8)
+          else:
+              masks = []
 
-            highlight_classes = ['person', 'dog', 'cat', 'horse', 'cow', 'sheep', 'bird', 'elephant', 'bear', 'zebra', 'giraffe','teddy bear']
-            for box in results.boxes:
-                cls_id = int(box.cls.item())
-                cls_name = names[cls_id]
-                conf = box.conf.item()
-                x1, y1, x2, y2 = map(int, box.xyxy[0].tolist())
+          boxes = res.boxes.xyxy.cpu().numpy()
+          classes = res.boxes.cls.cpu().numpy().astype(int)
+          scores = res.boxes.conf.cpu().numpy()
 
-                if cls_name in highlight_classes:
-                    rgb_color = (0, 0, 255)
-                    cnt_live += 1
-                    lastTime = time.time()
-                else:
-                    rgb_color = (255, 255, 0)
-                    cnt_object += 1
+          # 시각화
+          out = visualize_segmentation(frame, masks, boxes, classes, scores, None, class_names)
 
-                cv2.rectangle(output, (x1, y1), (x2, y2), rgb_color, 2)
-                label = f'{cls_name} {conf:.2f}'
-                cv2.putText(output, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, rgb_color, 2)
+          # 얼굴 감지 모델 추론
+          resized_frame = cv2.resize(frame, (face_det_width, face_det_height))
+          input_tensor = np.expand_dims(resized_frame.transpose((2, 0, 1)), 0)
+          face_det_results = face_det_compiled_model(input_tensor)[face_det_output_layer]
 
-            state["cnt_live"] = cnt_live
-            state["cnt_object"] = cnt_object
+          out = visualize_face(out, face_det_results)
 
-            if result.masks is not None:
-                masks = result.masks.data.cpu().numpy()
-                for mask in masks:
-                    #mask = (mask * 255).astype(np.uint8)
-                    #contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-                    #cv2.drawContours(output, contours, -1, (0, 255, 0), 3)
+          # FPS 계산 및 표시
+          curr_time = time.time()
+          fps = 1.0 / (curr_time - start_time)
+          cv2.putText(out, f"FPS: {fps:.2f}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
 
-                    colored_mask = (mask * 255).astype(np.uint8)
-
-                    # 컬러 마스크 생성
-                    color_layer = np.zeros_like(output, dtype=np.uint8)
-                    color_layer[:, :] = (0, 255, 0) 
-
-                    # 마스크 적용
-                    mask_3ch = cv2.merge([colored_mask] * 3)
-                    masked_color = cv2.bitwise_and(color_layer, mask_3ch)
-
-                    # 오버레이에 컬러 마스크 반영
-                    output = np.where(mask_3ch > 0, cv2.addWeighted(output, 1 - 0.3, masked_color, 0.3, 0), output)
-
-                # 윤곽선 그리기 (선택 사항)
-                #contours, _ = cv2.findContours(colored_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-                #cv2.drawContours(output, contours, -1, (0, 0, 255), 2)
-
-            processing_times.append(stop_time - start_time)
-            if len(processing_times) > 200:
-                processing_times.popleft()
-
-            _, f_width = output.shape[:2]
-            processing_time = np.mean(processing_times) * 1000
-            fps = 1000 / processing_time
-            cv2.putText(output,f"{processing_time:.1f}ms ({fps:.1f} FPS)",(20, 40),cv2.FONT_HERSHEY_COMPLEX,f_width / 1000,(0, 0, 255),1,cv2.LINE_AA)
-
-            if processed_frame_queue.full():
+          if processed_frame_queue.full():
               processed_frame_queue.get()  # 가장 오래된 프레임 제거   
 
-            processed_frame_queue.put(output)
+          processed_frame_queue.put(out)
         else:
             time.sleep(0.001)
+
 
 
 @app.get("/")
 def main():
   return { "result" : True, "data" : "AI-CPU-V2", "ip" : _IP, "port" : _PORT }      
-
-"""
-def fetch_frames():
-    print("streaming start......")
-    with requests.get("http://127.0.0.1:59521/video_feed", stream=True) as response:
-        if response.status_code == 200:
-            # 서버 A에서 오는 스트리밍을 하나씩 받아 큐에 넣음
-            frame_buffer = b''  # 비디오 프레임을 이어서 받기 위한 버퍼
-            for chunk in response.iter_content(chunk_size=1024):
-                frame_buffer += chunk
-                # JPEG 데이터가 하나의 프레임을 완성한 경우
-                if b'\xff\xd9' in frame_buffer:  # JPEG의 끝 마커
-                    try:
-                        # 받은 데이터를 디코딩하여 이미지로 변환
-                        image = cv2.imdecode(np.frombuffer(frame_buffer, dtype=np.uint8), cv2.IMREAD_COLOR)
-                        if image is not None:
-                            # 큐에 디코딩된 이미지를 넣음
-
-                            if frame_queue.full():
-                              frame_queue.get()  # 가장 오래된 프레임 제거  
-                            print('............ frame input')
-                            frame_queue.put(image)
-                    except Exception as e:
-                        print(f"Error decoding image: {e}")
-                    frame_buffer = b''  # 다음 프레임을 받기 위해 버퍼 초기화
-# 비디오 프레임을 가져오는 스레드를 시작
-thread = Thread(target=fetch_frames, daemon=True)
-thread.start()
-"""
 
 # Async function to receive video frames and put them in the queue
 async def recv_camera_stream(track: MediaStreamTrack):

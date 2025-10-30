@@ -44,10 +44,7 @@ logger = logging.getLogger(__name__)
 _IP = "127.0.0.1" #si.getIP()
 _PORT = int(open("port.txt", 'r').read())
 
-
-
 app = FastAPI()
-
 
 # 모든 도메인 허용 (allow_origins에 '*' 설정)
 app.add_middleware(
@@ -99,13 +96,6 @@ class Chat(BaseModel):
   top_p : float = 0.92
   top_k : int = 50
   max : int = 256 #16384
-
-#model_name = 'rippertnt/Phi-4-mini-it-ov-int4' #'../models/CLOVAX-1.5B-ov-int4'
-#model_name = snapshot_download(repo_id='rippertnt/Phi-4-mini-it-ov-int4') # Phi-4-mini-it-ov-int4 //text only
-#model_txt = snapshot_download(repo_id='circulus/Qwen2.5-VL-3B-it-ov-int4') # Phi-4-mini-it-ov-int4 //text only
-
-#model_name = '../models/gemma-3-1b-int4-ov'
-#pipe_txt = ov_genai.LLMPipeline(model_name, device="GPU")
 
 model_txt = snapshot_download(repo_id='circulus/gemma-3-4b-it-ov-awq-sym')
 model_stt = snapshot_download(repo_id='circulus/whisper-large-v3-turbo-ov')
