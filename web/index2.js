@@ -27,7 +27,7 @@ function listen(){
   if(!isRecord){
     
     console.log("Recording started")
-    isRecord = tze
+    isRecord = true
     navigator.mediaDevices.getUserMedia({audio: true, video: false}).then(function(stream) {
       console.log("getUserMedia() success, stream created, initializing Recorder.js ...");
 
@@ -360,7 +360,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     break;        
                 case 'tts-hello':
                     cmd = `/arm?cmd=shakeHands_1`
-                    play("안녕? 나는 서큘러스의 파이온이라고 해. 만나서 반가워.")
+                    play("안녕? 나는 인텔 코어 울트라 기반의 서큘러스의 파이온이라고 해. 만나서 반가워.")
                     break;
                 case 'tts-intro':
                     cmd = `/arm?cmd=clamp`
@@ -379,9 +379,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     play("환영합니다. 저는 휴머노이드 로봇 파이온입니다.")
                     break;
                 case 'tts-poet':
-                    //cmd = `/arm?cmd=Refuse`
-                    cmd = 'http://127.0.0.1:59532/v2/img2chat?isPlay=1&lang=ko&prompt="이 장면에 적합한 인사말을 해 주겠니?"'
-                    //play("저는 업무를 처리중이므로, 가까이 오시면 위험합니다.")
+                    cmd = `/arm?cmd=Refuse`
+                    //cmd = 'http://127.0.0.1:59532/v2/img2chat?isPlay=1&lang=ko&prompt="이 장면에 적합한 인사말을 해 주겠니?"'
+                    play("저는 업무를 처리중이므로, 가까이 오시면 위험합니다.")
                     break;    
                 case 'mode':
                     if(mode){
@@ -447,9 +447,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
                             if(Date.now() - lastTime > 30000 && data.cnt_live > 0 && mode){
                                 lastTime = Date.now()
-                                fetch('http://127.0.0.1:59532/v2/img2chat?isPlay=1&lang=ko&prompt="이 장면에 뭐가 보이는지 설명해주고? 이런 상황에서는 뭘 사람과 하면 좋을것 같니?"')
+                                fetch('http://127.0.0.1:59532/v2/img2chat?isPlay=1&lang=ko&prompt="이런 상황에 어울리는 짧은 인사말을 해줘!"')
+                                
+                                fetch(`/arm?cmd=lowWave`)
                             }                        
-                        },1000)
+                        },10000)
 
 
                     })

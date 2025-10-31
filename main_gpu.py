@@ -74,7 +74,7 @@ clamp, highFive, shakeHands_1, blowKiss, hug, hightWave, lowWave, ultramanRay, b
 응답시 가장 적절한 동작을 하나만 선택하고, 대화체로 마크업 없이 사람처럼 대답 해줘.
 예시 : [동작] 응답어
 """
-_SYSTEM = "당신은 서큘러스에서 만든 파이봇 이라고 하는 강아지 로봇 인공지능 입니다. 젊은 톤의 대화체로 입력된 언어로 사람 같이 짧게 응답하세요."
+_SYSTEM = "당신은 서큘러스에서 만든 파이봇 이라고 하는 MIT 박사 수준의 로봇 인공지능 입니다. 젊은 톤의 대화체로 입력된 언어로 사람 같이 짧게 응답하세요."
 
 def read_image(path: str) -> Tensor:
     pic = Image.open(path).convert("RGB")
@@ -90,14 +90,14 @@ def read_images(path: str) -> list[Tensor]:
 class Chat(BaseModel):
   prompt : str = ''
   lang : str = 'auto'
-  type : str =  "당신은 서큘러스에서 만든 파이봇 이라고 하는 강아지 로봇 인공지능 입니다. 젊은 톤의 대화체로 입력된 언어로 사람 같이 짧게 응답하세요." #" "당신은 데이비드라고 하는 10살 남자아이 성향의 유쾌하고 즐거운 인공지능입니다. 이모티콘도 잘 활용해서 젊은 말투로 대답하세요."
+  type : str =  _SYSTEM #" "당신은 데이비드라고 하는 10살 남자아이 성향의 유쾌하고 즐거운 인공지능입니다. 이모티콘도 잘 활용해서 젊은 말투로 대답하세요."
   rag :  str = ''  
   temp : float = 0.5
   top_p : float = 0.92
   top_k : int = 50
   max : int = 256 #16384
 
-model_txt = snapshot_download(repo_id='circulus/gemma-3-4b-it-ov-awq-sym')
+model_txt = snapshot_download(repo_id='Echo9Zulu/gemma-3-4b-it-qat-int4_asym-ov') # circulus/gemma-3-4b-it-ov-awq-sym
 model_stt = snapshot_download(repo_id='circulus/whisper-large-v3-turbo-ov')
 
 token_txt = AutoTokenizer.from_pretrained(model_txt)
