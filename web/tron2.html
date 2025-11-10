@@ -440,7 +440,7 @@
         /* 소리 이벤트 오버레이 */
         .sound-events-overlay {
             position: absolute;
-            top: 20px;
+            bottom: 20px;
             left: 20px;
             z-index: 15;
             display: flex;
@@ -456,7 +456,7 @@
             min-width: 200px;
             clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
             box-shadow: 0 0 20px var(--primary-glow), inset 0 0 10px rgba(0, 0, 0, 0.5);
-            animation: soundEventFadeIn 0.3s ease-out;
+           /* animation: soundEventFadeIn 1s ease-out; */
         }
 
         @keyframes soundEventFadeIn {
@@ -753,7 +753,7 @@
     <div class="app-container">
         <div class="chat-section">
             <div class="chat-header">
-                <h1>◢ MANCIRO ◣</h1>
+                <h1>◢ ARCos ◣</h1>
                 <div class="language-selector">
                     <label style="font-size: 14px;">🌐</label>
                     <select id="languageSelect">
@@ -1111,7 +1111,7 @@
                     } catch (error) {
                         console.error('Sound monitoring error:', error);
                     }
-                }, 500); // 0.5초마다 업데이트
+                }, 1000); // 0.5초마다 업데이트
             }
             
             // 소리 이벤트 UI 업데이트

@@ -11,6 +11,7 @@ from transformers import AutoTokenizer
 from pydantic import BaseModel, Field
 import numpy as np
 import openvino_genai as ov_genai
+import subprocess
 from scipy.io.wavfile import write
 from text import text_to_sequence
 from serverinfo import si
@@ -337,3 +338,4 @@ def stt(file : UploadFile = File(...), lang="ko", isPlay=0):
   return { "result" : True, "data" : str(out) } #txt2chat(chat, isPlay)
 
 print("Loading Complete","GPU")
+subprocess.Popen(["play", 'intel_inside.mp3']) # async
