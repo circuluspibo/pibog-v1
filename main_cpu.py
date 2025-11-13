@@ -19,6 +19,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import hashlib
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 import requests
+import csv
 
 def getHash(text):
   hash_func = hashlib.new('md5')
@@ -68,39 +69,84 @@ async def heartbeat():
 def monitor():
   return si.getAll()
 
+import time as t
+import csv
+import os
+from datetime import datetime
+from scipy.io.wavfile import write
+
 @app.get("/v1/tts", response_class=FileResponse, summary="입력한 문장으로 부터 음성을 생성합니다.")
-def tts(text = "", voice=31, lang='ko', static=0, isPlay=0):
-    #org_text = parse.quote(text, safe='', encoding="cp949")
+def tts(text="", voice=31, lang='ko', static=0, isPlay=0):
     start = t.time()
     print(text, static)
     filename = getHash(text)
 
-    #phoneme_ids = text_to_sequence(text, conf_tts.data.text_cleaners)
+    # phoneme 변환
     phoneme_ids = text_to_sequence(text, [f'canvers_{lang}_cleaners'])
-    text = np.expand_dims(np.array(phoneme_ids, dtype=np.int64), 0)
+    text_arr = np.expand_dims(np.array(phoneme_ids, dtype=np.int64), 0)
 
     inputs = {
-        "input": text,
-        "input_lengths":  np.array([text.shape[1]], dtype=np.int64),
+        "input": text_arr,
+        "input_lengths": np.array([text_arr.shape[1]], dtype=np.int64),
         "scales": np.array([0.667, 1.0, 0.8], dtype=np.float16),
-        "sid" : np.array([int(voice)], dtype=np.int64) if voice is not None else None
+        "sid": np.array([int(voice)], dtype=np.int64) if voice is not None else None
     }
 
+    # --------------------------
+    # 🔥 TTS 추론 시간 측정
+    # --------------------------
     start_time = t.time()
     result = pipe_tts(inputs)
-    print(f"Inference time: {t.time() - start_time:.4f} seconds")
+    inference_time = t.time() - start_time
+    print(f"Inference time: {inference_time:.4f} seconds")
 
-    audio = list(result.values())[0].squeeze((0, 1))  
+    audio = list(result.values())[0].squeeze((0, 1))
 
-    print(t.time() - start)
-    
+    # --------------------------
+    # 🔥 오디오 길이 → RTF 계산
+    # --------------------------
+    sampling_rate = conf_tts.data.sampling_rate
+    audio_duration = len(audio) / sampling_rate
+    rtf = audio_duration / inference_time
+
+    print(f"Audio duration: {audio_duration:.4f} sec | RTF: {rtf:.4f}")
+    print(f"Total time: {t.time() - start:.4f}")
+
+    # --------------------------
+    # 🔥 CSV 로그 저장
+    # --------------------------
+    log_file = "tts_log.csv"
+    new_file = not os.path.exists(log_file)
+
+    with open(log_file, mode="a", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        if new_file:
+            writer.writerow([
+                "timestamp", "text_length", "voice", "lang",
+                "inference_time", "audio_duration", "rtf", "output_file"
+            ])
+        writer.writerow([
+            datetime.now().isoformat(),
+            len(text),
+            voice,
+            lang,
+            round(inference_time, 6),
+            round(audio_duration, 6),
+            round(rtf, 6),
+            f"output/{filename}.wav"
+        ])
+
+    # --------------------------
+    # 🔥 WAV 파일 저장
+    # --------------------------
     if int(static) > 0:
-      write(data=audio, rate=conf_tts.data.sampling_rate, filename="output/human.wav")
-      return "output/human.wav"
-    if int(isPlay) > 0 :
-      playsound(f"output/{filename}.wav")
+        write(data=audio, rate=sampling_rate, filename="output/human.wav")
+        return "output/human.wav"
 
-    write(data=audio, rate=conf_tts.data.sampling_rate, filename=f"output/{filename}.wav")
+    if int(isPlay) > 0:
+        playsound(f"output/{filename}.wav")
+
+    write(data=audio, rate=sampling_rate, filename=f"output/{filename}.wav")
     return f"output/{filename}.wav"
     
     # 31 korean
