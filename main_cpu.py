@@ -100,6 +100,7 @@ def tts(text = "", voice=31, lang='ko', static=0, isPlay=0):
     if int(isPlay) > 0 :
       playsound(f"output/{filename}.wav")
 
+    write(data=audio, rate=conf_tts.data.sampling_rate, filename=f"output/{filename}.wav")
     return f"output/{filename}.wav"
     
     # 31 korean
