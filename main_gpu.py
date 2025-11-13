@@ -31,6 +31,10 @@ from PIL import Image
 from openvino import Tensor
 from pathlib import Path
 from openvino_genai import GenerationConfig
+import time
+import csv
+import os
+from datetime import datetime
 
 #optimum-cli export openvino --weight-format int4 --task text-generation-with-past --model growdle/HyperCLOVAX-SEED-Text-Instruct-1.5B ./CLOVAX-1.5B-ov-int4
 #kakaocorp/kanana-1.5-2.1b-instruct-2505
@@ -107,39 +111,96 @@ pipe_stt = ov_genai.WhisperPipeline(model_stt,device="GPU", config={"PERFORMANCE
 
 # for genai
 async def process_stream(streamer, isStream=True, isPlay=0, lang='en'):
-  cnt = 0
-  sentence = ""
-  print("streaming start...")
-  for new_token in streamer:
-    if "assistant" in new_token:
-      cnt += 1
-      if cnt == 1:
-          continue  # Skip the fi'../models/stt'rst one (don't yield)
-      elif cnt == 2:
-          print("Forcing exit...")
-          break  # Stop stream (don't yield)
-        
-    if isStream:
-      #print(new_token)덷
-      yield new_token
-      #await asyncio.sleep(0) 
-    elif "." in new_token or "\n" in new_token:
-      sentence = sentence + new_token
-      if len(sentence) > 3:      
+    cnt = 0
+    sentence = ""
+    print("streaming start...")
 
-        sentence = sentence.strip()
+    # ---------------------------------
+    # 🔥 token/s 측정용 변수
+    # ---------------------------------
+    start_time = time.time()
+    total_tokens = 0
 
-        if int(isPlay) > 0:
-          get("http://127.0.0.1:59531/v2/tts", params={"text": sentence, "lang" : lang, "voice" : 31})         #korean
+    for new_token in streamer:
 
-        print(sentence)
+        # token count 증가
+        total_tokens += 1
+
+        if "assistant" in new_token:
+            cnt += 1
+            if cnt == 1:
+                continue  # skip
+            elif cnt == 2:
+                print("Forcing exit...")
+                break
+
+        # ---------------------
+        # 🔥 Stream 모드 처리
+        # ---------------------
+        if isStream:
+            yield new_token
+
+        # ---------------------
+        # 🔥 Sentence 모드 처리
+        # ---------------------
+        elif "." in new_token or "\n" in new_token:
+            sentence += new_token
+            if len(sentence) > 3:
+
+                sentence = sentence.strip()
+
+                if int(isPlay) > 0:
+                    get(
+                      "http://127.0.0.1:59531/v2/tts",
+                      params={"text": sentence, "lang": lang, "voice": 31}
+                    )
+
+                print(sentence)
+                yield sentence
+                sentence = ""
+
+        else:
+            sentence += new_token
+
+    # 마지막 문장 처리
+    if len(sentence) > 3:
         yield sentence
-        #await asyncio.sleep(0.01) # thread 처리
-        sentence = ""
-    else:
-      sentence = sentence + new_token
-  if len(sentence) > 3:
-    yield sentence
+
+    # ---------------------------------
+    # 🔥 token/s 계산
+    # ---------------------------------
+    duration = time.time() - start_time
+    tokens_per_sec = total_tokens / duration if duration > 0 else 0
+
+    print(f"Total tokens: {total_tokens}")
+    print(f"Duration: {duration:.4f} sec")
+    print(f"Tokens/s: {tokens_per_sec:.4f}")
+
+    # ---------------------------------
+    # 🔥 CSV 로그 저장
+    # ---------------------------------
+    log_file = "stream_log.csv"
+    new_file = not os.path.exists(log_file)
+
+    with open(log_file, mode="a", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+
+        # 헤더가 없으면 추가
+        if new_file:
+            writer.writerow([
+                "timestamp", "total_tokens", "duration_sec",
+                "tokens_per_sec", "isStream", "isPlay", "lang"
+            ])
+
+        writer.writerow([
+            datetime.now().isoformat(),
+            total_tokens,
+            round(duration, 6),
+            round(tokens_per_sec, 6),
+            isStream,
+            isPlay,
+            lang
+        ])
 
 app.add_middleware(
     CORSMiddleware,
