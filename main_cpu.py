@@ -19,7 +19,10 @@ from fastapi.middleware.cors import CORSMiddleware
 import hashlib
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 import requests
+import time
 import csv
+import os
+from datetime import datetime
 
 def getHash(text):
   hash_func = hashlib.new('md5')
