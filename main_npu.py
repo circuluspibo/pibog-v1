@@ -26,6 +26,9 @@ import pyrealsense2 as rs
 is_collecting = False
 collection_task = None
 
+fps_buffer = deque()  # (timestamp, fps)
+fps_lock = threading.Lock()
+
 ov = Core()
 
 FACE_DETECTION_MODEL_XML = "./models/face-detection-retail-0005/FP16-INT8/face-detection-retail-0005.xml"
@@ -317,7 +320,9 @@ def processing_thread():
             processed_frame_queue.get()  # 가장 오래된 프레임 제거   
 
         processed_frame_queue.put(out)
-
+        
+        with fps_lock:
+            fps_buffer.append((curr_time, fps))
 
 
 @app.get("/")
@@ -349,6 +354,26 @@ async def video_feed():
 
 lastCmd = {} 
 
+def fps_saver_thread():
+    while True:
+        time.sleep(30)  # 30초마다 실행
+        
+        with fps_lock:
+            if len(fps_buffer) == 0:
+                continue
+            
+            # 버퍼 복사
+            data_to_save = list(fps_buffer)
+            fps_buffer.clear()
+
+        # 파일 저장 (버퍼는 잠금 없이! → 실시간 추론 안느려짐)
+        filename = time.strftime("fps_log_%Y%m%d_%H%M%S.txt")
+        with open(filename, "w") as f:
+            for ts, fps in data_to_save:
+                f.write(f"{ts},{fps}\n")
+
+        print(f"[FPS Saver] {filename} saved with {len(data_to_save)} records")
+
 def toFloat(value):
     try:
         return float(value)
@@ -370,7 +395,9 @@ async def start_frame_collection():
 
     
     is_collecting = True
+    threading.Thread(target=fps_saver_thread, daemon=True).start()         
     threading.Thread(target=processing_thread, daemon=True).start()
+         
 
     return {"message": "프레임 수집을 시작했습니다"}
 
