@@ -54,7 +54,7 @@ emotion_height, emotion_width = list(emotion_input_layer.shape)[2:]
 
 # ------------------ YOLO --------------------------
 det_model = YOLO('./models/yolo11s-seg_int8_openvino_model')
-det_model("out.jpg", device='cpu', imgsz=640)  # 초기로드
+det_model("test.jpg", device='cpu', imgsz=640)  # 초기로드
 class_names = det_model.names
 
 # ------------------ 상태 값 ------------------------
