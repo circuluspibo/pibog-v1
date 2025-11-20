@@ -180,6 +180,7 @@ def processing_thread():
 
     print("Webcam Processing Started...")
     # FPS 측정을 위한 변수
+    max_count = 0
     frame_count = 0
     start_time_sec = time.time()
     # CSV 파일 이름
@@ -222,9 +223,10 @@ def processing_thread():
             processed_frame_queue.put(cv2.resize(out, (640, 480)))
 
             frame_count += 1
+            max_count += 1
             
             # 현재 시간과 1초 전 측정 시작 시간 비교
-            if (time.time() - start_time_sec) >= 1.0:
+            if (time.time() - start_time_sec) >= 1.0 and max_count < 30:
                 # 1초 동안의 평균 FPS 계산
                 avg_fps = frame_count / (time.time() - start_time_sec)
                 
