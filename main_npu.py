@@ -10,8 +10,12 @@ from queue import Queue
 from ultralytics import YOLO
 import threading
 import csv
-
+import os
+from monitor import CPUPowerMonitor
 # --- 전역 변수 초기화 (함수 외부에 위치) ---
+
+pw = CPUPowerMonitor(interval=1.0)
+pw.start()
 
 
 # ------------------ 기본 설정 ---------------------
@@ -51,7 +55,7 @@ emotion_output_layer = emotion_compiled_model.output(0)
 emotion_height, emotion_width = list(emotion_input_layer.shape)[2:]
 
 # ------------------ YOLO --------------------------
-det_model = YOLO('./models/yolo11s-seg_int8_openvino_model')
+det_model = YOLO('./models/yolo11x-seg_int8_openvino_model')
 class_names = det_model.names
 
 # ------------------ 상태 값 ------------------------
@@ -182,15 +186,19 @@ def processing_thread():
     # FPS 측정을 위한 변수
     max_count = 0
     frame_count = 0
-    start_time_sec = time.time()
-    # CSV 파일 이름
-    csv_filename = 'NPU_log.csv'
+
     # ---------------------------------------------
 
     # CSV 파일 헤더 작성 (최초 1회만 실행)
-    with open(csv_filename, mode='w', newline='') as file:
-        writer = csv.writer(file)
-        writer.writerow(['Timestamp', 'FPS'])
+    log_file = "NPU_log.csv"
+    new_file = not os.path.exists(log_file)
+
+    with open(log_file, mode="a", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        if new_file:
+            writer.writerow(['Timestamp', 'FPS','Watt'])
+
+        start_time_sec = time.time()
 
         while True:
             ret, frame = cap.read()
@@ -231,9 +239,10 @@ def processing_thread():
                 
                 # 현재 시간 (타임스탬프)
                 timestamp = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())
-                writer.writerow([timestamp, f"{avg_fps:.2f}"])
+                writer.writerow([timestamp, f"{avg_fps:.2f}",pw.get_power()])
+                f.flush()
                 max_count += 1  
-                #print(f"[{timestamp}] AVG FPS: {avg_fps:.2f}를 CSV에 저장했습니다.")
+                print(f"[{timestamp}] AVG FPS: {avg_fps:.2f}를 CSV에 저장했습니다.")
                     
                 # 변수 초기화: 다음 1초 측정을 위해
                 frame_count = 0
