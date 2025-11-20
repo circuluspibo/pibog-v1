@@ -23,7 +23,7 @@ import time
 import csv
 import os
 from datetime import datetime
-
+from monitor import CPUPowerMonitor
 def getHash(text):
   hash_func = hashlib.new('md5')
   hash_func.update(text.encode('utf-8'))
@@ -37,6 +37,10 @@ _IP = "127.0.0.1" #si.getIP()
 _PORT = int(open("port.txt", 'r').read())
 
 app = FastAPI()
+
+pw = CPUPowerMonitor(interval=1.0)
+pw.start()
+
 
 app.mount("/web", StaticFiles(directory="web"), name="web")
 app.mount("/webfonts", StaticFiles(directory="webfonts"), name="webfonts")
@@ -125,18 +129,15 @@ def tts(text="", voice=31, lang='ko', static=0, isPlay=0):
         writer = csv.writer(f)
         if new_file:
             writer.writerow([
-                "timestamp", "text_length", "voice", "lang",
-                "inference_time", "audio_duration", "rtf", "output_file"
+                "timestamp", "text_length","inference_time", "audio_duration", "rtf", "Watt"
             ])
         writer.writerow([
             datetime.now().isoformat(),
             len(text),
-            voice,
-            lang,
             round(inference_time, 6),
             round(audio_duration, 6),
             round(rtf, 6),
-            f"output/{filename}.wav"
+            pw.get_power()
         ])
 
     # --------------------------
