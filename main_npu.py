@@ -9,24 +9,22 @@ from fastapi.staticfiles import StaticFiles
 from queue import Queue
 from ultralytics import YOLO
 import threading
-from collections import deque
-import hashlib
-import logging
+import csv
+
+# --- 전역 변수 초기화 (함수 외부에 위치) ---
+
 
 # ------------------ 기본 설정 ---------------------
 is_collecting = False
 collection_task = None
 
-fps_buffer = deque()  
-fps_lock = threading.Lock()
-
+DEVICE = "NPU"  # 일반 웹캠 사용이므로 CPU 권장
 ov = Core()
 
 FACE_DETECTION_MODEL_XML = "./models/face-detection-retail-0005/FP16-INT8/face-detection-retail-0005.xml"
 AGE_GENDER_MODEL_XML = "./models/age-gender-recognition-retail-0013/FP16-INT8/age-gender-recognition-retail-0013.xml"
 EMOTION_MODEL_XML = "./models/emotions-recognition-retail-0003/FP16-INT8/emotions-recognition-retail-0003.xml"
 
-DEVICE = "CPU"  # 일반 웹캠 사용이므로 CPU 권장
 LIVING_CLASSES = {'person', 'cat', 'dog', 'bird', 'teddy bear', 'cow', 'sheep', 'horse'}
 EMOTIONS = ['neutral', 'happy', 'sad', 'surprise', 'anger']
 
@@ -54,7 +52,6 @@ emotion_height, emotion_width = list(emotion_input_layer.shape)[2:]
 
 # ------------------ YOLO --------------------------
 det_model = YOLO('./models/yolo11s-seg_int8_openvino_model')
-det_model("out.jpg", device='cpu', imgsz=640)  # 초기로드
 class_names = det_model.names
 
 # ------------------ 상태 값 ------------------------
@@ -182,41 +179,64 @@ def processing_thread():
     cap.set(4, 480)
 
     print("Webcam Processing Started...")
+    # FPS 측정을 위한 변수
+    frame_count = 0
+    start_time_sec = time.time()
+    # CSV 파일 이름
+    csv_filename = 'NPU_log.csv'
+    # ---------------------------------------------
 
-    while True:
-        ret, frame = cap.read()
-        if not ret:
-            continue
+    # CSV 파일 헤더 작성 (최초 1회만 실행)
+    with open(csv_filename, mode='w', newline='') as file:
+        writer = csv.writer(file)
+        writer.writerow(['Timestamp', 'FPS'])
 
-        start_time = time.time()
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                continue
 
-        results = det_model(frame, device="cpu", imgsz=640, verbose=False, conf=0.3)
-        res = results[0]
+            start_time = time.time()
+            frame = cv2.resize(frame, (640, 640))
+            res = det_model(frame, device="intel:npu", verbose=False, conf=0.25)[0] #, imgsz=640
 
-        masks = res.masks.data.cpu().numpy().astype(np.uint8) if res.masks is not None else []
-        boxes = res.boxes.xyxy.cpu().numpy()
-        classes = res.boxes.cls.cpu().numpy().astype(int)
-        scores = res.boxes.conf.cpu().numpy()
+            masks = res.masks.data.cpu().numpy().astype(np.uint8) if res.masks is not None else []
+            boxes = res.boxes.xyxy.cpu().numpy()
+            classes = res.boxes.cls.cpu().numpy().astype(int)
+            scores = res.boxes.conf.cpu().numpy()
 
-        out = visualize_segmentation(frame, masks, boxes, classes, scores, class_names)
+            out = visualize_segmentation(frame, masks, boxes, classes, scores, class_names)
 
-        resized = cv2.resize(frame, (face_det_width, face_det_height))
-        input_tensor = np.expand_dims(resized.transpose(2, 0, 1), 0)
-        face_det_results = face_det_compiled_model(input_tensor)[face_det_output_layer]
+            resized = cv2.resize(frame, (face_det_width, face_det_height))
+            input_tensor = np.expand_dims(resized.transpose(2, 0, 1), 0)
+            face_det_results = face_det_compiled_model(input_tensor)[face_det_output_layer]
 
-        out = visualize_face(out, face_det_results)
+            out = visualize_face(out, face_det_results)
 
-        fps = 1.0 / (time.time() - start_time)
-        cv2.putText(out, f"FPS: {fps:.2f}", (10, 30),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
+            fps = 1.0 / (time.time() - start_time)
+            cv2.putText(out, f"FPS: {fps:.2f}", (10, 30),cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
 
-        if processed_frame_queue.full():
-            processed_frame_queue.get()
+            if processed_frame_queue.full():
+                processed_frame_queue.get()
 
-        processed_frame_queue.put(out)
+            processed_frame_queue.put(cv2.resize(out, (640, 480)))
 
-        with fps_lock:
-            fps_buffer.append((time.time(), fps))
+            frame_count += 1
+            
+            # 현재 시간과 1초 전 측정 시작 시간 비교
+            if (time.time() - start_time_sec) >= 1.0:
+                # 1초 동안의 평균 FPS 계산
+                avg_fps = frame_count / (time.time() - start_time_sec)
+                
+                # 현재 시간 (타임스탬프)
+                timestamp = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())
+                writer.writerow([timestamp, f"{avg_fps:.2f}"])
+                    
+                #print(f"[{timestamp}] AVG FPS: {avg_fps:.2f}를 CSV에 저장했습니다.")
+                    
+                # 변수 초기화: 다음 1초 측정을 위해
+                frame_count = 0
+                start_time_sec = time.time()        
 
 
 # ------------------ FastAPI ---------------------

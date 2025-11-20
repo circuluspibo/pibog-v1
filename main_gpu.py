@@ -112,6 +112,8 @@ pipe_stt = ov_genai.WhisperPipeline(model_stt,device="GPU", config={"PERFORMANCE
 # for genai
 async def process_stream(streamer, isStream=True, isPlay=0, lang='en'):
     cnt = 0
+    latency = 0
+    isStart = False
     sentence = ""
     print("streaming start...")
 
@@ -121,7 +123,12 @@ async def process_stream(streamer, isStream=True, isPlay=0, lang='en'):
     start_time = time.time()
     total_tokens = 0
 
+
     for new_token in streamer:
+        
+        if isStart is False:
+          isStart = True
+          latency =  start_time - time.time()
 
         # token count 증가
         total_tokens += 1
@@ -179,7 +186,7 @@ async def process_stream(streamer, isStream=True, isPlay=0, lang='en'):
     # ---------------------------------
     # 🔥 CSV 로그 저장
     # ---------------------------------
-    log_file = "stream_log.csv"
+    log_file = "GPU_log.csv"
     new_file = not os.path.exists(log_file)
 
     with open(log_file, mode="a", newline="", encoding="utf-8") as f:
@@ -188,18 +195,16 @@ async def process_stream(streamer, isStream=True, isPlay=0, lang='en'):
         # 헤더가 없으면 추가
         if new_file:
             writer.writerow([
-                "timestamp", "total_tokens", "duration_sec",
-                "tokens_per_sec", "isStream", "isPlay", "lang"
+                "timestamp", "total_tokens", "latency", "duration_sec",
+                "tokens_per_sec"
             ])
 
         writer.writerow([
             datetime.now().isoformat(),
             total_tokens,
+            latency,
             round(duration, 6),
             round(tokens_per_sec, 6),
-            isStream,
-            isPlay,
-            lang
         ])
 
 app.add_middleware(

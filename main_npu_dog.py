@@ -77,8 +77,8 @@ emotion_output_layer = emotion_compiled_model.output(0)
 emotion_height, emotion_width = list(emotion_input_layer.shape)[2:]
 
 det_model = YOLO('./models/yolo11s-seg_int8_openvino_model')
-det_model("capture.jpg", device='intel:cpu', imgsz=640) # error 방지용
 class_names = det_model.names
+
 
 # Enable logging for debugging
 logging.basicConfig(level=logging.ERROR)
@@ -329,8 +329,8 @@ def processing_thread():
 
           start_time = time.time()
 
-          results = det_model(frame, device="intel:npu", imgsz=640, verbose=False, conf=0.3)  # 작을수록 빠름
-          res = results[0]
+          frame = cv2.resize(frame, (640, 640))
+          res = det_model(frame, device="intel:npu", verbose=False, conf=0.25)[0] #, imgsz=640
 
           if hasattr(res, 'masks') and res.masks is not None:
               masks = res.masks.data.cpu().numpy().astype(np.uint8)
@@ -359,7 +359,7 @@ def processing_thread():
           if processed_frame_queue.full():
               processed_frame_queue.get()  # 가장 오래된 프레임 제거   
 
-          processed_frame_queue.put(out)
+          processed_frame_queue.put(cv2.resize(out, (640, 480)))
         else:
             time.sleep(0.001)
 

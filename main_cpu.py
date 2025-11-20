@@ -118,7 +118,7 @@ def tts(text="", voice=31, lang='ko', static=0, isPlay=0):
     # --------------------------
     # 🔥 CSV 로그 저장
     # --------------------------
-    log_file = "tts_log.csv"
+    log_file = "CPU_log.csv"
     new_file = not os.path.exists(log_file)
 
     with open(log_file, mode="a", newline="", encoding="utf-8") as f:
