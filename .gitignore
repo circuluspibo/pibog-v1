@@ -1,3 +1,4 @@
 output
 datasets
 recordings_wakeword
+*.csv
