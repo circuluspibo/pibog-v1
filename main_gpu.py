@@ -35,6 +35,7 @@ import time
 import csv
 import os
 from datetime import datetime
+from monitor import CPUPowerMonitor
 
 #optimum-cli export openvino --weight-format int4 --task text-generation-with-past --model growdle/HyperCLOVAX-SEED-Text-Instruct-1.5B ./CLOVAX-1.5B-ov-int4
 #kakaocorp/kanana-1.5-2.1b-instruct-2505
@@ -50,6 +51,9 @@ _IP = "127.0.0.1" #si.getIP()
 _PORT = int(open("port.txt", 'r').read())
 
 app = FastAPI()
+
+pw = CPUPowerMonitor(interval=1.0)
+pw.start()
 
 # 모든 도메인 허용 (allow_origins에 '*' 설정)
 app.add_middleware(
@@ -102,7 +106,7 @@ class Chat(BaseModel):
   top_k : int = 50
   max : int = 256 #16384
 
-model_txt = snapshot_download(repo_id='Echo9Zulu/gemma-3-4b-it-qat-int4_asym-ov') # circulus/gemma-3-4b-it-ov-awq-sym
+model_txt = snapshot_download(repo_id='Echo9Zulu/gemma-3-12b-it-qat-int4_asym-ov') # circulus/gemma-3-4b-it-ov-awq-sym helenai/Qwen2.5-VL-3B-Instruct-ov-int4
 model_stt = snapshot_download(repo_id='circulus/whisper-large-v3-turbo-ov')
 
 token_txt = AutoTokenizer.from_pretrained(model_txt)
@@ -128,7 +132,7 @@ async def process_stream(streamer, isStream=True, isPlay=0, lang='en'):
         
         if isStart is False:
           isStart = True
-          latency =  start_time - time.time()
+          latency =  time.time() - start_time 
 
         # token count 증가
         total_tokens += 1
@@ -195,8 +199,8 @@ async def process_stream(streamer, isStream=True, isPlay=0, lang='en'):
         # 헤더가 없으면 추가
         if new_file:
             writer.writerow([
-                "timestamp", "total_tokens", "latency", "duration_sec",
-                "tokens_per_sec"
+                "timestamp", "Total_Tokens", "TTFT", "Duration",
+                "Tokens/s", "Watt"
             ])
 
         writer.writerow([
@@ -205,6 +209,7 @@ async def process_stream(streamer, isStream=True, isPlay=0, lang='en'):
             latency,
             round(duration, 6),
             round(tokens_per_sec, 6),
+            pw.get_power()
         ])
 
 app.add_middleware(
