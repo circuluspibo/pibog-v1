@@ -892,7 +892,7 @@
                     this.elements.webcamPlaceholder.style.display = 'none';
                     this.elements.startWebcam.style.display = 'none';
                     this.elements.stopWebcam.style.display = 'block';
-                    this.elements.webcamVideo.src = '/video_feed';
+                    this.elements.webcamVideo.src = 'http://127.0.0.1:59531/video_feed';
 
                     await fetch('http://127.0.0.1:8000/init_mcr');
                     this.updateStatus('카메라 시작됨');
