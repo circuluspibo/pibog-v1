@@ -223,7 +223,6 @@ def processing_thread():
             processed_frame_queue.put(cv2.resize(out, (640, 480)))
 
             frame_count += 1
-            max_count += 1
             
             # 현재 시간과 1초 전 측정 시작 시간 비교
             if (time.time() - start_time_sec) >= 1.0 and max_count < 30:
@@ -233,7 +232,7 @@ def processing_thread():
                 # 현재 시간 (타임스탬프)
                 timestamp = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())
                 writer.writerow([timestamp, f"{avg_fps:.2f}"])
-                    
+                max_count += 1  
                 #print(f"[{timestamp}] AVG FPS: {avg_fps:.2f}를 CSV에 저장했습니다.")
                     
                 # 변수 초기화: 다음 1초 측정을 위해
