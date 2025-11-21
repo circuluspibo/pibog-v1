@@ -55,7 +55,7 @@ emotion_output_layer = emotion_compiled_model.output(0)
 emotion_height, emotion_width = list(emotion_input_layer.shape)[2:]
 
 # ------------------ YOLO --------------------------
-det_model = YOLO('./models/yolo11x-seg_int8_openvino_model')
+det_model = YOLO('./models/yolo11m-seg_int8_openvino_model')
 class_names = det_model.names
 
 # ------------------ 상태 값 ------------------------
@@ -207,8 +207,12 @@ def processing_thread():
 
             start_time = time.time()
             frame = cv2.resize(frame, (640, 640))
-            res = det_model(frame, device="intel:npu", verbose=False, conf=0.25)[0] #, imgsz=640
 
+            # three point for calculate head x 2 arms
+            res = det_model(frame, device="intel:npu", verbose=False, conf=0.25)[0] #, imgsz=640
+            res = det_model(frame, device="intel:npu", verbose=False, conf=0.25)[0] #, imgsz=640
+            res = det_model(frame, device="intel:npu", verbose=False, conf=0.25)[0] #, imgsz=640
+            
             masks = res.masks.data.cpu().numpy().astype(np.uint8) if res.masks is not None else []
             boxes = res.boxes.xyxy.cpu().numpy()
             classes = res.boxes.cls.cpu().numpy().astype(int)
