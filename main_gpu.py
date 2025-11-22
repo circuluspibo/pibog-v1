@@ -110,7 +110,7 @@ model_txt = snapshot_download(repo_id='Echo9Zulu/gemma-3-12b-it-qat-int4_asym-ov
 model_stt = snapshot_download(repo_id='circulus/whisper-large-v3-turbo-ov')
 
 token_txt = AutoTokenizer.from_pretrained(model_txt)
-pipe_txt = ov_genai.VLMPipeline(model_txt, device="GPU", config={"PERFORMANCE_HINT": "LATENCY"})
+pipe_txt = ov_genai.VLMPipeline(model_txt, device="GPU", config={"PERFORMANCE_HINT": "THROUGHPUT"})
 pipe_stt = ov_genai.WhisperPipeline(model_stt,device="GPU", config={"PERFORMANCE_HINT": "LATENCY"})
 
 # for genai
