@@ -1,5 +1,6 @@
 yolo*
 output
 datasets
+*__pycache__*
 recordings_wakeword
 *.csv
