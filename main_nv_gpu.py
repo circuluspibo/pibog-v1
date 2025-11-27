@@ -162,7 +162,7 @@ async def process_stream(streamer, isStream=True, isPlay=0, lang='en'):
         yield sentence
 
     duration = t.time() - start_time
-    total_tokens = token_txt(full_txt)
+    total_tokens = len(token_txt(full_txt))
     tokens_per_sec = total_tokens / duration if duration > 0 else 0
 
     print(f"Total tokens: {total_tokens}")
@@ -195,7 +195,7 @@ async def process_stream(streamer, isStream=True, isPlay=0, lang='en'):
 @app.get("/v1/txt2chat", summary="문장 기반의 chatgpt 스타일 구현")
 def txt2chat(prompt : str ,system = _SYSTEM, isPlay = 0, lang='en'): # gen or med
     # Initialize the streamer
-    streamer = CustomIterableStreamer(tokenizer_txt, skip_prompt=True) # Use the custom streamer
+    streamer = CustomIterableStreamer(token_txt, skip_prompt=True) # Use the custom streamer
 
     # 1. Prepare the chat history using the tokenizer's chat template
     messages = [
@@ -205,14 +205,14 @@ def txt2chat(prompt : str ,system = _SYSTEM, isPlay = 0, lang='en'): # gen or me
     
     # 2. Apply the chat template and tokenize the inputs
     # Use pipe_txt.get_tokenizer() for consistency if that's what you intended
-    input_text = tokenizer_txt.apply_chat_template(
+    input_text = token_txt.apply_chat_template(
         messages,
         tokenize=False,
         add_generation_prompt=True
     )
     
     # 3. Tokenize the inputs and move to device
-    inputs = tokenizer_txt(input_text, return_tensors="pt").to(device)
+    inputs = token_txt(input_text, return_tensors="pt").to(device)
 
     # 4. Define configuration (using simple kwargs instead of a separate config object)
     
@@ -252,7 +252,7 @@ def img2chat(file: UploadFile = File(...), prompt: str = "", system: str = _SYST
     # process the image. We will stream a response based on the prompt only,
     # and provide a contextual note in the streamed output.
     
-    streamer = CustomIterableStreamer(tokenizer_txt, skip_prompt=True)
+    streamer = CustomIterableStreamer(token_txt, skip_prompt=True)
 
     # NOTE: You've successfully received the file, but we won't process it with pipe_txt.
     # If the user's intent is to verify the file upload, this is where we'd do it.
@@ -270,13 +270,13 @@ def img2chat(file: UploadFile = File(...), prompt: str = "", system: str = _SYST
         {"role": "user", "content": modified_prompt}
     ]
     
-    input_text = tokenizer_txt.apply_chat_template(
+    input_text = token_txt.apply_chat_template(
         messages,
         tokenize=False,
         add_generation_prompt=True
     )
     
-    inputs = tokenizer_txt(input_text, return_tensors="pt").to(device)
+    inputs = token_txt(input_text, return_tensors="pt").to(device)
     
     # 2. Define generation arguments
     generate_kwargs = dict(
