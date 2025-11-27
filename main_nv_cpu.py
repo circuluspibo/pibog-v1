@@ -66,7 +66,6 @@ app = FastAPI()
 pw = CPUPowerMonitor(interval=1.0)
 pw.start()
 
-
 app.mount("/web", StaticFiles(directory="web"), name="web")
 app.mount("/webfonts", StaticFiles(directory="webfonts"), name="webfonts")
 
