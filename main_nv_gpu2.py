@@ -26,7 +26,7 @@ collection_task = None
 LIVING_CLASSES = {'person', 'cat', 'dog', 'bird', 'teddy bear', 'cow', 'sheep', 'horse'}
 
 # ------------------ YOLO --------------------------
-det_model = YOLO("yolo11x-seg.pt")
+det_model = YOLO("./models/yolo11x-seg-int8.engine") #YOLO("yolo11x-seg.pt")
 class_names = det_model.names
 
 # ------------------ 상태 값 ------------------------
