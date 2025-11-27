@@ -96,7 +96,7 @@ device = "cuda"
 
 # Load text generation model (Gemma 3-12b QAT)
 pipe_txt = AutoModelForCausalLM.from_pretrained(gemma_model_name, cache_dir=CACHE_DIR, dtype=torch.bfloat16,quantization_config=quant_config, attn_implementation = "flash_attention_2").to(device)
-token_txt = AutoTokenizer.from_pretrained(gemma_model_name, cache_dir=CACHE_DIR, dtype=torch.bfloat16)
+token_txt = AutoTokenizer.from_pretrained('unsloth/gemma-3-12b-it-qat', cache_dir='/home/circulus/git/HF_CACHE', dtype=torch.bfloat16)
 
 # Load speech-to-text model (Whisper 3 Large Turbo)
 # NOTE: Using AutoModelForCausalLM is incorrect for Whisper. It should be AutoModelForSpeechSeq2Seq.
@@ -120,12 +120,8 @@ async def process_stream(streamer, isStream=True, isPlay=0, lang='en'):
     # NOTE: The streamer is expected to yield tokens/strings here
     for new_token in streamer:
 
-        # If the streamer yields token IDs, we need to decode them first.
-        # Assuming the CustomIterableStreamer is correctly set up to yield strings/tokens.
-        if isinstance(new_token, int):
-             new_token = token_txt.decode(new_token, skip_special_tokens=False)
-             full_txt = full_txt + token_txt
-
+        full_txt = full_txt + new_token
+        
         if isStart is False:
             isStart = True
             latency = t.time() - start_time
@@ -162,7 +158,9 @@ async def process_stream(streamer, isStream=True, isPlay=0, lang='en'):
         yield sentence
 
     duration = t.time() - start_time
-    total_tokens = len(token_txt(full_txt))
+    total_tokens = len(token_txt(full_txt)['input_ids'])
+    print(total_tokens,len(full_txt))
+
     tokens_per_sec = total_tokens / duration if duration > 0 else 0
 
     print(f"Total tokens: {total_tokens}")

@@ -181,7 +181,7 @@ async def process_stream(streamer, isStream=True, isPlay=0, lang='en'):
     # 🔥 token/s 계산
     # ---------------------------------
     duration = time.time() - start_time
-    total_tokens = len(token_txt(full_txt))
+    total_tokens = len(token_txt(full_txt)['input_ids'])
     tokens_per_sec = total_tokens / duration if duration > 0 else 0
 
     print(f"Total tokens: {total_tokens}")
