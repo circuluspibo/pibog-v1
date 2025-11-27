@@ -14,7 +14,10 @@ import csv
 import subprocess
 import librosa
 from requests import get
+from nv_monitor import CPUPowerMonitor
 
+pw = CPUPowerMonitor(interval=1.0)
+pw.start()
 # --- Missing Definitions/Imports for the original code to run ---
 
 # A mock GenerationConfig class based on common HF parameters
@@ -93,7 +96,7 @@ device = "cuda"
 
 # Load text generation model (Gemma 3-12b QAT)
 pipe_txt = AutoModelForCausalLM.from_pretrained(gemma_model_name, cache_dir=CACHE_DIR, dtype=torch.bfloat16,quantization_config=quant_config, attn_implementation = "flash_attention_2").to(device)
-tokenizer_txt = AutoTokenizer.from_pretrained(gemma_model_name, cache_dir=CACHE_DIR, dtype=torch.bfloat16)
+token_txt = AutoTokenizer.from_pretrained(gemma_model_name, cache_dir=CACHE_DIR, dtype=torch.bfloat16)
 
 # Load speech-to-text model (Whisper 3 Large Turbo)
 # NOTE: Using AutoModelForCausalLM is incorrect for Whisper. It should be AutoModelForSpeechSeq2Seq.
@@ -108,6 +111,7 @@ async def process_stream(streamer, isStream=True, isPlay=0, lang='en'):
     latency = 0
     isStart = False
     sentence = ""
+    full_txt = ""
     print("streaming start...")
 
     start_time = t.time()
@@ -115,17 +119,17 @@ async def process_stream(streamer, isStream=True, isPlay=0, lang='en'):
 
     # NOTE: The streamer is expected to yield tokens/strings here
     for new_token in streamer:
-        
+
         # If the streamer yields token IDs, we need to decode them first.
         # Assuming the CustomIterableStreamer is correctly set up to yield strings/tokens.
         if isinstance(new_token, int):
-             new_token = tokenizer_txt.decode(new_token, skip_special_tokens=False)
+             new_token = token_txt.decode(new_token, skip_special_tokens=False)
+             full_txt = full_txt + token_txt
 
         if isStart is False:
             isStart = True
             latency = t.time() - start_time
 
-        total_tokens += 1
 
         if "assistant" in new_token:
             cnt += 1
@@ -158,6 +162,7 @@ async def process_stream(streamer, isStream=True, isPlay=0, lang='en'):
         yield sentence
 
     duration = t.time() - start_time
+    total_tokens = token_txt(full_txt)
     tokens_per_sec = total_tokens / duration if duration > 0 else 0
 
     print(f"Total tokens: {total_tokens}")
@@ -183,7 +188,7 @@ async def process_stream(streamer, isStream=True, isPlay=0, lang='en'):
             latency,
             round(duration, 6),
             round(tokens_per_sec, 6),
-            0  # Assuming power data is gathered by an external tool
+            pw.get_power()
         ])
 
 # --- FIX: txt2chat to use standard HF generation with chat template ---

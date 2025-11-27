@@ -119,6 +119,7 @@ async def process_stream(streamer, isStream=True, isPlay=0, lang='en'):
     latency = 0
     isStart = False
     sentence = ""
+    full_txt = ""
     print("streaming start...")
 
     # ---------------------------------
@@ -129,13 +130,12 @@ async def process_stream(streamer, isStream=True, isPlay=0, lang='en'):
 
 
     for new_token in streamer:
-        
+        full_txt = full_txt + new_token
         if isStart is False:
           isStart = True
           latency =  time.time() - start_time 
 
         # token count 증가
-        total_tokens += 1
 
         if "assistant" in new_token:
             cnt += 1
@@ -181,6 +181,7 @@ async def process_stream(streamer, isStream=True, isPlay=0, lang='en'):
     # 🔥 token/s 계산
     # ---------------------------------
     duration = time.time() - start_time
+    total_tokens = token_txt(full_txt)
     tokens_per_sec = total_tokens / duration if duration > 0 else 0
 
     print(f"Total tokens: {total_tokens}")
