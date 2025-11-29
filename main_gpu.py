@@ -109,9 +109,16 @@ class Chat(BaseModel):
 model_txt = snapshot_download(repo_id='Echo9Zulu/gemma-3-12b-it-qat-int4_asym-ov') # circulus/gemma-3-4b-it-ov-awq-sym helenai/Qwen2.5-VL-3B-Instruct-ov-int4
 model_stt = snapshot_download(repo_id='circulus/whisper-large-v3-turbo-ov')
 
+config = {
+    "PERFORMANCE_HINT": "LATENCY",
+    "NUM_STREAMS": "AUTO", 
+    "CACHE_DIR": "./ov_cache",
+    "GPU_HOST_TASK_PRIORITY": "HIGH"
+}
+
 token_txt = AutoTokenizer.from_pretrained(model_txt)
-pipe_txt = ov_genai.VLMPipeline(model_txt, device="GPU", config={"PERFORMANCE_HINT": "THROUGHPUT", "NUM_STREAMS": "1"})
-pipe_stt = ov_genai.WhisperPipeline(model_stt,device="GPU", config={"PERFORMANCE_HINT": "LATENCY", "NUM_STREAMS": "1"})
+pipe_txt = ov_genai.VLMPipeline(model_txt, device="GPU", config=config)
+pipe_stt = ov_genai.WhisperPipeline(model_stt,device="GPU", config=config)
 
 # for genai
 async def process_stream(streamer, isStream=True, isPlay=0, lang='en'):
@@ -252,8 +259,8 @@ def txt2chat(prompt : str ,system = _SYSTEM, isPlay = 0, lang='en'): # gen or me
 
   config = GenerationConfig(
       max_new_tokens=256,
-      temperature=0.5,
-      beam_size=1,
+      #temperature=0.5,
+      #beam_size=1,
       do_sample=False, #fast for beam-search
       speculative_decoding=True,
       repetition_penalty=1.1,
