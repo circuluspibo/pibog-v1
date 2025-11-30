@@ -36,6 +36,15 @@ import csv
 import os
 from datetime import datetime
 from monitor import CPUPowerMonitor
+from openvino_genai import SchedulerConfig, SparseAttentionConfig, SparseAttentionMode
+
+# 1. Sparse Attention 설정 객체 생성
+cb_config = SchedulerConfig(
+    use_sparse_attention=True,
+    sparse_attention_config=SparseAttentionConfig(
+        mode=SparseAttentionMode.XATTENTION  # XAttention 활성화
+    )
+)
 
 #optimum-cli export openvino --weight-format int4 --task text-generation-with-past --model growdle/HyperCLOVAX-SEED-Text-Instruct-1.5B ./CLOVAX-1.5B-ov-int4
 #kakaocorp/kanana-1.5-2.1b-instruct-2505
@@ -117,7 +126,7 @@ config = {
 }
 
 token_txt = AutoTokenizer.from_pretrained(model_txt)
-pipe_txt = ov_genai.VLMPipeline(model_txt, device="GPU", config=config)
+pipe_txt = ov_genai.VLMPipeline(model_txt, device="GPU", config=config, scheduler_config=cb_config)
 pipe_stt = ov_genai.WhisperPipeline(model_stt,device="GPU", config=config)
 
 # for genai
