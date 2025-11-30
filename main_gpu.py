@@ -116,9 +116,10 @@ config = {
     "GPU_HOST_TASK_PRIORITY": "HIGH"
 }
 
+pipe_stt = ov_genai.WhisperPipeline(model_stt,device="GPU", config={"PERFORMANCE_HINT": "LATENCY"})
+
 token_txt = AutoTokenizer.from_pretrained(model_txt)
 pipe_txt = ov_genai.VLMPipeline(model_txt, device="GPU", config={"PERFORMANCE_HINT": "LATENCY"})
-pipe_stt = ov_genai.WhisperPipeline(model_stt,device="GPU", config={"PERFORMANCE_HINT": "LATENCY"})
 
 # for genai
 async def process_stream(streamer, isStream=True, isPlay=0, lang='en'):
