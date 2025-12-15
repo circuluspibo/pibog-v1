@@ -1,0 +1,425 @@
+from fastapi.middleware.cors import CORSMiddleware
+import librosa
+from fastapi import FastAPI, File, UploadFile
+from transformers import AutoTokenizer
+from fastapi.responses import FileResponse, StreamingResponse
+from PIL import Image
+from transformers import AutoTokenizer
+from huggingface_hub import snapshot_download
+import time as t
+from transformers import AutoTokenizer
+from pydantic import BaseModel, Field
+import numpy as np
+import openvino_genai as ov_genai
+import subprocess
+from serverinfo import si
+import logging
+from requests import get
+from queue import Queue
+import openvino as ov
+from threading import Event, Thread
+from transformers import AutoTokenizer
+from pydantic import BaseModel, Field
+from iterator import IterableStreamer
+from fastapi.middleware.cors import CORSMiddleware
+import torchvision.transforms.functional as F
+from PIL import Image
+from openvino import Tensor
+from pathlib import Path
+from openvino_genai import GenerationConfig
+import time
+from transformers import AutoConfig, AutoTokenizer, pipeline
+from optimum.intel.openvino import OVModelForSeq2SeqLM
+from fastapi import FastAPI, UploadFile, File, Form
+import io
+import random
+import torch
+
+# 너는 파이온이라는 휴머노이드 로봇으로 사람들을 지키기 위해 태어났어. 대화체로 사람처럼 대답하되, 다음과 같은 동작이 가능하니, 적절한 동작을 먼저 출력하고 대답을 이야기 해줘. - clamp, highFive, shakeHands_1, blowKiss, hug, hightWave, lowWave, ultramanRay, bothHandsUp, singleHandsUp, Refuse
+
+logging.basicConfig(level=logging.ERROR)
+logger = logging.getLogger(__name__)
+
+_IP = "127.0.0.1" #si.getIP()
+_PORT = int(open("port.txt", 'r').read())
+
+app = FastAPI()
+
+
+# 모든 도메인 허용 (allow_origins에 '*' 설정)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # 모든 도메인 허용
+    allow_credentials=True,  # 쿠키나 자격 증명 허용
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],  # 허용할 HTTP 메소드
+    allow_headers=["*"],  # 모든 헤더 허용
+)
+
+class Param (BaseModel):
+  text : str
+  hash : str = Field(default='')
+  voice : str = Field(default='main') 
+  lang : str = Field(default='ko')
+  type : str = Field(default='mp3')
+  pitch : str = Field(default='medium')
+  rate : str = Field(default='medium')
+  volume : str = Field(default='medium')
+
+"""
+너는 파이온이라는 휴머노이드 로봇으로 사람들을 지키기 위해 태어났어.  
+ 
+다음과 같은 동작중 하나를 선택할 수 있어
+clamp, highFive, shakeHands_1, blowKiss, hug, hightWave, lowWave, ultramanRay, bothHandsUp, singleHandsUp, Refuse
+
+응답시 가장 적절한 동작을 하나만 선택하고, 대화체로 마크업 없이 사람처럼 대답 해줘.
+예시 : [동작] 응답어
+"""
+_SYSTEM = "당신은 서큘러스에서 만든 파이봇 이라고 하는 MIT 박사 수준의 로봇 인공지능 입니다. 젊은 톤의 대화체로 입력된 언어로 사람 같이 짧게 응답하세요."
+
+def read_image(path: str) -> Tensor:
+    pic = Image.open(path).convert("RGB")
+    image_data = np.array(pic)
+    return Tensor(image_data)
+
+def read_images(path: str) -> list[Tensor]:
+    entry = Path(path)
+    if entry.is_dir():
+        return [read_image(str(file)) for file in sorted(entry.iterdir())]
+    return [read_image(path)]
+
+class Chat(BaseModel):
+  prompt : str = ''
+  lang : str = 'auto'
+  type : str =  _SYSTEM #" "당신은 데이비드라고 하는 10살 남자아이 성향의 유쾌하고 즐거운 인공지능입니다. 이모티콘도 잘 활용해서 젊은 말투로 대답하세요."
+  rag :  str = ''  
+  temp : float = 0.5
+  top_p : float = 0.92
+  top_k : int = 50
+  max : int = 256 #16384
+
+model_txt = snapshot_download(repo_id='Echo9Zulu/gemma-3-4b-it-qat-int4_asym-ov') # circulus/gemma-3-4b-it-ov-awq-sym helenai/Qwen2.5-VL-3B-Instruct-ov-int4
+model_stt = snapshot_download(repo_id='circulus/whisper-large-v3-turbo-ov') # translate not working, only general model
+model_img = snapshot_download(repo_id='rippertnt/pix2pix-turbo-ov')
+model_t2t = snapshot_download(repo_id='rippertnt/ko2en-ov-int4')
+
+token_txt = AutoTokenizer.from_pretrained(model_txt)
+token_img = AutoTokenizer.from_pretrained(model_img)
+
+conf = AutoConfig.from_pretrained(model_t2t, trust_remote_code=True)
+token_t2t = AutoTokenizer.from_pretrained(model_t2t, trust_remote_code=True)
+model_t2t = OVModelForSeq2SeqLM.from_pretrained(model_t2t, device='GPU', ov_config={"PERFORMANCE_HINT": "LATENCY", "NUM_STREAMS": "1"}, config=conf, low_cpu_mem_usage=True, trust_remote_code=True) #"KV_CACHE_PRECISION": "u8", "DYNAMIC_QUANTIZATION_GROUP_SIZE": "32"
+pipe_t2t = pipeline("text2text-generation", model=model_t2t, tokenizer=token_t2t)
+
+pipe_stt = ov_genai.WhisperPipeline(model_stt,device="GPU", config={"PERFORMANCE_HINT": "LATENCY"})
+pipe_txt = ov_genai.VLMPipeline(model_txt, device="GPU", config={"PERFORMANCE_HINT": "LATENCY"})
+pipe_img = None
+
+def load_model(vlm=True):
+  global model_img
+  global model_txt
+  global pipe_txt
+  global pipe_img
+
+  print('model',vlm)
+
+  if vlm:
+    if pipe_txt is None:
+      pipe_img = None
+      pipe_txt = ov_genai.VLMPipeline(model_txt, device="GPU", config={"PERFORMANCE_HINT": "LATENCY"})
+  else:
+    if pipe_img is None:
+      pipe_txt = None
+      pipe_img = ov.compile_model(f"{model_img}/pix2pix-turbo.xml", "GPU",{ "PERFORMANCE_HINT": "LATENCY" })
+
+def tokenize_prompt(prompt: str):
+  caption_tokens = token_img(prompt,max_length=token_img.model_max_length,padding="max_length",truncation=True,return_tensors="pt").input_ids
+  return caption_tokens
+
+
+# Output directory
+OUTPUT_DIR = Path("outputs")
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+# for genai
+async def process_stream(streamer, isStream=True, isPlay=0, lang='en'):
+    cnt = 0
+    latency = 0
+    isStart = False
+    sentence = ""
+    full_txt = ""
+    print("streaming start...")
+
+    # ---------------------------------
+    # 🔥 token/s 측정용 변수
+    # ---------------------------------
+    start_time = time.time()
+    total_tokens = 0
+
+
+    for new_token in streamer:
+        full_txt = full_txt + new_token
+        if isStart is False:
+          isStart = True
+          latency =  time.time() - start_time 
+
+        # token count 증가
+
+        if "assistant" in new_token:
+            cnt += 1
+            if cnt == 1:
+                continue  # skip
+            elif cnt == 2:
+                print("Forcing exit...")
+                break
+
+        # ---------------------
+        # 🔥 Stream 모드 처리
+        # ---------------------
+        if isStream:
+            yield new_token
+
+        # ---------------------
+        # 🔥 Sentence 모드 처리
+        # ---------------------
+        elif "." in new_token or "\n" in new_token:
+            sentence += new_token
+            if len(sentence) > 3:
+
+                sentence = sentence.strip()
+
+                if int(isPlay) > 0:
+                    get(
+                      "http://127.0.0.1:59531/v2/tts",
+                      params={"text": sentence, "lang": lang, "voice": 31}
+                    )
+
+                print(sentence)
+                yield sentence
+                sentence = ""
+
+        else:
+            sentence += new_token
+
+    # 마지막 문장 처리
+    if len(sentence) > 3:
+        yield sentence
+
+    # ---------------------------------
+    # 🔥 token/s 계산
+    # ---------------------------------
+    duration = time.time() - start_time
+    total_tokens = len(token_txt(full_txt)['input_ids'])
+    tokens_per_sec = total_tokens / duration if duration > 0 else 0
+
+    print(f"Total tokens: {total_tokens}")
+    print(f"Duration: {duration:.4f} sec")
+    print(f"Tokens/s: {tokens_per_sec:.4f}")
+
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],#origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+@app.get("/")
+def main():
+  return { "result" : True, "data" : "AI-CPU-V2", "ip" : _IP, "port" : _PORT }           
+
+
+@app.get("/monitor")
+def monitor():
+  return si.getAll()
+
+
+@app.get("/prepare")
+def preprare(mode : int = 0):
+  
+  if mode == 0:
+    load_model(vlm=True)
+  else:
+    load_model(vlm=False)
+  return { "result" : mode }
+
+
+@app.get("/v1/txt2chat", summary="문장 기반의 chatgpt 스타일 구현")
+def txt2chat(prompt : str ,system = _SYSTEM, isPlay = 0, lang='en'): # gen or med
+  load_model(True)
+  streamer = IterableStreamer(pipe_txt.get_tokenizer())
+
+  pipe_txt.start_chat(system_message=system)
+
+  print(prompt)
+
+  config = GenerationConfig(
+      max_new_tokens=256,
+      #temperature=0.5,
+      #beam_size=1,
+      do_sample=False, #fast for beam-search
+      speculative_decoding=True,
+      repetition_penalty=1.1,
+      #top_k=50,
+      #top_p=0.9,
+  )
+
+  generate_kwargs = dict(
+      prompt = prompt,
+      config = config,
+      streamer=streamer, # !do_sample || top_k > 0
+  )
+
+
+  t1 = Thread(target=pipe_txt.generate, kwargs=generate_kwargs)
+  t1.start()
+
+  out = process_stream(streamer, False, isPlay,lang)
+  return StreamingResponse(out, media_type='text/event-stream')
+
+
+@app.get("/v2/img2chat", summary="문장 기반의 chatgpt 스타일 구현")
+@app.post("/v2/img2chat", summary="문장 기반의 chatgpt 스타일 구현")
+def img2chat2(prompt = "" ,system = _SYSTEM, isPlay = 0, lang='en'): # gen or med
+  load_model(True)
+  streamer = IterableStreamer(pipe_txt.get_tokenizer())
+
+  messages = [
+    {"role": "system", "content": system},
+    {"role": "user", "content": prompt}
+  ] 
+
+  pipe_txt.start_chat(system_message=system)
+    
+  print(prompt)
+
+  config = GenerationConfig(
+      max_new_tokens=256,
+      temperature=0.5,
+      beam_size=1,
+      do_sample=False, #fast for beam-search
+      speculative_decoding=True,
+      repetition_penalty=1.1,
+      #top_k=50,
+      #top_p=0.9,
+  )
+
+  generate_kwargs = dict(
+      prompt = prompt,
+      images=read_image("capture.jpg"),
+      config=config,
+      streamer=streamer, # !do_sample || top_k > 0
+  )
+
+  t1 = Thread(target=pipe_txt.generate, kwargs=generate_kwargs)
+  t1.start()
+
+  out = process_stream(streamer, False, isPlay,lang)
+  return StreamingResponse(out, media_type='text/event-stream')
+
+@app.post("/v1/img2chat", summary="문장 기반의 chatgpt 스타일 구현")
+def img2chat(file : UploadFile = File(...), prompt = "" ,system = _SYSTEM, isPlay = 0, lang='en'): # gen or med
+  load_model(True)
+  streamer = IterableStreamer(pipe_txt.get_tokenizer())
+
+  print(prompt)
+
+  config = GenerationConfig(
+      max_new_tokens=256,
+      temperature=0.5,
+      beam_size=1,
+      do_sample=False, #fast for beam-search
+      speculative_decoding=True,
+      #repetition_penalty=1.1,
+      #top_k=50,
+      #top_p=0.9,
+      
+  )
+
+  generate_kwargs = dict(
+      prompt = prompt,
+      images=read_image(file.file),
+      config=config,
+      streamer=streamer, # !do_sample || top_k > 0
+  )
+
+  t1 = Thread(target=pipe_txt.generate, kwargs=generate_kwargs)
+  t1.start()
+
+  out = process_stream(streamer, False, isPlay, lang)
+  return StreamingResponse(out, media_type='text/event-stream')
+
+@app.post("/v1/stt", summary="음성을 인식합니다.")
+def stt(file : UploadFile = File(...), lang="ko", isPlay=0):
+  start = t.time()
+  location = f"uploads/{file.filename}"
+
+  with open(location,"wb+") as file_object:
+    file_object.write(file.file.read())
+  
+  raw_speech, samplerate = librosa.load(location, sr=16000)
+  print('length',librosa.get_duration(y=raw_speech, sr=samplerate))
+  raw =  raw_speech.tolist()
+
+  out = pipe_stt.generate(
+    raw,
+    max_new_tokens=100,
+    # 'task' and 'language' parameters are supported for multilingual models only
+    language=f"<|{lang}|>",
+    task="transcribe",
+    #return_timestamps=True
+    #streamer=streamer,
+  )
+
+  print(t.time()-start, str(out))
+
+  return { "result" : True, "data" : str(out) } #txt2chat(chat, isPlay)
+
+
+@app.post("/v1/translate", summary="한글을 영어로 번역합니다")
+def translate(prompt : str):
+  out = pipe_t2t(prompt, max_new_tokens=512)[0]['generated_text']
+
+  return { "result" : True, "data" : str(out) } #txt2chat(chat, isPlay)
+
+
+@app.post("/sketch2img", response_class=FileResponse)
+async def sketch2img(file: UploadFile = File(...), prompt: str = Form(...), seed: int | None = Form(None), lang='ko'):
+  load_model(False)
+
+  if seed is None:
+      seed = random.randint(0, 2**32 - 1)
+  torch.manual_seed(seed)
+
+
+  if lang == "ko":
+     prompt =  pipe_t2t(prompt, max_new_tokens=512)[0]['generated_text']
+
+  print(lang, prompt)
+
+  image_bytes = await file.read()
+  sketch_image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+
+  sketch_image = sketch_image.resize((512, 512), Image.NEAREST)
+
+  c_t = torch.unsqueeze(F.to_tensor(sketch_image) > 0.5, 0)
+  noise = torch.randn((1, 4, 512 // 8, 512 // 8))
+
+  prompt_template = "{prompt} . anime style, key visual, vibrant, studio anime, highly detailed"
+  full_prompt = prompt_template.replace("{prompt}", prompt)
+  prompt_tokens = tokenize_prompt(full_prompt)
+
+  result = pipe_img([1 - c_t.to(torch.float32),prompt_tokens,noise])[0]
+
+  image_tensor = (result[0] * 0.5 + 0.5) * 255
+  image = np.transpose(image_tensor, (1, 2, 0)).astype(np.uint8)
+  out = Image.fromarray(image)
+
+  filename = f"generated_seed{seed}.png"
+  save_path = OUTPUT_DIR / filename
+  out.save(save_path)
+
+  return save_path
+
+print("Loading Complete","GPU")
+subprocess.Popen(["play", 'intel_inside.mp3']) # async

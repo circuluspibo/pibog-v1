@@ -210,8 +210,8 @@ def processing_thread():
 
             # three point for calculate head x 2 arms
             res = det_model(frame, device="intel:npu", verbose=False, conf=0.25)[0] #, imgsz=640
-            res = det_model(frame, device="intel:npu", verbose=False, conf=0.25)[0] #, imgsz=640
-            res = det_model(frame, device="intel:npu", verbose=False, conf=0.25)[0] #, imgsz=640
+            #res = det_model(frame, device="intel:npu", verbose=False, conf=0.25)[0] #, imgsz=640
+            #res = det_model(frame, device="intel:npu", verbose=False, conf=0.25)[0] #, imgsz=640
             
             masks = res.masks.data.cpu().numpy().astype(np.uint8) if res.masks is not None else []
             boxes = res.boxes.xyxy.cpu().numpy()
