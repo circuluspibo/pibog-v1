@@ -6,7 +6,7 @@ langid
 ctranslate2
 uvicorn
 librosa
-epitran
+epitran==1.26.0
 num2words
 g2pk2
 uvicorn
