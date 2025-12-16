@@ -97,7 +97,7 @@ class Chat(BaseModel):
   top_k : int = 50
   max : int = 256 #16384
 
-model_txt = snapshot_download(repo_id='Echo9Zulu/gemma-3-4b-it-qat-int4_asym-ov') # circulus/gemma-3-4b-it-ov-awq-sym helenai/Qwen2.5-VL-3B-Instruct-ov-int4
+model_txt = snapshot_download(repo_id='Echo9Zulu/gemma-3-4b-it-qat-int4_asym-ov') # helenai/Qwen3-VL-4B-Instruct-int4 Echo9Zulu/gemma-3-4b-it-qat-int4_asym-ov circulus/gemma-3-4b-it-ov-awq-sym helenai/Qwen2.5-VL-3B-Instruct-ov-int4
 model_stt = snapshot_download(repo_id='circulus/whisper-large-v3-turbo-ov') # translate not working, only general model
 model_img = snapshot_download(repo_id='rippertnt/pix2pix-turbo-ov')
 model_t2t = snapshot_download(repo_id='rippertnt/ko2en-ov-int4')
@@ -318,7 +318,7 @@ def img2chat2(prompt = "" ,system = _SYSTEM, isPlay = 0, lang='en'): # gen or me
   return StreamingResponse(out, media_type='text/event-stream')
 
 @app.post("/v1/img2chat", summary="문장 기반의 chatgpt 스타일 구현")
-def img2chat(file : UploadFile = File(...), prompt = "" ,system = _SYSTEM, isPlay = 0, lang='en'): # gen or med
+def img2chat(file : UploadFile = File(...), prompt = "recognize this image as OCR, response only json like this, { 'result' : 'value'}" ,system = "You are the AI OCR engine for recognizing hand-writen korean charactors", isPlay = 0, lang='en'): # gen or med
   load_model(True)
   streamer = IterableStreamer(pipe_txt.get_tokenizer())
 
@@ -326,7 +326,7 @@ def img2chat(file : UploadFile = File(...), prompt = "" ,system = _SYSTEM, isPla
 
   config = GenerationConfig(
       max_new_tokens=256,
-      temperature=0.5,
+      temperature=0.0,
       beam_size=1,
       do_sample=False, #fast for beam-search
       speculative_decoding=True,
@@ -384,13 +384,12 @@ def translate(prompt : str):
 
 
 @app.post("/sketch2img", response_class=FileResponse)
-async def sketch2img(file: UploadFile = File(...), prompt: str = Form(...), seed: int | None = Form(None), lang='ko'):
+async def sketch2img(file: UploadFile = File(...), prompt: str = "", seed: int = None, lang : str = 'ko'):
   load_model(False)
 
   if seed is None:
       seed = random.randint(0, 2**32 - 1)
   torch.manual_seed(seed)
-
 
   if lang == "ko":
      prompt =  pipe_t2t(prompt, max_new_tokens=512)[0]['generated_text']
@@ -405,7 +404,7 @@ async def sketch2img(file: UploadFile = File(...), prompt: str = Form(...), seed
   c_t = torch.unsqueeze(F.to_tensor(sketch_image) > 0.5, 0)
   noise = torch.randn((1, 4, 512 // 8, 512 // 8))
 
-  prompt_template = "{prompt} . anime style, key visual, vibrant, studio anime, highly detailed"
+  prompt_template = "{prompt}.  highly detailed"
   full_prompt = prompt_template.replace("{prompt}", prompt)
   prompt_tokens = tokenize_prompt(full_prompt)
 
