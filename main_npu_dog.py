@@ -14,10 +14,11 @@ from text import text_to_sequence
 import json
 from pydub import AudioSegment
 from serverinfo import si
-from go2_webrtc_driver.webrtc_audiohub import WebRTCAudioHub
+from unitree_webrtc_connect.webrtc_audiohub import WebRTCAudioHub
+from unitree_webrtc_connect.webrtc_driver import UnitreeWebRTCConnection, WebRTCConnectionMethod
+from unitree_webrtc_connect.constants import RTC_TOPIC, VUI_COLOR, SPORT_CMD
+
 import logging
-from go2_webrtc_driver.webrtc_driver import Go2WebRTCConnection, WebRTCConnectionMethod
-from go2_webrtc_driver.constants import RTC_TOPIC, VUI_COLOR, SPORT_CMD
 from aiortc import MediaStreamTrack
 from requests import get
 import time
@@ -91,7 +92,8 @@ conn = None
 audio_hub = None
 track = None
 lastColor = 'cyan'
-state = { "charge" : 0, "temp" : 0, "voltage" : 0, "cnt_live" : 0, "cnt_object" : 0 }
+state = { "charge" : 0, "temp" : 0, "voltage" : 0, "cnt_live" : 0, "cnt_object" : 0,  "boxes" : [], 
+         "human" : { "age" : "", "gender" : "", "emotion" : "", "position" : ""} }
 
 G1_ARM = {
   "clamp": 17, 
@@ -384,7 +386,7 @@ async def recv_camera_stream(track: MediaStreamTrack):
 async def connect():
   global conn
   global audio_hub
-  conn =  Go2WebRTCConnection(WebRTCConnectionMethod.LocalAP) #Go2WebRTCConnection(WebRTCConnectionMethod.LocalSTA, ip="192.168.0.101")
+  conn =  UnitreeWebRTCConnection(WebRTCConnectionMethod.LocalAP) #Go2WebRTCConnection(WebRTCConnectionMethod.LocalSTA, ip="192.168.0.101")
   await conn.connect()
   print(1)
   audio_hub = WebRTCAudioHub(conn, logger)
@@ -420,7 +422,7 @@ async def connect():
 async def connect2():
   global conn
   #global audio_hub
-  conn =  Go2WebRTCConnection(WebRTCConnectionMethod.LocalAP) #Go2WebRTCConnection(WebRTCConnectionMethod.LocalSTA, ip="192.168.0.101")
+  conn =  UnitreeWebRTCConnection(WebRTCConnectionMethod.LocalAP) #Go2WebRTCConnection(WebRTCConnectionMethod.LocalSTA, ip="192.168.0.101")
   await conn.connect()
   print(1)
   #audio_hub = WebRTCAudioHub(conn, logger)
