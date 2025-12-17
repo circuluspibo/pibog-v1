@@ -34,6 +34,8 @@ from fastapi import FastAPI, UploadFile, File, Form
 import io
 import random
 import torch
+from optimum.intel.openvino.modeling_diffusion import OVStableDiffusionPipeline
+
 
 # 너는 파이온이라는 휴머노이드 로봇으로 사람들을 지키기 위해 태어났어. 대화체로 사람처럼 대답하되, 다음과 같은 동작이 가능하니, 적절한 동작을 먼저 출력하고 대답을 이야기 해줘. - clamp, highFive, shakeHands_1, blowKiss, hug, hightWave, lowWave, ultramanRay, bothHandsUp, singleHandsUp, Refuse
 
@@ -112,16 +114,24 @@ pipe_t2t = pipeline("text2text-generation", model=model_t2t, tokenizer=token_t2t
 
 pipe_stt = ov_genai.WhisperPipeline(model_stt,device="GPU", config={"PERFORMANCE_HINT": "LATENCY"})
 pipe_txt = ov_genai.VLMPipeline(model_txt, device="GPU", config={"PERFORMANCE_HINT": "LATENCY"})
-pipe_img = None
+pipe_img2anim = OVStableDiffusionPipeline.from_pretrained("circulus/on-canvers-disney-v3.9.1-int8", ov_config={"CACHE_DIR": ""})
+pipe_img2real = OVStableDiffusionPipeline.from_pretrained("circulus/on-canvers-real-v3.9.1-int8", ov_config={"CACHE_DIR": ""})
+
 
 def load_model(vlm=True):
+  print('model',vlm)
+
+"""
+def load_model(vlm=True):
+
+  
   global model_img
   global model_txt
   global pipe_txt
   global pipe_img
 
   print('model',vlm)
-
+  
   if vlm:
     if pipe_txt is None:
       pipe_img = None
@@ -129,7 +139,10 @@ def load_model(vlm=True):
   else:
     if pipe_img is None:
       pipe_txt = None
-      pipe_img = ov.compile_model(f"{model_img}/pix2pix-turbo.xml", "GPU",{ "PERFORMANCE_HINT": "LATENCY" })
+      #pipe_img = ov.compile_model(f"{model_img}/pix2pix-turbo.xml", "GPU",{ "PERFORMANCE_HINT": "LATENCY" })
+
+      pipe_img = OVStableDiffusionPipeline.from_pretrained("circulus/on-canvers-disney-v3.9.1-int8", ov_config={"CACHE_DIR": ""})
+"""
 
 def tokenize_prompt(prompt: str):
   caption_tokens = token_img(prompt,max_length=token_img.model_max_length,padding="max_length",truncation=True,return_tensors="pt").input_ids
@@ -381,6 +394,34 @@ def translate(prompt : str):
   out = pipe_t2t(prompt, max_new_tokens=512)[0]['generated_text']
 
   return { "result" : True, "data" : str(out) } #txt2chat(chat, isPlay)
+
+
+@app.post("/txt2img", response_class=FileResponse)
+async def txt2img(prompt: str = "", model : str = "real", seed: int = None, lang : str = 'ko'):
+  load_model(False)
+  pipe = pipe_img2real
+
+  if seed is None:
+      seed = random.randint(0, 2**32 - 1)
+  torch.manual_seed(seed)
+
+  if lang == "ko":
+     prompt =  pipe_t2t(prompt, max_new_tokens=512)[0]['generated_text']
+
+  if model == "anim":
+     pipe = pipe_img2anim
+
+  image = pipe(
+      prompt=f"{prompt}. high quality.",
+      width=512,
+      height=512,
+      num_inference_steps=4,
+      guidance_scale=1.0,
+  ).images[0]
+
+  image.save(f"outputs/out_image_{seed}.png")
+
+  return f"outputs/out_image_{seed}.png"
 
 
 @app.post("/sketch2img", response_class=FileResponse)
