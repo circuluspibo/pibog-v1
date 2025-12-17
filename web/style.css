@@ -191,7 +191,7 @@ body {
 .color-panel {
     position: fixed;
     right: 30px;
-    top: 41%;
+    top: 50%;
     transform: translateY(-50%);
     background-color: var(--background-color);
     border-radius: 15px;
@@ -294,7 +294,7 @@ body {
 .controls-panel {
     position: fixed;
     left: 30px;
-    top: 41%;
+    top: 50%;
     transform: translateY(-50%);
     background-color: var(--background-color);
     border-radius: 15px;
@@ -511,7 +511,7 @@ body {
 }
 
 .function-panel {
-    width: 70%;
+    width: 80%;
     /* max-width: 700px; */
     background-color: var(--background-color);
     border-radius: 15px;
@@ -528,7 +528,7 @@ body {
 .function-button {
     background-color: rgba(0, 0, 0, 0.7) !important;
     border: 1px solid var(--accent-color);
-    padding: 10px 20px;
+    padding: 15px 15px;
     border-radius: 8px;
     color: var(--text-color);
     font-weight: bold;
@@ -540,7 +540,7 @@ body {
 
 .function-button:hover {
     background-color: var(--accent-color);
-    color: #000;
+    color: cyan;
     transform: translateY(-5px);
     box-shadow: 0 5px 15px rgba(0, 224, 255, 0.4);
 }

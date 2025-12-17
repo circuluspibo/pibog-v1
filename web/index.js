@@ -1,4 +1,4 @@
-alert("Nice to meet you again! 2507010500")
+alert("Nice to meet you again! 2512170500")
 // 버튼 클릭 효과 및 상태 변화 시뮬레이션
 let isRecord = false
 let audio = 0
@@ -283,7 +283,8 @@ document.addEventListener('DOMContentLoaded', function() {
     const allButtons = document.querySelectorAll('.function-button, .pad-button, .rotation-button, .mic-button');
     
     allButtons.forEach(button => {
-        button.addEventListener('click', async function() {
+        button.addEventListener('click', async function(event) {
+            event.stopPropagation();
             // 버튼을 누르는 시각적 효과
             this.style.transform = 'scale(0.95)';
             setTimeout(() => {
@@ -391,6 +392,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     break;
                 default:
                     cmd = `/sport?cmd=${this.id}`
+                    multi = 0.5
+                    document.getElementById('object-speed').textContent = multi
             }
             const response = await fetch(cmd)
             if (!response.ok) {
@@ -728,7 +731,7 @@ document.addEventListener('DOMContentLoaded', function() {
             else if(multi == 1.5)
                 multi = 2
             else
-                multi = 2
+                multi = 0.5
         } else {
             if(multi == 2)
                 multi = 1.5
