@@ -44,7 +44,7 @@ def getHash(text):
   hash_func.update(text.encode('utf-8'))
   return hash_func.hexdigest()
 
-_IP = "192.168.12.117"
+_IP = "192.168.12.112"
 
 ov = Core()
 
@@ -86,7 +86,6 @@ class_names = det_model.names
 logging.basicConfig(level=logging.ERROR)
 logger = logging.getLogger(__name__)
 
-_IP = "127.0.0.1" #si.getIP()
 _PORT = int(open("port.txt", 'r').read())
 
 conn = None
