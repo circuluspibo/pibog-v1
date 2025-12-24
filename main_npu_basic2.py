@@ -442,33 +442,11 @@ async def connect2():
 
 @app.get("/prepare")
 async def prepare():
-  """
-  global hL
-  global hR
-
-  try:
-      hL = HadnControler('/dev/ttyACM0') # L 컨트롤러 L동글 부터 연결
-      hR = HadnControler('/dev/ttyACM1') # R 컨트롤러
-      print("컨트롤러 초기화 성공")
-  except Exception as e:
-      print(f"컨트롤러 초기화 실패: {e}")
-      exit()
-  """"
+  return { "result" : True, "data" : True }      
 
 @app.get("/prepare2")
 async def prepare2():
-  """
-  global hL
-  global hR
-
-  try:
-      hL = HadnControler('/dev/ttyACM2') # L 컨트롤러 L동글 부터 연결
-      hR = HadnControler('/dev/ttyACM3') # R 컨트롤러
-      print("컨트롤러 초기화 성공")
-  except Exception as e:
-      print(f"컨트롤러 초기화 실패: {e}")
-      exit()      
-  """
+  return { "result" : True, "data" : True }    
   
 @app.get("/hand")
 async def hand(cmd : str):
