@@ -452,22 +452,7 @@ async def prepare2():
 async def hand(cmd : str):
   requests.get(f"http://{_IP}:59521/hands?cmd={cmd}")
   return { "result" : True }    
-  """
-  global hL
-  global hR
 
-  print(cmd)
-
-  if cmd == 'release':
-    thread_L = threading.Thread(target=hL.send_release, args=(None,))
-    thread_R = threading.Thread(target=hR.send_release, args=(None,))     
-  else:
-    thread_L = threading.Thread(target=hL.send_motion, args=(cmd,))
-    thread_R = threading.Thread(target=hR.send_motion, args=(cmd,))
-
-  thread_L.start()
-  thread_R.start()
-  """
 @app.get("/heartbeat")
 async def heartbeat():
   global state
