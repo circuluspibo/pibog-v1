@@ -50,11 +50,12 @@ from langchain_community.embeddings import OpenVINOBgeEmbeddings
 from langchain_chroma import Chroma
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from openvino_genai import TextRerankPipeline
+import glob
 
 RAG_DB_DIR = "./rag_db"
 
 rag_embedding = OpenVINOBgeEmbeddings(
-    model_name_or_path="./models/Qwen3-Embedding-0.6B-ov-int8",
+    model_name_or_path="./models/Qwen3-Embedding-0.6B-int8-ov",
     model_kwargs={"device": "GPU"},
 )
 
@@ -70,9 +71,9 @@ config.top_n = 5
 # ===============================
 # 🔥 RERANKER
 # ===============================
-model_rerank = snapshot_download(repo_id="OpenVINO/Qwen3-Reranker-0.6B-fp16-ov")
+#model_rerank = snapshot_download(repo_id="OpenVINO/Qwen3-Reranker-0.6B-fp16-ov")
 
-reranker = TextRerankPipeline(model_rerank,"GPU",config) #./models/Qwen3-Reranker-0.6B-ov
+reranker = TextRerankPipeline("./models/Qwen3-Reranker-0.6B-fp16-ov","GPU",config) #./models/Qwen3-Reranker-0.6B-ov
 
 
 #optimum-cli export openvino --weight-format int4 --task text-generation-with-past --model growdle/HyperCLOVAX-SEED-Text-Instruct-1.5B ./CLOVAX-1.5B-ov-int4
@@ -90,8 +91,8 @@ _PORT = int(open("port.txt", 'r').read())
 
 app = FastAPI()
 
-pw = CPUPowerMonitor(interval=1.0)
-pw.start()
+#pw = CPUPowerMonitor(interval=1.0)
+#pw.start()
 
 # 모든 도메인 허용 (allow_origins에 '*' 설정)
 app.add_middleware(
@@ -144,8 +145,8 @@ class Chat(BaseModel):
   top_k : int = 50
   max : int = 256 #16384
 
-model_txt = snapshot_download(repo_id='Echo9Zulu/gemma-3-4b-it-qat-int4_asym-ov') # circulus/gemma-3-4b-it-ov-awq-sym helenai/Qwen2.5-VL-3B-Instruct-ov-int4
-model_stt = snapshot_download(repo_id='circulus/whisper-large-v3-turbo-ov')
+model_txt = "./models/gemma-3-4b-it-qat-int4_asym-ov"#snapshot_download(repo_id='Echo9Zulu/gemma-3-4b-it-qat-int4_asym-ov') # circulus/gemma-3-4b-it-ov-awq-sym helenai/Qwen2.5-VL-3B-Instruct-ov-int4
+model_stt = "./models/whisper-large-v3-turbo-ov"#snapshot_download(repo_id='circulus/whisper-large-v3-turbo-ov')
 
 config = {
     "PERFORMANCE_HINT": "LATENCY",
@@ -282,7 +283,7 @@ async def process_stream(streamer, isStream=True, isPlay=0, lang='en'):
             latency,
             round(duration, 6),
             round(tokens_per_sec, 6),
-            pw.get_power()
+            #pw.get_power()
         ])
 
 app.add_middleware(
@@ -338,6 +339,67 @@ async def upload_csv_rag(file: UploadFile = File(...)):
         "chunks": len(docs)
     }
 
+
+@app.post("/v1/rag/upload_all_csv")
+def upload_all_csv():
+    # 우분투 시스템 사용자명을 자동으로 가져옵니다
+    user_name = os.getenv("USER")  # 시스템 환경 변수에서 사용자명을 가져옴
+
+    # 파일 경로 설정: /media/{시스템 사용자명}
+    directory = f"/media/{user_name}"
+
+    # 지정된 폴더 내의 모든 CSV 파일을 glob을 사용하여 하위 디렉토리까지 검색
+    # '**'는 하위 디렉토리까지 포함하겠다는 의미입니다.
+    csv_files = glob.glob(os.path.join(directory, "**", "*.csv"), recursive=True)
+
+    print(user_name,csv_files)
+
+    if not csv_files:
+        return {"result": False, "error": "No CSV files found in the specified directory."}
+
+    # 기존 rag_db 초기화
+    rag_db.reset_collection()  # rag_db 초기화 함수 호출 (실제 사용 중인 라이브러리에서 초기화 방법에 맞게 수정 필요)
+
+    # CSV 파일을 읽고 RAG DB에 추가하는 작업 수행
+    total_rows = 0
+    total_chunks = 0
+
+    # Initialize the text splitter
+    splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
+
+    for file_path in csv_files:
+        # Read the CSV file into a pandas dataframe
+        df = pd.read_csv(file_path)
+
+        # Process each row to generate text data
+        texts = []
+        for _, row in df.iterrows():
+            texts.append(" | ".join(map(str, row.values)))
+
+        # Split the texts into smaller chunks for easier indexing
+        docs = splitter.create_documents(texts)
+
+        # Add documents to the RAG database (Chroma or similar)
+        rag_db.add_documents(docs)
+
+        # Track row and chunk counts for the response
+        total_rows += len(df)
+        total_chunks += len(docs)
+
+    # If Chroma supports `commit()` or `save()`, call that to persist changes.
+    # If necessary, you can uncomment the next lines to commit/save.
+    # try:
+    #     rag_db.commit()  # commit() or rag_db.save() depending on the library
+    # except AttributeError:
+    #     return {"result": False, "error": "Unable to persist the documents. Please check your database setup."}
+    print("RAG > ",total_rows)
+    # Return a response indicating the result
+    return {
+        "result": True,
+        "total_files": len(csv_files),
+        "total_rows": total_rows,
+        "total_chunks": total_chunks
+    }
 
 @app.get("/v1/txt2chat", summary="문장 기반의 chatgpt 스타일 구현")
 def txt2chat(prompt : str ,system = _SYSTEM, isPlay = 0, lang='en'): # gen or med
@@ -395,14 +457,14 @@ def txt2chat(prompt : str ,system = _SYSTEM, isPlay = 0, lang='en'): # gen or me
   out = process_stream(streamer, False, isPlay,lang)
   return StreamingResponse(out, media_type='text/event-stream')
 
-@app.get("/v1/txt2rag", summary="문장 기반의 chatgpt 스타일 구현")
+@app.get("/v1/rag/txt2chat", summary="문장 기반의 chatgpt 스타일 구현")
 def txt2rag(prompt : str ,system = _SYSTEM, isPlay = 0, lang='en'): # gen or med
   streamer = IterableStreamer(pipe_txt.get_tokenizer())
 
   rag_context = get_rag_context(prompt)
   if rag_context:
         prompt = f"""
-다음은 참고 지식이다. 반드시 이 내용을 우선 참고하여 답변하라.
+다음은 참고 지식이다. 반드시 이 내용을 우선 참고하여 url 은 빼고 답변해주세요.
 
 [지식]
 {rag_context}
@@ -544,8 +606,8 @@ def img2chat(file : UploadFile = File(...), prompt = "" ,system = _SYSTEM, isPla
   out = process_stream(streamer, False, isPlay, lang)
   return StreamingResponse(out, media_type='text/event-stream')
 
-@app.get("/v1/img2rag", summary="RAG + Image Chat")
-@app.post("/v1/img2rag", summary="RAG + Image Chat")
+@app.get("/v1/rag/img2chat", summary="RAG + Image Chat")
+@app.post("/v1/rag/img2chat", summary="RAG + Image Chat")
 def img2rag( prompt="", system=_SYSTEM, isPlay=0, lang='en',):
     streamer = IterableStreamer(pipe_txt.get_tokenizer())
 
@@ -556,7 +618,7 @@ def img2rag( prompt="", system=_SYSTEM, isPlay=0, lang='en',):
     rag_context = get_rag_context(prompt)
     if rag_context:
         prompt = f"""
-다음은 참고 지식이다. 반드시 이 내용을 우선 참고하여 답변하라.
+다음은 참고 지식이다. 반드시 이 내용을 우선 참고하여 url 은 빼고 답변해주세요.
 
 [지식]
 {rag_context}
@@ -621,3 +683,11 @@ def stt(file : UploadFile = File(...), lang="ko", isPlay=0):
 
 print("Loading Complete","GPU")
 subprocess.Popen(["play", 'intel_inside.mp3']) # async
+
+upload_all_csv()
+
+# Kiosk 모드로 띄울 URL
+url = "http://127.0.0.1:59531/web/pion.html"
+
+# Kiosk 모드로 Chromium 실행
+subprocess.run(['chromium', '--kiosk', url])
