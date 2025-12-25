@@ -152,9 +152,9 @@ app.add_middleware(
 
 
 config = {"PERFORMANCE_HINT": "LATENCY"}
-path_tts = snapshot_download(repo_id="rippertnt/on-vits2-multi-tts-v1", allow_patterns="*ov*")
-pipe_tts = ov.compile_model(ov.read_model(model=f"{path_tts}/all_base_ov.xml"), device_name="CPU", config=config)
-conf_tts = utils.get_hparams_from_file(hf_hub_download(repo_id="rippertnt/on-vits2-multi-tts-v1", filename="all_base.json"))
+#path_tts = snapshot_download(repo_id="rippertnt/on-vits2-multi-tts-v1", allow_patterns="*ov*")
+pipe_tts = ov.compile_model(ov.read_model("./models/all_base_ov.xml"), device_name="CPU", config=config)
+conf_tts = utils.get_hparams_from_file("./models/all_base_ov.json")
 
 def visualize_face(frame,face_det_results):
     global state
@@ -420,7 +420,7 @@ async def connect():
 async def connect2():
   global conn
   #global audio_hub
-  conn =  Go2WebRTCConnection(WebRTCConnectionMethod.LocalAP) #Go2WebRTCConnection(WebRTCConnectionMethod.LocalSTA, ip="192.168.0.101")
+  conn =  UnitreeWebRTCConnection(WebRTCConnectionMethod.LocalAP) #Go2WebRTCConnection(WebRTCConnectionMethod.LocalSTA, ip="192.168.0.101")
   await conn.connect()
   print(1)
   #audio_hub = WebRTCAudioHub(conn, logger)
@@ -450,7 +450,7 @@ async def prepare2():
   
 @app.get("/hand")
 async def hand(cmd : str):
-  requests.get(f"http://{_IP}:59521/hands?cmd={cmd}")
+  requests.get(f"http://{_IP}:59511/hands?cmd={cmd}")
   return { "result" : True }    
 
 @app.get("/heartbeat")
