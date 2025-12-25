@@ -1,3 +1,10 @@
+#optimum-cli export openvino --task text-classification --weight-format int4 --ratio 0.8 --model Qwen/Qwen3-Reranker-0.6B models/Qwen3-Reranker-0.6B-ov
+#optimum-cli export openvino --task text-classification --weight-format int4 --ratio 0.8 --model Qwen/Qwen3-Reranker-4B models/Qwen3-Reranker-4B-ov
+
+#optimum-cli export openvino --task feature-extraction --weight-format int4 --ratio 0.8 --model Qwen/Qwen3-Embedding-0.6B models/Qwen3-Embedding-0.6B-ov
+#optimum-cli export openvino --task feature-extraction --weight-format int4 --ratio 0.8 --model Qwen/Qwen3-Embedding-4B models/Qwen3-Embedding-4B-ov
+
+
 from fastapi.middleware.cors import CORSMiddleware
 import librosa
 from fastapi import FastAPI, File, UploadFile
@@ -36,6 +43,37 @@ import csv
 import os
 from datetime import datetime
 from monitor import CPUPowerMonitor
+
+# support rag
+import pandas as pd
+from langchain_community.embeddings import OpenVINOBgeEmbeddings
+from langchain_chroma import Chroma
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from openvino_genai import TextRerankPipeline
+
+RAG_DB_DIR = "./rag_db"
+
+rag_embedding = OpenVINOBgeEmbeddings(
+    model_name_or_path="./models/Qwen3-Embedding-0.6B-ov-int8",
+    model_kwargs={"device": "GPU"},
+)
+
+rag_db = Chroma(
+    collection_name="arcos",
+    persist_directory=RAG_DB_DIR,
+    embedding_function=rag_embedding,
+)
+
+config = TextRerankPipeline.Config()
+config.top_n = 5
+
+# ===============================
+# 🔥 RERANKER
+# ===============================
+model_rerank = snapshot_download(repo_id="OpenVINO/Qwen3-Reranker-0.6B-fp16-ov")
+
+reranker = TextRerankPipeline(model_rerank,"GPU",config) #./models/Qwen3-Reranker-0.6B-ov
+
 
 #optimum-cli export openvino --weight-format int4 --task text-generation-with-past --model growdle/HyperCLOVAX-SEED-Text-Instruct-1.5B ./CLOVAX-1.5B-ov-int4
 #kakaocorp/kanana-1.5-2.1b-instruct-2505
@@ -120,6 +158,32 @@ pipe_stt = ov_genai.WhisperPipeline(model_stt,device="GPU", config={"PERFORMANCE
 
 token_txt = AutoTokenizer.from_pretrained(model_txt)
 pipe_txt = ov_genai.VLMPipeline(model_txt, device="GPU", config={"PERFORMANCE_HINT": "LATENCY"})
+
+def get_rag_context(
+    query: str,
+    search_k: int = 20,
+    rerank_k: int = 5,
+) -> str:
+    # 1️⃣ Embedding 기반 1차 검색
+    docs = rag_db.similarity_search(query, k=search_k)
+    if not docs:
+        return ""
+
+    candidates = [doc.page_content for doc in docs]
+    print(len(candidates), candidates)
+
+    # 2️⃣ Reranker (Cross-Encoder)
+    rerank_results = reranker.rerank(query,candidates)
+
+    # [(idx, score), ...] → 상위 문서
+    top_docs = [
+        candidates[idx] for idx, score in rerank_results[:rerank_k]
+    ]
+
+    # 3️⃣ Prompt Context 생성
+    context = "\n".join([f"- {doc}" for doc in top_docs])
+    return context    
+
 
 # for genai
 async def process_stream(streamer, isStream=True, isPlay=0, lang='en'):
@@ -238,6 +302,43 @@ def main():
 def monitor():
   return si.getAll()
 
+@app.post("/v1/rag/upload_csv")
+async def upload_csv_rag(file: UploadFile = File(...)):
+    # Read CSV file into a pandas dataframe
+    df = pd.read_csv(file.file)
+
+    # Process each row to generate text data
+    texts = []
+    for _, row in df.iterrows():
+        texts.append(" | ".join(map(str, row.values)))
+
+    # Initialize the text splitter (if not done already)
+    splitter = RecursiveCharacterTextSplitter(
+        chunk_size=500,
+        chunk_overlap=50,
+    )
+
+    # Split the texts into smaller chunks for easier indexing
+    docs = splitter.create_documents(texts)
+
+    # Add documents to the RAG database (Chroma or similar)
+    rag_db.add_documents(docs)
+
+    # If Chroma supports `commit()` or `save()`, call that to persist changes.
+    # For example, if it's a Chroma client object, use commit().
+    #try:
+    #    rag_db.commit()   # commit() error or rag_db.save(), depending on the library
+    #except AttributeError:
+    #    return {"result": False, "error": "Unable to persist the documents. Please check your database setup."}
+
+    # Return a response indicating the result
+    return {
+        "result": True,
+        "rows": len(df),
+        "chunks": len(docs)
+    }
+
+
 @app.get("/v1/txt2chat", summary="문장 기반의 chatgpt 스타일 구현")
 def txt2chat(prompt : str ,system = _SYSTEM, isPlay = 0, lang='en'): # gen or med
   streamer = IterableStreamer(pipe_txt.get_tokenizer())
@@ -293,6 +394,63 @@ def txt2chat(prompt : str ,system = _SYSTEM, isPlay = 0, lang='en'): # gen or me
 
   out = process_stream(streamer, False, isPlay,lang)
   return StreamingResponse(out, media_type='text/event-stream')
+
+@app.get("/v1/txt2rag", summary="문장 기반의 chatgpt 스타일 구현")
+def txt2rag(prompt : str ,system = _SYSTEM, isPlay = 0, lang='en'): # gen or med
+  streamer = IterableStreamer(pipe_txt.get_tokenizer())
+
+  rag_context = get_rag_context(prompt)
+  if rag_context:
+        prompt = f"""
+다음은 참고 지식이다. 반드시 이 내용을 우선 참고하여 답변하라.
+
+[지식]
+{rag_context}
+
+[질문]
+{prompt}
+"""
+        
+  pipe_txt.start_chat(system_message=system)
+
+  print(prompt)
+
+  config = GenerationConfig(
+      max_new_tokens=256,
+      #temperature=0.5,
+      #beam_size=1,
+      do_sample=False, #fast for beam-search
+      speculative_decoding=True,
+      repetition_penalty=1.1,
+      #top_k=50,
+      #top_p=0.9,
+  )
+
+  generate_kwargs = dict(
+      prompt = prompt,
+      config = config,
+      streamer=streamer, # !do_sample || top_k > 0
+  )
+
+  """
+  generate_kwargs = dict(
+      inputs = prompt,
+      max_new_tokens= 256,
+      temperature= 0.5,
+      #do_sample=True,
+      repetition_penalty=1.1,
+      top_k=50,
+      top_p=0.9,
+      streamer=streamer, # !do_sample || top_k > 0
+  )
+  """
+
+  t1 = Thread(target=pipe_txt.generate, kwargs=generate_kwargs)
+  t1.start()
+
+  out = process_stream(streamer, False, isPlay,lang)
+  return StreamingResponse(out, media_type='text/event-stream')
+
 
 
 @app.get("/v2/img2chat", summary="문장 기반의 chatgpt 스타일 구현")
@@ -385,6 +543,50 @@ def img2chat(file : UploadFile = File(...), prompt = "" ,system = _SYSTEM, isPla
 
   out = process_stream(streamer, False, isPlay, lang)
   return StreamingResponse(out, media_type='text/event-stream')
+
+@app.get("/v1/img2rag", summary="RAG + Image Chat")
+@app.post("/v1/img2rag", summary="RAG + Image Chat")
+def img2rag( prompt="", system=_SYSTEM, isPlay=0, lang='en',):
+    streamer = IterableStreamer(pipe_txt.get_tokenizer())
+
+    # ===============================
+    # 🔥 RAG CONTEXT
+    # ===============================
+   
+    rag_context = get_rag_context(prompt)
+    if rag_context:
+        prompt = f"""
+다음은 참고 지식이다. 반드시 이 내용을 우선 참고하여 답변하라.
+
+[지식]
+{rag_context}
+
+[질문]
+{prompt}
+"""
+
+    pipe_txt.start_chat(system_message=system)
+
+    config = GenerationConfig(
+        max_new_tokens=256,
+        do_sample=False,
+        speculative_decoding=True,
+        repetition_penalty=1.1,
+    )
+
+    generate_kwargs = dict(
+        prompt=prompt,
+        images=read_image("capture.jpg"),
+        config=config,
+        streamer=streamer,
+    )
+
+    t1 = Thread(target=pipe_txt.generate, kwargs=generate_kwargs)
+    t1.start()
+
+    # 🔥 기존 streaming 유지
+    out = process_stream(streamer, False, isPlay, lang)
+    return StreamingResponse(out, media_type="text/event-stream")
 
 
 @app.post("/v1/stt", summary="음성을 인식합니다.")
