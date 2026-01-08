@@ -2,7 +2,8 @@ yolo*
 output
 outputs
 datasets
-models/
+uploads
+models
 __pycache__*
 *__pycache__*
 recordings_wakeword
