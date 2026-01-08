@@ -35,6 +35,77 @@ import io
 import random
 import torch
 from optimum.intel.openvino.modeling_diffusion import OVStableDiffusionPipeline
+from ov_faceswap import FaceSwapOpenVINO 
+import cv2
+import os
+import numpy as np
+import torch
+from scipy.io.wavfile import write
+
+from speaker_encoder import audio
+from speaker_encoder.hparams import sampling_rate, mel_window_step, partials_n_frames
+
+
+# 변환된 모델 로드
+compiled_cmodel = ov.compile_model("models/cmodel_ir.xml")
+compiled_smodel = ov.compile_model("models/smodelir.xml")
+compiled_net_g = ov.compile_model("models/net_gir.xml")
+
+
+### 2. 보조 함수 (Speaker Embedding 추출 전용)
+def compute_partial_slices(n_samples: int, rate=1.3, min_coverage=0.75):
+    samples_per_frame = int((sampling_rate * mel_window_step / 1000))
+    n_frames = int(np.ceil((n_samples + 1) / samples_per_frame))
+    frame_step = int(np.round((sampling_rate / rate) / samples_per_frame))
+    
+    wav_slices, mel_slices = [], []
+    steps = max(1, n_frames - partials_n_frames + frame_step + 1)
+    for i in range(0, steps, frame_step):
+        mel_range = np.array([i, i + partials_n_frames])
+        wav_range = mel_range * samples_per_frame
+        mel_slices.append(slice(*mel_range))
+        wav_slices.append(slice(*wav_range))
+
+    return wav_slices, mel_slices
+
+def embed_utterance(wav: np.ndarray, smodel_compiled):
+    wav_slices, mel_slices = compute_partial_slices(len(wav))
+    max_wave_length = wav_slices[-1].stop
+    if max_wave_length >= len(wav):
+        wav = np.pad(wav, (0, max_wave_length - len(wav)), "constant")
+
+    mel = audio.wav_to_mel_spectrogram(wav)
+    mels = np.array([mel[s] for s in mel_slices])
+    
+    # OpenVINO 추론
+    output_layer = smodel_compiled.output(0)
+    partial_embeds = smodel_compiled(mels)[output_layer]
+
+    raw_embed = np.mean(partial_embeds, axis=0)
+    return raw_embed / np.linalg.norm(raw_embed, 2)
+
+
+### 3. 메인 추론 함수
+def synthesize_audio(src_path, tgt_path):
+    # Target Speaker Embedding 추출
+    wav_tgt, _ = librosa.load(tgt_path, sr=sampling_rate)
+    wav_tgt, _ = librosa.effects.trim(wav_tgt, top_db=20)
+    g_tgt = embed_utterance(wav_tgt, compiled_smodel)
+    g_tgt = np.expand_dims(g_tgt, 0).astype(np.float32)
+
+    # Source Content 추출
+    wav_src, _ = librosa.load(src_path, sr=sampling_rate)
+    wav_src = np.expand_dims(wav_src, axis=0).astype(np.float32)
+    
+    # cmodel 추론
+    c_output = compiled_cmodel(wav_src)[compiled_cmodel.output(0)]
+    c = c_output.transpose((0, 2, 1)) # [1, channel, time]
+
+    # net_g(Synthesizer) 최종 추론
+    # 입력 순서와 타입 주의
+    tgt_audio = compiled_net_g([c, g_tgt])[compiled_net_g.output(0)]
+    
+    return tgt_audio[0][0]
 
 
 # 너는 파이온이라는 휴머노이드 로봇으로 사람들을 지키기 위해 태어났어. 대화체로 사람처럼 대답하되, 다음과 같은 동작이 가능하니, 적절한 동작을 먼저 출력하고 대답을 이야기 해줘. - clamp, highFive, shakeHands_1, blowKiss, hug, hightWave, lowWave, ultramanRay, bothHandsUp, singleHandsUp, Refuse
@@ -101,11 +172,13 @@ class Chat(BaseModel):
 
 model_txt = snapshot_download(repo_id='Echo9Zulu/gemma-3-4b-it-qat-int4_asym-ov') # helenai/Qwen3-VL-4B-Instruct-int4 Echo9Zulu/gemma-3-4b-it-qat-int4_asym-ov circulus/gemma-3-4b-it-ov-awq-sym helenai/Qwen2.5-VL-3B-Instruct-ov-int4
 model_stt = snapshot_download(repo_id='circulus/whisper-large-v3-turbo-ov') # translate not working, only general model
-model_img = snapshot_download(repo_id='rippertnt/pix2pix-turbo-ov')
+#model_img = snapshot_download(repo_id='rippertnt/pix2pix-turbo-ov')
 model_t2t = snapshot_download(repo_id='rippertnt/ko2en-ov-int4')
 
+swapper = FaceSwapOpenVINO(device_name="GPU") 
+
 token_txt = AutoTokenizer.from_pretrained(model_txt)
-token_img = AutoTokenizer.from_pretrained(model_img)
+#token_img = AutoTokenizer.from_pretrained(model_img)
 
 conf = AutoConfig.from_pretrained(model_t2t, trust_remote_code=True)
 token_t2t = AutoTokenizer.from_pretrained(model_t2t, trust_remote_code=True)
@@ -114,7 +187,7 @@ pipe_t2t = pipeline("text2text-generation", model=model_t2t, tokenizer=token_t2t
 
 pipe_stt = ov_genai.WhisperPipeline(model_stt,device="GPU", config={"PERFORMANCE_HINT": "LATENCY"})
 pipe_txt = ov_genai.VLMPipeline(model_txt, device="GPU", config={"PERFORMANCE_HINT": "LATENCY"})
-pipe_img2anim = OVStableDiffusionPipeline.from_pretrained("circulus/on-canvers-disney-v3.9.1-int8", ov_config={"CACHE_DIR": ""})
+#pipe_img2anim = OVStableDiffusionPipeline.from_pretrained("circulus/on-canvers-disney-v3.9.1-int8", ov_config={"CACHE_DIR": ""})
 pipe_img2real = OVStableDiffusionPipeline.from_pretrained("circulus/on-canvers-real-v3.9.1-int8", ov_config={"CACHE_DIR": ""})
 
 
@@ -408,8 +481,8 @@ async def txt2img(prompt: str = "", model : str = "real", seed: int = None, lang
   if lang == "ko":
      prompt =  pipe_t2t(prompt, max_new_tokens=512)[0]['generated_text']
 
-  if model == "anim":
-     pipe = pipe_img2anim
+  #if model == "anim":
+  #   pipe = pipe_img2anim
 
   image = pipe(
       prompt=f"{prompt}. high quality.",
@@ -424,6 +497,71 @@ async def txt2img(prompt: str = "", model : str = "real", seed: int = None, lang
   return f"outputs/out_image_{seed}.png"
 
 
+@app.post("/face2img", response_class=FileResponse)
+def face2img(file : UploadFile = File(...), prompt: str = "", model : str = "real", seed: int = None, lang : str = 'ko'):
+  location = f"uploads/{file.filename}"
+
+  pipe = pipe_img2real
+
+  if seed is None:
+      seed = random.randint(0, 2**32 - 1)
+  torch.manual_seed(seed)
+
+  if lang == "ko":
+     prompt =  pipe_t2t(prompt, max_new_tokens=512)[0]['generated_text']
+
+  image = pipe(
+      prompt=f"{prompt}. high quality.",
+      width=512,
+      height=512,
+      num_inference_steps=4,
+      guidance_scale=1.0,
+  ).images[0]
+
+  image.save(f"outputs/out_image_{seed}.jpg")
+
+  with open(location,"wb+") as file_object:
+    file_object.write(file.file.read())
+
+  target_img = cv2.imread(f"outputs/out_image_{seed}.jpg")
+  source_img = cv2.imread(location)
+
+  result_img = swapper.swap_face(target_img, source_img, enhance=0)
+
+  cv2.imwrite(f"outputs/out_image_{seed}_{file.filename}.jpg", result_img)
+  return f"outputs/out_image_{seed}_{file.filename}.jpg"
+
+
+@app.post("/voice2wav", response_class=FileResponse)
+def voice2wav(file : UploadFile = File(...), gender : str = "man"):
+  tgt_file = f"uploads/{file.filename}"
+
+  with open(src_file,"wb+") as file_object:
+    file_object.write(file.file.read())
+
+  ### 4. 실행 및 결과 저장
+  print('추론 시작...')
+  start_time = time.time()
+
+  src_file = f"{gender}.wav"
+
+  output_audio = synthesize_audio(src_file, tgt_file)
+
+  # 결과 저장
+  timestamp = time.strftime("%m-%d_%H-%M", time.localtime())
+  result_path = os.path.join("output", f"result_{timestamp}.wav")
+
+  write(result_path, sampling_rate, output_audio)
+
+  print(f"완료! 소요 시간: {time.time() - start_time:.2f}초")
+  print(f"저장 위치: {result_path}")
+
+  return result_path
+
+
+
+
+"""
 @app.post("/sketch2img", response_class=FileResponse)
 async def sketch2img(file: UploadFile = File(...), prompt: str = "", seed: int = None, lang : str = 'ko'):
   load_model(False)
@@ -460,6 +598,7 @@ async def sketch2img(file: UploadFile = File(...), prompt: str = "", seed: int =
   out.save(save_path)
 
   return save_path
-
+"""
+  
 print("Loading Complete","GPU")
 subprocess.Popen(["play", 'intel_inside.mp3']) # async

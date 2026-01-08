@@ -26,3 +26,9 @@ ultralytics
 playsound==1.2.2
 pyserial
 scikit-image
+py3langid
+spacy
+pypinyin 
+hangul_romanize 
+num2words
+torchcodec

@@ -509,7 +509,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 // 잠시 후 명령어 실행 시뮬레이션
                 setTimeout(() => {
                     document.querySelector('.voice-input input').value = '';
-                    document.getElementById('move-up').click();
+                    //document.getElementById('move-up').click();
                 }, 1000);
             }, 500);
         }
