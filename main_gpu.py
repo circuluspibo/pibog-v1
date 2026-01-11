@@ -54,6 +54,12 @@ import glob
 
 RAG_DB_DIR = "./rag_db"
 
+
+#OpenVINO/Qwen3-Reranker-0.6B-fp16-ov
+#OpenVINO/Qwen3-Embedding-0.6B-int8-ov
+#Echo9Zulu/gemma-3-4b-it-qat-int4_asym-ov
+#circulus/whisper-large-v3-turbo-ov
+
 rag_embedding = OpenVINOBgeEmbeddings(
     model_name_or_path="./models/Qwen3-Embedding-0.6B-int8-ov",
     model_kwargs={"device": "GPU"},
