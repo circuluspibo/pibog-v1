@@ -40,3 +40,5 @@ torchcodec
 langchain_chroma
 langchain_text_splitters
 langchain_community
+optimum-intel
+nncf
