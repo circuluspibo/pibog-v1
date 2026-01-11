@@ -39,7 +39,4 @@ num2words
 torchcodec
 langchain_chroma
 langchain_text_splitters
-langchain_community.embeddings
-
-
-
+langchain_community
