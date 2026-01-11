@@ -27,6 +27,15 @@ def download_models():
             local_dir_use_symlinks=False,
             resume_download=True  # 중단 시 다시 시작 가능
         )
+
+    snapshot_download(
+        repo_id="rippertnt/on-vits2-multi-tts-v1", 
+        local_dir="./models",
+        local_dir_use_symlinks=False,
+        resume_download=True,  # 중단 시 다시 시작 가능
+        allow_patterns="*ov*")
+
+
     print("\n모든 모델 다운로드 완료.")
 
 def load_offline_model(repo_id):
