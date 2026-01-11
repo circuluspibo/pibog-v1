@@ -15,9 +15,12 @@ pydantic
 serverinfo
 transformers
 pillow
-torch --index-url https://download.pytorch.org/whl/xpu 
-torchvision --index-url https://download.pytorch.org/whl/xpu 
-torchaudio --index-url https://download.pytorch.org/whl/xpu
+--extra-index-url https://download.pytorch.org/whl/xpu 
+torch
+--extra-index-url https://download.pytorch.org/whl/xpu 
+torchvision
+--extra-index-url https://download.pytorch.org/whl/xpu 
+torchaudio
 pykakasi
 eng-to-ipa
 cn2an
@@ -34,4 +37,5 @@ pypinyin
 hangul_romanize 
 num2words
 torchcodec
+
 
