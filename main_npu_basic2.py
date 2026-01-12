@@ -409,7 +409,48 @@ async def processing_thread():
           processed_frame_queue.put(cv2.resize(out, (640, 480)))
           await asyncio.sleep(0.001)
 
+"""
+async def processing_thread():
+    global cnt_image
+    print("============= Processing Combined Stream....")
 
+    # 세션 옵션: 연결 유지(keep-alive)를 위해 더 세밀하게 설정 가능
+    connector = aiohttp.TCPConnector(limit=None) 
+    async with aiohttp.ClientSession(connector=connector) as session:
+        while True:
+            start_time = time.time()
+
+            # 1. 데이터 가져오기
+            frame, depth_frame = await fetch_combined_frame(session)
+            
+            if frame is None or depth_frame is None:
+                await asyncio.sleep(0.01) # 서버가 준비 안됐을 때만 대기
+                continue
+
+            # 2. 분석 로직 (NPU 추론 등)
+            # (여기에 있는 det_model, visualize_face 등 기존 로직 수행)
+            frame_resized = cv2.resize(frame, (640, 640))
+            depth_resized = cv2.resize(depth_frame, (640, 640))
+            
+            # ... [기존 모델 추론 코드 생략] ...
+            # out = 시각화된 결과 프레임
+
+            # 3. 큐 관리 (반드시 await 사용!)
+            if processed_frame_queue.full():
+                try:
+                    processed_frame_queue.get_nowait() # 가장 오래된 프레임 제거
+                except asyncio.QueueEmpty:
+                    pass
+
+            # 분석된 결과를 큐에 넣기
+            await processed_frame_queue.put(cv2.resize(out, (640, 480)))
+
+            # 4. 루프 속도 제어
+            # AI 추론 속도가 너무 빠르면 서버에 요청을 너무 자주 보낼 수 있음
+            elapsed = time.time() - start_time
+            sleep_time = max(0.001, (1/30) - elapsed) # 30FPS 타겟
+            await asyncio.sleep(sleep_time)
+"""
 
 @app.get("/")
 def main():
