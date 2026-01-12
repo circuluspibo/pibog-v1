@@ -348,11 +348,14 @@ async def processing_thread():
     global state, cnt_image
     print("============= Processing Combined Stream....")
 
-    async with aiohttp.ClientSession() as session:
-        while True:
-          # 1. 하나의 요청으로 두 데이터를 동시에 가져옴
+    connector = aiohttp.TCPConnector(limit=None) 
+    async with aiohttp.ClientSession(connector=connector) as session:
+      while True:
+          start_time = time.time()
+
+          # 1. 데이터 가져오기
           frame, depth_frame = await fetch_combined_frame(session)
-          
+        
           if frame is None or depth_frame is None:
               await asyncio.sleep(0.01) # Non-blocking sleep
               continue
@@ -402,11 +405,14 @@ async def processing_thread():
           cv2.putText(out, f"FPS: {fps:.2f}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
 
           if processed_frame_queue.full():
-              processed_frame_queue.get()  # 가장 오래된 프레임 제거   
+              try:
+                  processed_frame_queue.get_nowait() # 가장 오래된 프레임 제거
+              except asyncio.QueueEmpty:
+                  pass
 
-          #print("pocessed")
-
-          processed_frame_queue.put(cv2.resize(out, (640, 480)))
+          # 분석된 결과를 큐에 넣기
+          await processed_frame_queue.put(cv2.resize(out, (640, 480)))
+          
           await asyncio.sleep(0.001)
 
 """
