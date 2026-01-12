@@ -322,141 +322,82 @@ def get_mask_depths(masks, depth_frame, low_percentile=5):
 
 import aiohttp
 
-async def fetch_combined_frame(session):
-    """서버로부터 합쳐진 바이너리 데이터를 받아 분리함"""
-    try:
-        async with session.get(SOURCE_VIDEO_URL, timeout=1.0) as response:
-            if response.status == 200:
-                data = await response.read()
-                
-                # 데이터 크기 계산
-                # 640 * 480 * 3 (RGB) = 921,600 bytes
-                # 640 * 480 * 2 (Depth 16bit) = 614,400 bytes
-                # 총합: 1,536,000 bytes
-                rgb_size = 640 * 480 * 3
-                
-                if len(data) >= rgb_size:
-                    # 바이너리 슬라이싱 및 reshape
-                    frame = np.frombuffer(data[:rgb_size], dtype=np.uint8).reshape(480, 640, 3)
-                    depth_frame = np.frombuffer(data[rgb_size:], dtype=np.uint16).reshape(480, 640)
-                    return frame, depth_frame
-    except Exception as e:
-        print(f"Fetch Error: {e}")
-    return None, None
+# 데이터 공유를 위한 비동기 큐 (최신 1프레임만 유지하여 지연 시간 최소화)
+raw_data_queue = asyncio.Queue(maxsize=1)
 
-async def processing_thread():
-    global state, cnt_image
-    print("============= Processing Combined Stream....")
-
-    connector = aiohttp.TCPConnector(limit=None) 
-    async with aiohttp.ClientSession(connector=connector) as session:
-      while True:
-          start_time = time.time()
-
-          # 1. 데이터 가져오기
-          frame, depth_frame = await fetch_combined_frame(session)
-        
-          if frame is None or depth_frame is None:
-              await asyncio.sleep(0.01) # Non-blocking sleep
-              continue
-
-          if cnt_image % 100 == 0:
-            cv2.imwrite("capture.jpg", frame) #cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
-
-          cnt_image = cnt_image + 1
-
-          start_time = time.time()
-
-          frame = cv2.resize(frame, (640, 640))
-          depth_frame = cv2.resize(depth_frame, (640, 640))
-          res = det_model(frame, device="intel:npu", verbose=False, conf=0.25)[0] #, imgsz=640
-
-
-          #print(res)
-
-          if hasattr(res, 'masks') and res.masks is not None:
-              masks = res.masks.data.cpu().numpy().astype(np.uint8)
-          else:
-              masks = []
-
-          boxes = res.boxes.xyxy.cpu().numpy()
-          classes = res.boxes.cls.cpu().numpy().astype(int)
-          scores = res.boxes.conf.cpu().numpy()
-
-          #print("1")
-
-          # 시각화
-          out = visualize_segmentation(frame, masks, boxes, classes, scores, get_mask_depths(masks, depth_frame), class_names)
-
-          #print("2")
-          # 얼굴 감지 모델 추론
-          resized_frame = cv2.resize(frame, (face_det_width, face_det_height))
-          input_tensor = np.expand_dims(resized_frame.transpose((2, 0, 1)), 0)
-          face_det_results = face_det_compiled_model(input_tensor)[face_det_output_layer]
-
-
-          out = visualize_face(out, face_det_results)
-
-          #print("3")
-
-          # FPS 계산 및 표시
-          curr_time = time.time()
-          fps = 1.0 / (curr_time - start_time)
-          cv2.putText(out, f"FPS: {fps:.2f}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
-
-          if processed_frame_queue.full():
-              try:
-                  processed_frame_queue.get_nowait() # 가장 오래된 프레임 제거
-              except asyncio.QueueEmpty:
-                  pass
-
-          # 분석된 결과를 큐에 넣기
-          await processed_frame_queue.put(cv2.resize(out, (640, 480)))
-          
-          await asyncio.sleep(0.001)
-
-"""
-async def processing_thread():
-    global cnt_image
-    print("============= Processing Combined Stream....")
-
-    # 세션 옵션: 연결 유지(keep-alive)를 위해 더 세밀하게 설정 가능
-    connector = aiohttp.TCPConnector(limit=None) 
+async def receiver_loop():
+    """[수신부] 서버에서 바이너리 데이터를 받아 큐에 넣음 (네트워크 전용)"""
+    print("============= Receiver Loop Started")
+    connector = aiohttp.TCPConnector(limit=None, keepalive_timeout=30)
     async with aiohttp.ClientSession(connector=connector) as session:
         while True:
-            start_time = time.time()
+            try:
+                frame, depth = await fetch_combined_frame(session)
+                if frame is not None:
+                    # 큐가 가득 찼다면 기존 프레임을 버리고 최신 것을 넣음 (Latency 방지)
+                    if raw_data_queue.full():
+                        raw_data_queue.get_nowait()
+                    await raw_data_queue.put((frame, depth))
+                else:
+                    await asyncio.sleep(0.001)
+            except Exception as e:
+                print(f"Receiver Error: {e}")
+                await asyncio.sleep(0.1)
 
-            # 1. 데이터 가져오기
-            frame, depth_frame = await fetch_combined_frame(session)
-            
-            if frame is None or depth_frame is None:
-                await asyncio.sleep(0.01) # 서버가 준비 안됐을 때만 대기
-                continue
+async def processing_loop():
+    """[분석부] 큐에서 데이터를 꺼내 NPU 추론 및 시각화 수행 (연산 전용)"""
+    global cnt_image
+    print("============= Processing Loop Started")
+    
+    while True:
+        # 1. 수신부로부터 데이터 획득 (데이터가 올 때까지 await)
+        frame, depth_frame = await raw_data_queue.get()
+        start_time = time.time()
 
-            # 2. 분석 로직 (NPU 추론 등)
-            # (여기에 있는 det_model, visualize_face 등 기존 로직 수행)
-            frame_resized = cv2.resize(frame, (640, 640))
-            depth_resized = cv2.resize(depth_frame, (640, 640))
-            
-            # ... [기존 모델 추론 코드 생략] ...
-            # out = 시각화된 결과 프레임
+        # 2. 전처리 최적화: INTER_NEAREST 사용 (CPU 부하 감소)
+        # AI 모델 입력 규격에 맞게 리사이즈
+        frame_ai = cv2.resize(frame, (640, 640), interpolation=cv2.INTER_NEAREST)
+        depth_ai = cv2.resize(depth_frame, (640, 640), interpolation=cv2.INTER_NEAREST)
 
-            # 3. 큐 관리 (반드시 await 사용!)
-            if processed_frame_queue.full():
-                try:
-                    processed_frame_queue.get_nowait() # 가장 오래된 프레임 제거
-                except asyncio.QueueEmpty:
-                    pass
+        # 3. NPU 추론
+        res = det_model(frame_ai, device="intel:npu", verbose=False, conf=0.25)[0]
 
-            # 분석된 결과를 큐에 넣기
-            await processed_frame_queue.put(cv2.resize(out, (640, 480)))
+        # 4. 후처리 및 시각화 로직
+        if hasattr(res, 'masks') and res.masks is not None:
+            masks = res.masks.data.cpu().numpy().astype(np.uint8)
+        else:
+            masks = []
 
-            # 4. 루프 속도 제어
-            # AI 추론 속도가 너무 빠르면 서버에 요청을 너무 자주 보낼 수 있음
-            elapsed = time.time() - start_time
-            sleep_time = max(0.001, (1/30) - elapsed) # 30FPS 타겟
-            await asyncio.sleep(sleep_time)
-"""
+        boxes = res.boxes.xyxy.cpu().numpy()
+        classes = res.boxes.cls.cpu().numpy().astype(int)
+        scores = res.boxes.conf.cpu().numpy()
+
+        # 시각화 (원본 크기 640x480으로 직접 생성하여 불필요한 리사이즈 제거)
+        out = visualize_segmentation(frame_ai, masks, boxes, classes, scores, 
+                                     get_mask_depths(masks, depth_ai), class_names)
+
+        # 얼굴 감지 (추가 최적화: 필요한 경우에만 수행하거나 해상도 최소화)
+        resized_face = cv2.resize(frame_ai, (face_det_width, face_det_height), interpolation=cv2.INTER_NEAREST)
+        input_tensor = np.expand_dims(resized_face.transpose((2, 0, 1)), 0)
+        face_det_results = face_det_compiled_model(input_tensor)[face_det_output_layer]
+        
+        out = visualize_face(out, face_det_results)
+
+        # 5. FPS 계산 및 출력
+        fps = 1.0 / (time.time() - start_time)
+        cv2.putText(out, f"FPS: {fps:.2f}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
+
+        # 6. 결과 스트리밍 큐에 전달
+        if processed_frame_queue.full():
+            try: processed_frame_queue.get_nowait()
+            except: pass
+        
+        # 마지막 출력 해상도로 조정하여 put
+        await processed_frame_queue.put(cv2.resize(out, (640, 480)))
+        
+        cnt_image += 1
+        if cnt_image % 100 == 0:
+            cv2.imwrite("capture.jpg", frame)
 
 @app.get("/")
 def main():
@@ -1226,92 +1167,32 @@ async def collect_depths():
         print(f"깊이 수집 종료. 총 {frame_count}개 프레임 처리됨")        
 
 
-def task1():
-    asyncio.run(collect_frames())
-
-def task2():
-    asyncio.run(collect_depths())
-
 @app.get("/start_collection")
 async def start_frame_collection():
-    """프레임 수집 시작"""
-    global is_collecting, is_collecting2
+    """수신 및 분석 루프 시작"""
+    global is_collecting
     
+    # 중복 실행 방지
     if is_collecting:
-        return {"message": "이미 프레임 수집이 진행 중입니다"}
+        return {"message": "이미 프레임 수집 및 분석이 진행 중입니다"}
     
-    # 기존 큐 비우기
-    cleared = 0
-    while not frame_queue.empty():
-        try:
-            frame_queue.get_nowait()
-            cleared += 1
-        except frame_queue.Empty:
-            break
+    # 1. 기존 큐 초기화 (Raw 데이터 큐와 처리된 결과 큐 모두)
+    for q in [raw_data_queue, processed_frame_queue]:
+        while not q.empty():
+            try:
+                q.get_nowait()
+            except asyncio.QueueEmpty:
+                break
     
-    print(f"큐 초기화: {cleared}개 프레임 제거")
+    print("모든 큐 초기화 완료")
     
     is_collecting = True
-    is_collecting2 = True
-    #task1 = asyncio.create_task(collect_frames())
-    #task2 = asyncio.create_task(collect_depths())
-    #threading.Thread(target=task1, daemon=True).start()
-    #threading.Thread(target=task2, daemon=True).start()
-    #threading.Thread(target=processing_thread, daemon=True).start()
-    asyncio.create_task(processing_thread())
-    return {"message": "프레임 수집을 시작했습니다"}
-
-
-"""
-import asyncio
-import aiohttp
-import numpy as np
-import cv2
-import time
-
-SERVER_URL = "http://localhost:8000"
-
-async def fetch_frame(session, endpoint, shape, dtype):
-    async with session.get(f"{SERVER_URL}/{endpoint}") as response:
-        if response.status == 200:
-            data = await response.read()
-            return np.frombuffer(data, dtype=dtype).reshape(shape)
-    return None
-
-async def main():
-    async with aiohttp.ClientSession() as session:
-        while True:
-            start_time = time.time()
-            
-            # 1. RGB와 Depth 데이터를 동시에 요청
-            results = await asyncio.gather(
-                fetch_frame(session, "video_raw", (480, 640, 3), np.uint8),
-                fetch_frame(session, "depth_raw", (480, 640), np.uint16)
-            )
-            
-            color_frame, depth_frame = results
-
-            # 2. 화면 표시 (후처리는 여기서 원본 데이터로 수행)
-            if color_frame is not None:
-                cv2.imshow("RGB Raw", color_frame)
-            
-            if depth_frame is not None:
-                # 시각화용 8비트 변환
-                depth_vis = cv2.normalize(depth_frame, None, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8U)
-                cv2.imshow("Depth Raw", depth_vis)
-
-            if cv2.waitKey(1) & 0xFF == ord('q'):
-                break
-
-            # 3. FPS 제어 (카메라 30fps에 맞춰 약 33ms 주기 유지)
-            elapsed = time.time() - start_time
-            sleep_time = max(0.001, (1/30) - elapsed)
-            await asyncio.sleep(sleep_time)
-
-    cv2.destroyAllWindows()
-
-if __name__ == "__main__":
-    asyncio.run(main())
-"""
+    
+    # 2. 비동기 테스크로 수신부와 분석부를 각각 실행
+    # 이제 이 두 함수는 백그라운드에서 서로 데이터를 주고받으며 독립적으로 작동합니다.
+    asyncio.create_task(receiver_loop())   # 서버에서 데이터 가져오기 전담
+    asyncio.create_task(processing_loop()) # NPU 분석 및 시각화 전담
+    
+    return {"message": "수신 및 분석 파이프라인이 시작되었습니다."}
 
 print("Loading Complete","NPU")
