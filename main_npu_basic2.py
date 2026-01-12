@@ -24,7 +24,8 @@ import time
 import cv2
 from openvino import Core
 from fastapi.staticfiles import StaticFiles
-from queue import Queue
+#from queue import Queue
+from asyncio import Queue
 from ultralytics import YOLO, FastSAM
 import openvino as ov
 #from playsound import playsound
@@ -93,7 +94,7 @@ import httpx  # httpx를 사용하여 비동기 HTTP 요청을 처리합니다.
 # 원본 비디오 스트림 URL
 #SOURCE_VIDEO_URL = "http://10.42.0.1:59511/video_feed"
 SOURCE_VIDEO_URL = f"http://{_IP}:59511/video_raw"
-SOURCE_DEPTH_URL = f"http://{_IP}:59511/depth_raw"
+
 
 conn = None
 audio_hub = None
@@ -324,7 +325,7 @@ import aiohttp
 async def fetch_combined_frame(session):
     """서버로부터 합쳐진 바이너리 데이터를 받아 분리함"""
     try:
-        async with session.get(SOURCE_COMBINED_URL, timeout=1.0) as response:
+        async with session.get(SOURCE_VIDEO_URL, timeout=1.0) as response:
             if response.status == 200:
                 data = await response.read()
                 
@@ -349,12 +350,12 @@ async def processing_thread():
 
     async with aiohttp.ClientSession() as session:
         while True:
-            # 1. 하나의 요청으로 두 데이터를 동시에 가져옴
-            frame, depth_frame = await fetch_combined_frame(session)
-            
-            if frame is None or depth_frame is None:
-                await asyncio.sleep(0.01) # Non-blocking sleep
-                continue
+          # 1. 하나의 요청으로 두 데이터를 동시에 가져옴
+          frame, depth_frame = await fetch_combined_frame(session)
+          
+          if frame is None or depth_frame is None:
+              await asyncio.sleep(0.01) # Non-blocking sleep
+              continue
 
           if cnt_image % 100 == 0:
             cv2.imwrite("capture.jpg", frame) #cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
@@ -365,6 +366,9 @@ async def processing_thread():
 
           frame = cv2.resize(frame, (640, 640))
           res = det_model(frame, device="intel:npu", verbose=False, conf=0.25)[0] #, imgsz=640
+
+
+          print("1")
 
           if hasattr(res, 'masks') and res.masks is not None:
               masks = res.masks.data.cpu().numpy().astype(np.uint8)
@@ -385,6 +389,8 @@ async def processing_thread():
 
           out = visualize_face(out, face_det_results)
 
+          print("2")
+
           # FPS 계산 및 표시
           curr_time = time.time()
           fps = 1.0 / (curr_time - start_time)
@@ -393,7 +399,10 @@ async def processing_thread():
           if processed_frame_queue.full():
               processed_frame_queue.get()  # 가장 오래된 프레임 제거   
 
+          print("pocessed")
+
           processed_frame_queue.put(cv2.resize(out, (640, 480)))
+          await asyncio.sleep(0.001)
 
 
 
