@@ -365,10 +365,11 @@ async def processing_thread():
           start_time = time.time()
 
           frame = cv2.resize(frame, (640, 640))
+          depth_frame = cv2.resize(depth_frame, (640, 640))
           res = det_model(frame, device="intel:npu", verbose=False, conf=0.25)[0] #, imgsz=640
 
 
-          print("1")
+          #print(res)
 
           if hasattr(res, 'masks') and res.masks is not None:
               masks = res.masks.data.cpu().numpy().astype(np.uint8)
@@ -379,17 +380,21 @@ async def processing_thread():
           classes = res.boxes.cls.cpu().numpy().astype(int)
           scores = res.boxes.conf.cpu().numpy()
 
+          #print("1")
+
           # 시각화
           out = visualize_segmentation(frame, masks, boxes, classes, scores, get_mask_depths(masks, depth_frame), class_names)
 
+          #print("2")
           # 얼굴 감지 모델 추론
           resized_frame = cv2.resize(frame, (face_det_width, face_det_height))
           input_tensor = np.expand_dims(resized_frame.transpose((2, 0, 1)), 0)
           face_det_results = face_det_compiled_model(input_tensor)[face_det_output_layer]
 
+
           out = visualize_face(out, face_det_results)
 
-          print("2")
+          #print("3")
 
           # FPS 계산 및 표시
           curr_time = time.time()
@@ -399,7 +404,7 @@ async def processing_thread():
           if processed_frame_queue.full():
               processed_frame_queue.get()  # 가장 오래된 프레임 제거   
 
-          print("pocessed")
+          #print("pocessed")
 
           processed_frame_queue.put(cv2.resize(out, (640, 480)))
           await asyncio.sleep(0.001)
