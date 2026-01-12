@@ -1172,4 +1172,57 @@ async def start_frame_collection():
     
     return {"message": "프레임 수집을 시작했습니다"}
 
+
+"""
+import asyncio
+import aiohttp
+import numpy as np
+import cv2
+import time
+
+SERVER_URL = "http://localhost:8000"
+
+async def fetch_frame(session, endpoint, shape, dtype):
+    async with session.get(f"{SERVER_URL}/{endpoint}") as response:
+        if response.status == 200:
+            data = await response.read()
+            return np.frombuffer(data, dtype=dtype).reshape(shape)
+    return None
+
+async def main():
+    async with aiohttp.ClientSession() as session:
+        while True:
+            start_time = time.time()
+            
+            # 1. RGB와 Depth 데이터를 동시에 요청
+            results = await asyncio.gather(
+                fetch_frame(session, "video_raw", (480, 640, 3), np.uint8),
+                fetch_frame(session, "depth_raw", (480, 640), np.uint16)
+            )
+            
+            color_frame, depth_frame = results
+
+            # 2. 화면 표시 (후처리는 여기서 원본 데이터로 수행)
+            if color_frame is not None:
+                cv2.imshow("RGB Raw", color_frame)
+            
+            if depth_frame is not None:
+                # 시각화용 8비트 변환
+                depth_vis = cv2.normalize(depth_frame, None, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8U)
+                cv2.imshow("Depth Raw", depth_vis)
+
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                break
+
+            # 3. FPS 제어 (카메라 30fps에 맞춰 약 33ms 주기 유지)
+            elapsed = time.time() - start_time
+            sleep_time = max(0.001, (1/30) - elapsed)
+            await asyncio.sleep(sleep_time)
+
+    cv2.destroyAllWindows()
+
+if __name__ == "__main__":
+    asyncio.run(main())
+"""
+
 print("Loading Complete","NPU")
