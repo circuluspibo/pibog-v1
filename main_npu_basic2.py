@@ -507,19 +507,24 @@ async def heartbeat():
 
 @app.get("/video_feed")
 async def video_feed():
-  def generate():
-    while True:
-        if not processed_frame_queue.empty():
-            output = processed_frame_queue.get()
-            _, img_bytes = cv2.imencode('.jpg', output)
-            frame = img_bytes.tobytes()
+    async def generate():
+        while True:
+            # 1. 비동기 큐에서 프레임을 가져올 때까지 기다립니다 (await)
+            # .get()은 데이터가 들어올 때까지 이벤트 루프를 넘겨주고 대기합니다.
+            output = await processed_frame_queue.get()
+            
+            if output is not None:
+                # 2. 인코딩 (이 부분은 CPU 연산이므로 루프를 살짝 점유하지만 OK)
+                _, img_bytes = cv2.imencode('.jpg', output)
+                frame = img_bytes.tobytes()
 
-            yield (b'--frame\r\n'
-                    b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n\r\n')
-        else:
-            time.sleep(0.01)
+                yield (b'--frame\r\n'
+                       b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+            
+            # 3. 큐 작업 완료 표시 (Optional)
+            processed_frame_queue.task_done()
 
-  return StreamingResponse(generate(), media_type="multipart/x-mixed-replace; boundary=frame")
+    return StreamingResponse(generate(), media_type="multipart/x-mixed-replace; boundary=frame")
 
 lastCmd = {} 
 
