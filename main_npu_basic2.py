@@ -325,6 +325,46 @@ import aiohttp
 # 데이터 공유를 위한 비동기 큐 (최신 1프레임만 유지하여 지연 시간 최소화)
 raw_data_queue = asyncio.Queue(maxsize=1)
 
+async def fetch_combined_frame(session):
+    """
+    서버로부터 합쳐진 바이너리 데이터(RGB + Depth)를 받아 분리함.
+    네트워크 IO 및 단순 메모리 슬라이싱만 수행하여 속도를 극대화함.
+    """
+    # 원본 해상도 규격 (서버와 일치해야 함)
+    W, H = 640, 480
+    RGB_SIZE = W * H * 3          # 921,600 bytes
+    DEPTH_SIZE = W * H * 2        # 614,400 bytes (16bit)
+    TOTAL_SIZE = RGB_SIZE + DEPTH_SIZE
+
+    try:
+        # 1.0초 타임아웃으로 연결 유지 확인
+        async with session.get(SOURCE_VIDEO_URL, timeout=aiohttp.ClientTimeout(total=1.0)) as response:
+            if response.status == 200:
+                # 스트림 전체를 한 번에 읽음
+                data = await response.read()
+                
+                # 데이터 크기 검증 (데이터가 깨지거나 덜 왔을 경우 대비)
+                if len(data) >= TOTAL_SIZE:
+                    # 1. RGB 분리 (uint8)
+                    # .copy()를 사용하지 않고 슬라이싱만 하여 메모리 효율 증대
+                    frame = np.frombuffer(data[:RGB_SIZE], dtype=np.uint8).reshape(H, W, 3)
+                    
+                    # 2. Depth 분리 (uint16)
+                    depth_frame = np.frombuffer(data[RGB_SIZE:TOTAL_SIZE], dtype=np.uint16).reshape(H, W)
+                    
+                    return frame, depth_frame
+                else:
+                    print(f"Warning: Data incomplete ({len(data)}/{TOTAL_SIZE} bytes)")
+            else:
+                print(f"Server Error: HTTP {response.status}")
+                
+    except asyncio.TimeoutError:
+        print("Fetch Timeout: 서버 응답이 너무 늦습니다.")
+    except Exception as e:
+        print(f"Fetch Error: {e}")
+        
+    return None, None
+
 async def receiver_loop():
     """[수신부] 서버에서 바이너리 데이터를 받아 큐에 넣음 (네트워크 전용)"""
     print("============= Receiver Loop Started")
