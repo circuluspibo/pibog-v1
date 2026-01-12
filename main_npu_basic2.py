@@ -92,8 +92,8 @@ import httpx  # httpx를 사용하여 비동기 HTTP 요청을 처리합니다.
 
 # 원본 비디오 스트림 URL
 #SOURCE_VIDEO_URL = "http://10.42.0.1:59511/video_feed"
-SOURCE_VIDEO_URL = f"http://{_IP}:59511/video_feed"
-SOURCE_DEPTH_URL = f"http://{_IP}:59511/depth_feed"
+SOURCE_VIDEO_URL = f"http://{_IP}:59511/video_raw"
+SOURCE_DEPTH_URL = f"http://{_IP}:59511/depth_raw"
 
 conn = None
 audio_hub = None
@@ -299,7 +299,7 @@ def visualize_segmentation(frame, masks, boxes, classes, scores, depths, class_n
 
 def get_mask_depths(masks, depth_frame, low_percentile=5):
     depths = []
-    depth_image = np.asanyarray(depth_frame) # .get_data()
+    depth_image = depth_frame
     for mask in masks:
         if mask.sum() == 0:
             depths.append(0.0)
@@ -319,16 +319,40 @@ def get_mask_depths(masks, depth_frame, low_percentile=5):
     return depths
 
 
-def processing_thread():
+import aiohttp
+
+async def fetch_frame(url, session, shape, dtype):
+    async with session.get(url) as response:
+        if response.status == 200:
+            data = await response.read()
+            return np.frombuffer(data, dtype=dtype).reshape(shape)
+    return None
+
+async def processing_thread():
     global cnt_live, cnt_object, lastTime, state, cnt_image
     processing_times = collections.deque()
 
     print("============= processing....")
 
-    while True:
-        if not frame_queue.empty() and not depth_queue.empty():
-          frame = np.array(frame_queue.get())
-          depth_frame = np.array(depth_queue.get())
+    async with aiohttp.ClientSession() as session:
+      while True:
+          try:
+              # Add the comma after 'session' and ensure brackets match
+              results = await asyncio.gather(
+                  fetch_frame(SOURCE_VIDEO_URL, session, (480, 640, 3), np.uint8),
+                  fetch_frame(SOURCE_DEPTH_URL, session, (480, 640), np.uint16)
+              )
+              
+              if results[0] is None or results[1] is None:
+                  time.sleep(0.01)
+                  print('no data....')
+                  continue
+                
+          except Exception as e:
+            print("error" ,e)
+                    
+          frame, depth_frame = results
+
           cnt_live = 0
           cnt_object = 0
 
@@ -370,8 +394,7 @@ def processing_thread():
               processed_frame_queue.get()  # 가장 오래된 프레임 제거   
 
           processed_frame_queue.put(cv2.resize(out, (640, 480)))
-        else:
-            time.sleep(0.001)
+
 
 
 @app.get("/")
@@ -1166,10 +1189,10 @@ async def start_frame_collection():
     is_collecting2 = True
     #task1 = asyncio.create_task(collect_frames())
     #task2 = asyncio.create_task(collect_depths())
-    threading.Thread(target=task1, daemon=True).start()
-    threading.Thread(target=task2, daemon=True).start()
-    threading.Thread(target=processing_thread, daemon=True).start()
-    
+    #threading.Thread(target=task1, daemon=True).start()
+    #threading.Thread(target=task2, daemon=True).start()
+    #threading.Thread(target=processing_thread, daemon=True).start()
+    asyncio.create_task(processing_thread())
     return {"message": "프레임 수집을 시작했습니다"}
 
 
