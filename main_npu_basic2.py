@@ -44,7 +44,7 @@ def getHash(text):
   hash_func.update(text.encode('utf-8'))
   return hash_func.hexdigest()
 
-_IP = "192.168.12.112"
+_IP = "192.168.3.67"#"192.168.12.112"
 
 ov = Core()
 
@@ -88,6 +88,13 @@ logger = logging.getLogger(__name__)
 
 _PORT = int(open("port.txt", 'r').read())
 
+import httpx  # httpx를 사용하여 비동기 HTTP 요청을 처리합니다.
+
+# 원본 비디오 스트림 URL
+#SOURCE_VIDEO_URL = "http://10.42.0.1:59511/video_feed"
+SOURCE_VIDEO_URL = f"http://{_IP}:59511/video_feed"
+SOURCE_DEPTH_URL = f"http://{_IP}:59511/depth_feed"
+
 conn = None
 audio_hub = None
 track = None
@@ -130,6 +137,7 @@ G1_BALANCE = {
 }
 
 frame_queue = Queue(maxsize=5)
+depth_queue = Queue(maxsize=5)
 processed_frame_queue = Queue(maxsize=5)
 
 cnt_live = 0
@@ -226,7 +234,7 @@ def visualize_segmentation(frame, masks, boxes, classes, scores, depths, class_n
     state["human"]["depth"] = ""
     state["human"]["position"] = ""
 
-    for mask, box, cls_idx, score in zip(masks, boxes, classes, scores):
+    for mask, box, cls_idx, score, depth in zip(masks, boxes, classes, scores, depths):
         class_name = class_names[cls_idx]
 
         is_living = class_name in LIVING_CLASSES
@@ -271,7 +279,7 @@ def visualize_segmentation(frame, masks, boxes, classes, scores, depths, class_n
 
         if is_living:  
             state["cnt_live"] += 1          
-            #state["human"]["depth"] = depth
+            state["human"]["depth"] = depth
             state["human"]["position"] = position
         else:
             state["cnt_object"] += 1        
@@ -281,17 +289,17 @@ def visualize_segmentation(frame, masks, boxes, classes, scores, depths, class_n
             'score': round(float(score), 2),
             'bbox': {'x1': x1, 'y1': y1, 'x2': x2, 'y2': y2},
             'position': position,  # 위치 정보 추가
-            #'depth' : depth
+            'depth' : depth
         }) 
 
-        label = f"{class_name}:{score:.2f}"
+        label = f"{class_name}:{score:.2f} | {depth:.2f}m"
         cv2.putText(overlay, label, (x1, max(15, y1 - 10)),cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
 
     return overlay
 
 def get_mask_depths(masks, depth_frame, low_percentile=5):
     depths = []
-    depth_image = np.asanyarray(depth_frame.get_data())
+    depth_image = np.asanyarray(depth_frame) # .get_data()
     for mask in masks:
         if mask.sum() == 0:
             depths.append(0.0)
@@ -318,8 +326,9 @@ def processing_thread():
     print("============= processing....")
 
     while True:
-        if not frame_queue.empty():
+        if not frame_queue.empty() and not depth_queue.empty():
           frame = np.array(frame_queue.get())
+          depth_frame = np.array(depth_queue.get())
           cnt_live = 0
           cnt_object = 0
 
@@ -343,7 +352,7 @@ def processing_thread():
           scores = res.boxes.conf.cpu().numpy()
 
           # 시각화
-          out = visualize_segmentation(frame, masks, boxes, classes, scores, None, class_names)
+          out = visualize_segmentation(frame, masks, boxes, classes, scores, get_mask_depths(masks, depth_frame), class_names)
 
           # 얼굴 감지 모델 추론
           resized_frame = cv2.resize(frame, (face_det_width, face_det_height))
@@ -809,11 +818,6 @@ def tts(text = "", voice=6, lang='ko', static=0, isPlay=0):
     return f"output/{filename}.wav"
 
 
-import httpx  # httpx를 사용하여 비동기 HTTP 요청을 처리합니다.
-
-# 원본 비디오 스트림 URL
-#SOURCE_VIDEO_URL = "http://10.42.0.1:59511/video_feed"
-SOURCE_VIDEO_URL = f"http://{_IP}:59511/video_feed"
 
 async def proxy_video_stream():
     """원본 서버에서 비디오 스트림을 받아서 다시 스트리밍"""
@@ -832,7 +836,7 @@ async def proxy_video_stream():
             yield b""
 
 @app.get("/video_feed2")
-async def video_feed():
+async def video_feed2():
     """비디오 스트림을 프록시하여 제공"""
     return StreamingResponse(
         proxy_video_stream(),
@@ -841,7 +845,7 @@ async def video_feed():
 # 서버 B에서 비디오 스트리밍 시작
 
 is_collecting = False
-collection_task = None
+is_collecting2 = False
 
 def parse_mjpeg_boundary(buffer):
     """boundary=frame 형식의 MJPEG 스트림 파싱"""
@@ -1024,10 +1028,125 @@ async def collect_frames():
         is_collecting = False
         print(f"프레임 수집 종료. 총 {frame_count}개 프레임 처리됨")
 
+async def collect_depths():
+    """원본 서버에서 프레임을 수집하여 큐에 저장"""
+    global is_collecting2
+    
+    buffer = b""
+    frame_count = 0
+    chunk_count = 0
+    
+    try:
+        print("깊이 스트림 연결 시작...")
+        
+        # 더 긴 타임아웃 설정
+        timeout = httpx.Timeout(connect=10.0, read=60.0, write=10.0, pool=10.0)
+        
+        async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
+            print(f"연결 시도: {SOURCE_DEPTH_URL}")
+            
+            async with client.stream("GET", SOURCE_DEPTH_URL) as response:
+                print(f"응답 상태: {response.status_code}")
+                print(f"응답 헤더: {dict(response.headers)}")
+                
+                if response.status_code != 200:
+                    print(f"HTTP 오류: {response.status_code}")
+                    return
+                
+                response.raise_for_status()
+                
+                print("깊이 읽기 시작...")
+                
+                async for chunk in response.aiter_bytes(chunk_size=4096):
+                    if not is_collecting2:
+                        print("수집 중지 요청")
+                        break
+                    
+                    chunk_count += 1
+                    buffer += chunk
+                    
+                    # 5초마다 상태 출력
+                    if chunk_count % 100 == 0:
+                        #print(f"청크 {chunk_count}개 수신, 버퍼 크기: {len(buffer)} bytes")
+                        
+                        # 버퍼에서 boundary 패턴 확인 (디버깅용)
+                        if b'--frame' in buffer:
+                            boundary_count = buffer.count(b'--frame')
+                            #print(f"발견된 boundary 개수: {boundary_count}")
+                        
+                        # 버퍼의 처음 200바이트 출력 (디버깅용)
+                        if len(buffer) > 200:
+                            sample = buffer[:200]
+                            #print(f"버퍼 샘플: {sample[:100]}")
+                            #if b'Content-Type' in sample:
+                            #    print("Content-Type 헤더 발견")
+                    
+                    # 버퍼가 너무 커지지 않도록 제한
+                    if len(buffer) > 2 * 1024 * 1024:  # 2MB 제한
+                        #print("버퍼 크기 제한, 일부 제거")
+                        # 버퍼의 앞쪽 절반 제거
+                        buffer = buffer[len(buffer)//2:]
+                    
+                    # 최소 버퍼 크기에 도달했을 때만 파싱 시도
+                    if len(buffer) > 1000:  # 최소 1KB
+                        try:
+                            frames, buffer = parse_mjpeg_boundary(buffer)
+                            
+                            for frame in frames:
+                                frame_count += 1
+                                
+                                # 큐가 꽉 찬 경우 오래된 프레임 제거
+                                while depth_queue.full():
+                                    try:
+                                        dropped = depth_queue.get_nowait()
+                                        #print("오래된 프레임 드랍")
+                                    except depth_queue.Empty:
+                                        break
+                                
+                                try:
+                                    frame = cv2.resize(frame, (640, 640)) 
+                                    depth_queue.put_nowait(frame)
+                                    #print(f"✓ 프레임 #{frame_count} 큐에 추가 (크기: {frame_queue.qsize()}/{frame_queue.maxsize})")
+                                except depth_queue.Full:
+                                    print("큐 풀 - 프레임 스킵")
+                        
+                        except Exception as e:
+                            print(f"프레임 파싱 오류: {e}")
+                            # 파싱 오류시 버퍼 일부 제거
+                            if len(buffer) > 5000:
+                                buffer = buffer[1000:]
+                    
+                    # CPU 사용률 조절
+                    if chunk_count % 50 == 0:
+                        await asyncio.sleep(0.01)
+                        
+                print("스트림 종료")
+                    
+    except httpx.TimeoutException as e:
+        print(f"타임아웃 오류: {e}")
+    except httpx.ConnectError as e:
+        print(f"연결 오류: {e}")
+    except httpx.RequestError as e:
+        print(f"요청 오류: {e}")
+    except Exception as e:
+        print(f"예상치 못한 오류: {e}")
+        import traceback
+        print(traceback.format_exc())
+    finally:
+        is_collecting2 = False
+        print(f"깊이 수집 종료. 총 {frame_count}개 프레임 처리됨")        
+
+
+def task1():
+    asyncio.run(collect_frames())
+
+def task2():
+    asyncio.run(collect_depths())
+
 @app.get("/start_collection")
 async def start_frame_collection():
     """프레임 수집 시작"""
-    global is_collecting, collection_task
+    global is_collecting, is_collecting2
     
     if is_collecting:
         return {"message": "이미 프레임 수집이 진행 중입니다"}
@@ -1044,7 +1163,11 @@ async def start_frame_collection():
     print(f"큐 초기화: {cleared}개 프레임 제거")
     
     is_collecting = True
-    task1 = asyncio.create_task(collect_frames())
+    is_collecting2 = True
+    #task1 = asyncio.create_task(collect_frames())
+    #task2 = asyncio.create_task(collect_depths())
+    threading.Thread(target=task1, daemon=True).start()
+    threading.Thread(target=task2, daemon=True).start()
     threading.Thread(target=processing_thread, daemon=True).start()
     
     return {"message": "프레임 수집을 시작했습니다"}
