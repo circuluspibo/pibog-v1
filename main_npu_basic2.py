@@ -321,40 +321,40 @@ def get_mask_depths(masks, depth_frame, low_percentile=5):
 
 import aiohttp
 
-async def fetch_frame(url, session, shape, dtype):
-    async with session.get(url) as response:
-        if response.status == 200:
-            data = await response.read()
-            return np.frombuffer(data, dtype=dtype).reshape(shape)
-    return None
+async def fetch_combined_frame(session):
+    """서버로부터 합쳐진 바이너리 데이터를 받아 분리함"""
+    try:
+        async with session.get(SOURCE_COMBINED_URL, timeout=1.0) as response:
+            if response.status == 200:
+                data = await response.read()
+                
+                # 데이터 크기 계산
+                # 640 * 480 * 3 (RGB) = 921,600 bytes
+                # 640 * 480 * 2 (Depth 16bit) = 614,400 bytes
+                # 총합: 1,536,000 bytes
+                rgb_size = 640 * 480 * 3
+                
+                if len(data) >= rgb_size:
+                    # 바이너리 슬라이싱 및 reshape
+                    frame = np.frombuffer(data[:rgb_size], dtype=np.uint8).reshape(480, 640, 3)
+                    depth_frame = np.frombuffer(data[rgb_size:], dtype=np.uint16).reshape(480, 640)
+                    return frame, depth_frame
+    except Exception as e:
+        print(f"Fetch Error: {e}")
+    return None, None
 
 async def processing_thread():
-    global cnt_live, cnt_object, lastTime, state, cnt_image
-    processing_times = collections.deque()
-
-    print("============= processing....")
+    global state, cnt_image
+    print("============= Processing Combined Stream....")
 
     async with aiohttp.ClientSession() as session:
-      while True:
-          try:
-              # Add the comma after 'session' and ensure brackets match
-              results = await asyncio.gather(
-                  fetch_frame(SOURCE_VIDEO_URL, session, (480, 640, 3), np.uint8),
-                  fetch_frame(SOURCE_DEPTH_URL, session, (480, 640), np.uint16)
-              )
-              
-              if results[0] is None or results[1] is None:
-                  time.sleep(0.01)
-                  print('no data....')
-                  continue
-                
-          except Exception as e:
-            print("error" ,e)
-                    
-          frame, depth_frame = results
-
-          cnt_live = 0
-          cnt_object = 0
+        while True:
+            # 1. 하나의 요청으로 두 데이터를 동시에 가져옴
+            frame, depth_frame = await fetch_combined_frame(session)
+            
+            if frame is None or depth_frame is None:
+                await asyncio.sleep(0.01) # Non-blocking sleep
+                continue
 
           if cnt_image % 100 == 0:
             cv2.imwrite("capture.jpg", frame) #cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
