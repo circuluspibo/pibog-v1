@@ -27,7 +27,10 @@ collection_task = None
 DEVICE = "NPU"  # 일반 웹캠 사용이므로 CPU 권장
 ov = Core()
 
-conn = serial.Serial('/dev/ttyUSB0', 9600, timeout=1)
+try:
+    conn = serial.Serial('/dev/ttyUSB0', 9600, timeout=1)
+except serial.SerialException as e:
+    raise ConnectionError(f"시리얼 포트 열기에 실패했습니다: {e}")
 
 FACE_DETECTION_MODEL_XML = "./models/face-detection-retail-0005/FP16-INT8/face-detection-retail-0005.xml"
 AGE_GENDER_MODEL_XML = "./models/age-gender-recognition-retail-0013/FP16-INT8/age-gender-recognition-retail-0013.xml"
@@ -161,7 +164,7 @@ def visualize_segmentation(frame, masks, boxes, classes, scores, class_names, al
         col = "L" if cx < cell_w else ("C" if cx < 2 * cell_w else "R")
         position = row + col
         send_counter += 1
-
+        
         if is_living:
             state["cnt_live"] += 1
             state["human"]["position"] = position
@@ -183,7 +186,7 @@ def visualize_segmentation(frame, masks, boxes, classes, scores, class_names, al
                     # 3. 명령어 전송
                     try:
                         cmd = f"#moter:{current_motor_angle}!"
-                        conn.write(cmd)
+                        conn.write(cmd.encode("utf-8"))
                         print(f"Tracking: {pos} -> Angle: {current_motor_angle}") 
                     except Exception as e:
                         print(f"Conn Error: {e}")
