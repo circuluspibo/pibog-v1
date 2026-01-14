@@ -187,7 +187,7 @@ def visualize_segmentation(frame, masks, boxes, classes, scores, class_names, al
                     except Exception as e:
                         print(f"Conn Error: {e}")
 
-            send_counter = 0
+                send_counter = 0
 
         else:
             state["cnt_object"] += 1
