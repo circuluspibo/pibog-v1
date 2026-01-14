@@ -28,7 +28,7 @@ DEVICE = "NPU"  # 일반 웹캠 사용이므로 CPU 권장
 ov = Core()
 
 try:
-    conn = serial.Serial('/dev/ttyUSB0', 9600, timeout=1)
+    conn = serial.Serial('/dev/ttyUSB0', 9600, 1)
 except serial.SerialException as e:
     raise ConnectionError(f"시리얼 포트 열기에 실패했습니다: {e}")
 
