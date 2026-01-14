@@ -174,9 +174,9 @@ def visualize_segmentation(frame, masks, boxes, classes, scores, class_names, al
                 
                 if pos != "":
                     # 1. 방향 판단 및 각도 증감
-                    if "L" in pos:      # 사람이 왼쪽이면
+                    if col == "L" :      # 사람이 왼쪽이면
                         current_motor_angle += 5
-                    elif "R" in pos:    # 사람이 오른쪽이면
+                    elif col == "R":    # 사람이 오른쪽이면
                         current_motor_angle -= 5
                     # "C"(중앙)인 경우 현재 각도 유지 (아무것도 안 함)
 
@@ -187,7 +187,7 @@ def visualize_segmentation(frame, masks, boxes, classes, scores, class_names, al
                     try:
                         cmd = f"#moter:{current_motor_angle}!\n"
                         conn.write(cmd.encode("utf-8"))
-                        print(f"Tracking: {pos} -> Angle: {current_motor_angle}") 
+                        print(f"Tracking: {pos} -> Angle: {cmd}") 
                     except Exception as e:
                         print(f"Conn Error: {e}")
 

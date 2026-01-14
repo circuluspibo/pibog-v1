@@ -21,6 +21,7 @@ class UsbUart:
       raise ConnectionError(f"시리얼 포트 {devname} 열기에 실패했습니다: {e}")
 
   def write(self, text):
+    print(str(text).encode('utf-8'),"cmd")
     if self.conn.is_open:
       return self.conn.write(str(text).encode('utf-8'))
     else:
