@@ -76,10 +76,6 @@ def visualize_face(frame, face_det_results):
     global state
     h, w, _ = frame.shape
 
-    state["human"]["gender"] = ""
-    state["human"]["age"] = ""
-    state["human"]["emotion"] = ""
-
     for detection in face_det_results[0][0]:
         confidence = detection[2]
         if confidence > 0.5:

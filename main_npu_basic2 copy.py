@@ -4,6 +4,7 @@ from fastapi import FastAPI, File, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
 from huggingface_hub import snapshot_download, hf_hub_download
 import time as t
+import collections
 from pydantic import BaseModel, Field
 import numpy as np
 import utils
@@ -34,10 +35,6 @@ from fastapi.middleware.cors import CORSMiddleware
 import hashlib
 import asyncio
 import requests
-from pyapriltags import Detector
-import httpx  # httpx를 사용하여 비동기 HTTP 요청을 처리합니다.
-
-
 #optimum-cli export openvino --weight-format int4 --task text-generation-with-past --model growdle/HyperCLOVAX-SEED-Text-Instruct-1.5B ./CLOVAX-1.5B-ov-int4
 #kakaocorp/kanana-1.5-2.1b-instruct-2505
 #https://github.com/Unitree-Go2-Robot/go2_robot
@@ -84,13 +81,9 @@ emotion_output_layer = emotion_compiled_model.output(0)
 emotion_height, emotion_width = list(emotion_input_layer.shape)[2:]
 
 det_model = YOLO('./models/yolo11s-seg_int8_openvino_model')
-ppe_model = YOLO('./models/safety-11s_int8_openvino_model')
+sft_model = YOLO('./models/safety-11s_int8_openvino_model')
 class_names = det_model.names
-ppe_names = ppe_model.names
-
-is_collecting = False
-
-detector = Detector(families="tag36h11") # 사용하는 태그 패밀리에 맞춰 설정
+sft_name = sft_model.names
 
 # Enable logging for debugging
 logging.basicConfig(level=logging.ERROR)
@@ -98,9 +91,12 @@ logger = logging.getLogger(__name__)
 
 _PORT = int(open("port.txt", 'r').read())
 
+import httpx  # httpx를 사용하여 비동기 HTTP 요청을 처리합니다.
+
 # 원본 비디오 스트림 URL
 #SOURCE_VIDEO_URL = "http://10.42.0.1:59511/video_feed"
 SOURCE_VIDEO_URL = f"http://{_IP}:59511/video_raw"
+
 
 conn = None
 audio_hub = None
@@ -394,9 +390,7 @@ async def processing_loop():
     """[분석부] 큐에서 데이터를 꺼내 NPU 추론 및 시각화 수행 (연산 전용)"""
     global cnt_image
     print("============= Processing Loop Started")
-    tag_size = 0.12
-    fx, fy = 600, 600  # 예시 초점 거리
-
+    
     while True:
         # 1. 수신부로부터 데이터 획득 (데이터가 올 때까지 await)
         frame, depth_frame = await raw_data_queue.get()
@@ -409,7 +403,6 @@ async def processing_loop():
 
         # 3. NPU 추론
         res = det_model(frame_ai, device="intel:npu", verbose=False, conf=0.25)[0]
-        ppe_res = ppe_model(frame_ai, device="intel:npu", verbose=False, conf=0.25)[0]
 
         # 4. 후처리 및 시각화 로직
         if hasattr(res, 'masks') and res.masks is not None:
@@ -422,82 +415,8 @@ async def processing_loop():
         scores = res.boxes.conf.cpu().numpy()
 
         # 시각화 (원본 크기 640x480으로 직접 생성하여 불필요한 리사이즈 제거)
-        out = visualize_segmentation(frame_ai, masks, boxes, classes, scores,  get_mask_depths(masks, depth_ai), class_names)
-
-        # 4. PPE 결과 시각화 추가 (파란색 박스)
-        # 4. PPE 결과 시각화 추가 (파란색 박스 + 클래스 이름)
-
-
-        if ppe_res.boxes is not None:
-          ppe_boxes = ppe_res.boxes.xyxy.cpu().numpy()
-          ppe_scores = ppe_res.boxes.conf.cpu().numpy()
-          ppe_classes = ppe_res.boxes.cls.cpu().numpy().astype(int)
-          ppe_names = ppe_model.names  # 클래스 이름 딕셔너리 획득
-          
-          for i, box in enumerate(ppe_boxes):
-              x1, y1, x2, y2 = map(int, box)
-              conf = ppe_scores[i]
-              cls_id = ppe_classes[i]
-              
-              # 클래스 이름 가져오기 (없을 경우 ID 표시)
-              label_text = ppe_names.get(cls_id, str(cls_id))
-
-              if 'helmet' in label_text or 'vest' in label_text:
-                  x1, y1, x2, y2 = map(int, box)
-                  conf = ppe_scores[i]
-                  display_str = f"{label_text.capitalize()}: {conf:.2f}"
-                  
-                  # 1) 파란색 박스 그리기
-                  cv2.rectangle(out, (x1, y1), (x2, y2), (255, 0, 0), 2)
-                  
-                  # 2) 텍스트 배경 (파란색 바)
-                  (w, h), _ = cv2.getTextSize(display_str, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
-                  # 텍스트가 화면 위로 나가지 않도록 y좌표 보정
-                  text_y = max(y1, h + 10)
-                  cv2.rectangle(out, (x1, text_y - h - 10), (x1 + w, text_y), (255, 0, 0), -1)
-                  
-                  # 3) 텍스트 쓰기 (흰색)
-                  cv2.putText(out, display_str, (x1, text_y - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
-          
-        gray = cv2.cvtColor(frame_ai, cv2.COLOR_BGR2GRAY)
-        tags = detector.detect(gray)
-
-        if tags:
-            # 픽셀 면적 기준으로 가장 큰 태그 선택
-            best_tag = max(tags, key=lambda t: cv2.contourArea(t.corners.astype(np.float32)))
-            
-            # --- 투명 노란색 채우기 로직 ---
-            overlay = out.copy()
-            # 태그의 네 모서리 좌표 가져오기
-            pts = best_tag.corners.reshape((-1, 1, 2)).astype(np.int32)
-            # 노란색(BGR: 0, 255, 255)으로 다각형 채우기
-            cv2.fillPoly(overlay, [pts], (0, 255, 255))
-            
-            # 투명도 적용 (0.2 opacity)
-            # out * 0.8 + overlay * 0.2
-            out = cv2.addWeighted(overlay, 0.2, out, 0.8, 0)
-            
-            # --- 우측 하단 정보 표시 ---
-            tag_id = best_tag.tag_id
-            cx, cy = int(best_tag.center[0]), int(best_tag.center[1])
-            
-            # Depth 데이터 활용 (범위 체크 포함)
-            dist = 0.0
-            if 0 <= cy < 640 and 0 <= cx < 640:
-                dist = depth_ai[cy, cx] / 1000.0  # mm -> m
-
-            info_str = f"ID: {tag_id} / Dist: {dist:.2f}m"
-            (w, h), baseline = cv2.getTextSize(info_str, cv2.FONT_HERSHEY_SIMPLEX, 0.7, 2)
-            
-            # 우측 하단 여백 설정 (20px)
-            text_x = 640 - w - 20
-            text_y = 640 - 20
-            
-            # 가독성을 위한 검정색 배경 바 (약간의 투명도 가능)
-            cv2.rectangle(out, (text_x - 10, text_y - h - 10), (640, 640), (0, 0, 0), -1)
-            # 노란색 글씨로 정보 출력
-            cv2.putText(out, info_str, (text_x, text_y), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
-
+        out = visualize_segmentation(frame_ai, masks, boxes, classes, scores, 
+                                     get_mask_depths(masks, depth_ai), class_names)
 
         # 얼굴 감지 (추가 최적화: 필요한 경우에만 수행하거나 해상도 최소화)
         resized_face = cv2.resize(frame_ai, (face_det_width, face_det_height), interpolation=cv2.INTER_NEAREST)
@@ -969,6 +888,325 @@ def tts(text = "", voice=6, lang='ko', static=0, isPlay=0):
         response = requests.post(f"http://{_IP}:59521/audio", files=files)
 
     return f"output/{filename}.wav"
+
+
+
+async def proxy_video_stream():
+    """원본 서버에서 비디오 스트림을 받아서 다시 스트리밍"""
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        try:
+            async with client.stream("GET", SOURCE_VIDEO_URL) as response:
+                response.raise_for_status()
+                async for chunk in response.aiter_bytes(chunk_size=1024):
+                    yield chunk
+        except httpx.RequestError as e:
+            print(f"비디오 스트림 연결 오류: {e}")
+            # 연결 오류 시 빈 프레임이나 오류 메시지를 반환할 수 있습니다
+            yield b""
+        except Exception as e:
+            print(f"예상치 못한 오류: {e}")
+            yield b""
+
+@app.get("/video_feed2")
+async def video_feed2():
+    """비디오 스트림을 프록시하여 제공"""
+    return StreamingResponse(
+        proxy_video_stream(),
+        media_type="multipart/x-mixed-replace; boundary=frame"
+    )
+# 서버 B에서 비디오 스트리밍 시작
+
+is_collecting = False
+is_collecting2 = False
+
+def parse_mjpeg_boundary(buffer):
+    """boundary=frame 형식의 MJPEG 스트림 파싱"""
+    frames = []
+    remaining_buffer = buffer
+    
+    # boundary 패턴들
+    boundary_patterns = [
+        b'--frame\r\n',
+        b'--frame\n', 
+        b'\r\n--frame\r\n',
+        b'\n--frame\n'
+    ]
+    
+    while True:
+        # boundary 찾기
+        boundary_pos = -1
+        next_boundary_pos = -1
+        
+        for pattern in boundary_patterns:
+            pos = remaining_buffer.find(pattern)
+            if pos != -1:
+                boundary_pos = pos
+                # 다음 boundary 찾기
+                next_pos = remaining_buffer.find(pattern, pos + len(pattern))
+                if next_pos != -1:
+                    next_boundary_pos = next_pos
+                    break
+        
+        if boundary_pos == -1 or next_boundary_pos == -1:
+            break
+            
+        # 현재 프레임 데이터 추출
+        frame_data = remaining_buffer[boundary_pos:next_boundary_pos]
+        
+        # Content-Type과 Content-Length 헤더 건너뛰기
+        header_end = frame_data.find(b'\r\n\r\n')
+        if header_end == -1:
+            header_end = frame_data.find(b'\n\n')
+        
+        if header_end != -1:
+            jpeg_data = frame_data[header_end + 4:]  # 헤더 이후 데이터
+            
+            # JPEG 시작 마커 확인
+            jpeg_start = jpeg_data.find(b'\xff\xd8')
+            if jpeg_start != -1:
+                jpeg_data = jpeg_data[jpeg_start:]
+                
+                # JPEG 끝 마커 찾기
+                jpeg_end = jpeg_data.find(b'\xff\xd9')
+                if jpeg_end != -1:
+                    complete_jpeg = jpeg_data[:jpeg_end + 2]
+                    
+                    try:
+                        # OpenCV로 디코딩
+                        nparr = np.frombuffer(complete_jpeg, np.uint8)
+                        frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+                        
+                        if frame is not None:
+                            # BGR을 RGB로 변환
+                            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                            frames.append(frame)
+                            #print(f"✓ 프레임 추출 성공: {frame.shape}")
+                        else:
+                            print("프레임 디코딩 실패")
+                            
+                    except Exception as e:
+                        print(f"프레임 디코딩 오류: {e}")
+        
+        # 처리된 부분 제거
+        remaining_buffer = remaining_buffer[next_boundary_pos:]
+    
+    return frames, remaining_buffer
+
+async def collect_frames():
+    """원본 서버에서 프레임을 수집하여 큐에 저장"""
+    global is_collecting
+    
+    buffer = b""
+    frame_count = 0
+    chunk_count = 0
+    
+    try:
+        print("비디오 스트림 연결 시작...")
+        
+        # 더 긴 타임아웃 설정
+        timeout = httpx.Timeout(connect=10.0, read=60.0, write=10.0, pool=10.0)
+        
+        async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
+            print(f"연결 시도: {SOURCE_VIDEO_URL}")
+            
+            async with client.stream("GET", SOURCE_VIDEO_URL) as response:
+                print(f"응답 상태: {response.status_code}")
+                print(f"응답 헤더: {dict(response.headers)}")
+                
+                if response.status_code != 200:
+                    print(f"HTTP 오류: {response.status_code}")
+                    return
+                
+                response.raise_for_status()
+                
+                print("스트림 읽기 시작...")
+                
+                async for chunk in response.aiter_bytes(chunk_size=4096):
+                    if not is_collecting:
+                        print("수집 중지 요청")
+                        break
+                    
+                    chunk_count += 1
+                    buffer += chunk
+                    
+                    # 5초마다 상태 출력
+                    if chunk_count % 100 == 0:
+                        #print(f"청크 {chunk_count}개 수신, 버퍼 크기: {len(buffer)} bytes")
+                        
+                        # 버퍼에서 boundary 패턴 확인 (디버깅용)
+                        if b'--frame' in buffer:
+                            boundary_count = buffer.count(b'--frame')
+                            #print(f"발견된 boundary 개수: {boundary_count}")
+                        
+                        # 버퍼의 처음 200바이트 출력 (디버깅용)
+                        if len(buffer) > 200:
+                            sample = buffer[:200]
+                            #print(f"버퍼 샘플: {sample[:100]}")
+                            #if b'Content-Type' in sample:
+                            #    print("Content-Type 헤더 발견")
+                    
+                    # 버퍼가 너무 커지지 않도록 제한
+                    if len(buffer) > 2 * 1024 * 1024:  # 2MB 제한
+                        #print("버퍼 크기 제한, 일부 제거")
+                        # 버퍼의 앞쪽 절반 제거
+                        buffer = buffer[len(buffer)//2:]
+                    
+                    # 최소 버퍼 크기에 도달했을 때만 파싱 시도
+                    if len(buffer) > 1000:  # 최소 1KB
+                        try:
+                            frames, buffer = parse_mjpeg_boundary(buffer)
+                            
+                            for frame in frames:
+                                frame_count += 1
+                                
+                                # 큐가 꽉 찬 경우 오래된 프레임 제거
+                                while frame_queue.full():
+                                    try:
+                                        dropped = frame_queue.get_nowait()
+                                        #print("오래된 프레임 드랍")
+                                    except frame_queue.Empty:
+                                        break
+                                
+                                try:
+                                    frame = cv2.resize(frame, (640, 384)) 
+                                    frame_queue.put_nowait(frame)
+                                    #print(f"✓ 프레임 #{frame_count} 큐에 추가 (크기: {frame_queue.qsize()}/{frame_queue.maxsize})")
+                                except frame_queue.Full:
+                                    print("큐 풀 - 프레임 스킵")
+                        
+                        except Exception as e:
+                            print(f"프레임 파싱 오류: {e}")
+                            # 파싱 오류시 버퍼 일부 제거
+                            if len(buffer) > 5000:
+                                buffer = buffer[1000:]
+                    
+                    # CPU 사용률 조절
+                    if chunk_count % 50 == 0:
+                        await asyncio.sleep(0.01)
+                        
+                print("스트림 종료")
+                    
+    except httpx.TimeoutException as e:
+        print(f"타임아웃 오류: {e}")
+    except httpx.ConnectError as e:
+        print(f"연결 오류: {e}")
+    except httpx.RequestError as e:
+        print(f"요청 오류: {e}")
+    except Exception as e:
+        print(f"예상치 못한 오류: {e}")
+        import traceback
+        print(traceback.format_exc())
+    finally:
+        is_collecting = False
+        print(f"프레임 수집 종료. 총 {frame_count}개 프레임 처리됨")
+
+async def collect_depths():
+    """원본 서버에서 프레임을 수집하여 큐에 저장"""
+    global is_collecting2
+    
+    buffer = b""
+    frame_count = 0
+    chunk_count = 0
+    
+    try:
+        print("깊이 스트림 연결 시작...")
+        
+        # 더 긴 타임아웃 설정
+        timeout = httpx.Timeout(connect=10.0, read=60.0, write=10.0, pool=10.0)
+        
+        async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
+            print(f"연결 시도: {SOURCE_DEPTH_URL}")
+            
+            async with client.stream("GET", SOURCE_DEPTH_URL) as response:
+                print(f"응답 상태: {response.status_code}")
+                print(f"응답 헤더: {dict(response.headers)}")
+                
+                if response.status_code != 200:
+                    print(f"HTTP 오류: {response.status_code}")
+                    return
+                
+                response.raise_for_status()
+                
+                print("깊이 읽기 시작...")
+                
+                async for chunk in response.aiter_bytes(chunk_size=4096):
+                    if not is_collecting2:
+                        print("수집 중지 요청")
+                        break
+                    
+                    chunk_count += 1
+                    buffer += chunk
+                    
+                    # 5초마다 상태 출력
+                    if chunk_count % 100 == 0:
+                        #print(f"청크 {chunk_count}개 수신, 버퍼 크기: {len(buffer)} bytes")
+                        
+                        # 버퍼에서 boundary 패턴 확인 (디버깅용)
+                        if b'--frame' in buffer:
+                            boundary_count = buffer.count(b'--frame')
+                            #print(f"발견된 boundary 개수: {boundary_count}")
+                        
+                        # 버퍼의 처음 200바이트 출력 (디버깅용)
+                        if len(buffer) > 200:
+                            sample = buffer[:200]
+                            #print(f"버퍼 샘플: {sample[:100]}")
+                            #if b'Content-Type' in sample:
+                            #    print("Content-Type 헤더 발견")
+                    
+                    # 버퍼가 너무 커지지 않도록 제한
+                    if len(buffer) > 2 * 1024 * 1024:  # 2MB 제한
+                        #print("버퍼 크기 제한, 일부 제거")
+                        # 버퍼의 앞쪽 절반 제거
+                        buffer = buffer[len(buffer)//2:]
+                    
+                    # 최소 버퍼 크기에 도달했을 때만 파싱 시도
+                    if len(buffer) > 1000:  # 최소 1KB
+                        try:
+                            frames, buffer = parse_mjpeg_boundary(buffer)
+                            
+                            for frame in frames:
+                                frame_count += 1
+                                
+                                # 큐가 꽉 찬 경우 오래된 프레임 제거
+                                while depth_queue.full():
+                                    try:
+                                        dropped = depth_queue.get_nowait()
+                                        #print("오래된 프레임 드랍")
+                                    except depth_queue.Empty:
+                                        break
+                                
+                                try:
+                                    frame = cv2.resize(frame, (640, 640)) 
+                                    depth_queue.put_nowait(frame)
+                                    #print(f"✓ 프레임 #{frame_count} 큐에 추가 (크기: {frame_queue.qsize()}/{frame_queue.maxsize})")
+                                except depth_queue.Full:
+                                    print("큐 풀 - 프레임 스킵")
+                        
+                        except Exception as e:
+                            print(f"프레임 파싱 오류: {e}")
+                            # 파싱 오류시 버퍼 일부 제거
+                            if len(buffer) > 5000:
+                                buffer = buffer[1000:]
+                    
+                    # CPU 사용률 조절
+                    if chunk_count % 50 == 0:
+                        await asyncio.sleep(0.01)
+                        
+                print("스트림 종료")
+                    
+    except httpx.TimeoutException as e:
+        print(f"타임아웃 오류: {e}")
+    except httpx.ConnectError as e:
+        print(f"연결 오류: {e}")
+    except httpx.RequestError as e:
+        print(f"요청 오류: {e}")
+    except Exception as e:
+        print(f"예상치 못한 오류: {e}")
+        import traceback
+        print(traceback.format_exc())
+    finally:
+        is_collecting2 = False
+        print(f"깊이 수집 종료. 총 {frame_count}개 프레임 처리됨")        
 
 
 @app.get("/start_collection")
