@@ -150,7 +150,7 @@ def mq9_grade_from_adc(value: int) -> str:
 
 # 모터이동 포함
 def visualize_segmentation(frame, masks, boxes, classes, scores, class_names, alpha=0.5):
-    global state, send_counter, current_motor_angle, SEND_INTERVAL, conn
+    global state, cnt_send, cnt_env, current_motor_angle, SEND_INTERVAL, conn
     overlay = frame.copy()
 
     state["boxes"] = []
