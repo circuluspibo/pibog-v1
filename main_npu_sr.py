@@ -161,7 +161,7 @@ def visualize_segmentation(frame, masks, boxes, classes, scores, class_names, al
         col = "L" if cx < cell_w else ("C" if cx < 2 * cell_w else "R")
         position = row + col
         send_counter += 1
-        
+
         if is_living:
             state["cnt_live"] += 1
             state["human"]["position"] = position
@@ -183,7 +183,7 @@ def visualize_segmentation(frame, masks, boxes, classes, scores, class_names, al
                     # 3. 명령어 전송
                     try:
                         cmd = f"#moter:{current_motor_angle}!"
-                        conn.write(cmd.encode("utf-8"))
+                        conn.write(cmd)
                         print(f"Tracking: {pos} -> Angle: {current_motor_angle}") 
                     except Exception as e:
                         print(f"Conn Error: {e}")
