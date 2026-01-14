@@ -127,7 +127,8 @@ def visualize_face(frame, face_det_results):
 
 
 # 전역 변수 설정
-send_counter = 0 
+cnt_send = 0
+cnt_env = 0
 SEND_INTERVAL = 10 
 current_motor_angle = 0  # 현재 모터의 목표 각도 상태 저장
 
@@ -164,20 +165,23 @@ def visualize_segmentation(frame, masks, boxes, classes, scores, class_names, al
         row = "T" if cy < cell_h else ("C" if cy < 2 * cell_h else "B")
         col = "L" if cx < cell_w else ("C" if cx < 2 * cell_w else "R")
         position = row + col
-        send_counter += 1
+        cnt_send += 1
+        cnt_env += 1
 
-        if send_counter >= SEND_INTERVAL * 10: # 공기질 정보
+        if cnt_env >= SEND_INTERVAL * 3: # 공기질 정보
             conn.write("#env:!".encode("utf-8"))
             resp = conn.read_all()
             env = resp.decode('utf-8', errors='ignore')
             print("enviornment", env)
             state["env"] = env
+            cnt_env = 0
+            
 
         if is_living:
             state["cnt_live"] += 1
             state["human"]["position"] = position
 
-            if send_counter >= SEND_INTERVAL:
+            if cnt_send >= SEND_INTERVAL:
                 pos = state["human"]["position"]
                 
                 if pos != "":
@@ -199,7 +203,7 @@ def visualize_segmentation(frame, masks, boxes, classes, scores, class_names, al
                     except Exception as e:
                         print(f"Conn Error: {e}")
 
-                send_counter = 0
+                cnt_send = 0
 
         else:
             state["cnt_object"] += 1
