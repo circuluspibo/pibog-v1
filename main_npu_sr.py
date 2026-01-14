@@ -129,7 +129,7 @@ current_motor_angle = 0  # 현재 모터의 목표 각도 상태 저장
 
 # 모터이동 포함
 def visualize_segmentation(frame, masks, boxes, classes, scores, class_names, alpha=0.5):
-    global state
+    global state, send_counter, current_motor_angle, SEND_INTERVAL
     overlay = frame.copy()
 
     state["boxes"] = []
