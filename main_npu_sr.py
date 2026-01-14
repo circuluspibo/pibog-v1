@@ -160,7 +160,8 @@ def visualize_segmentation(frame, masks, boxes, classes, scores, class_names, al
         row = "T" if cy < cell_h else ("C" if cy < 2 * cell_h else "B")
         col = "L" if cx < cell_w else ("C" if cx < 2 * cell_w else "R")
         position = row + col
-
+        send_counter += 1
+        
         if is_living:
             state["cnt_live"] += 1
             state["human"]["position"] = position
