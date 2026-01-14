@@ -187,14 +187,14 @@ def visualize_segmentation(frame, masks, boxes, classes, scores, class_names, al
         if cnt_env >= SEND_INTERVAL * 3: # 공기질 정보
             conn.write("#env:!".encode("utf-8"))
             resp = conn.read_all()
-            env = resp.decode('utf-8', errors='ignore')
+            env = resp.decode('utf-8', errors='ignore').strip()
             tokens = env.split(',')
             print(env, tokens)
 
             if len(tokens) > 2:
                 state["env"]["temp"] = env[0]
                 state["env"]["humidity"] = env[1]
-                state["env"]["air"] = mq9_grade_from_adc(int(env[2].replace('\r\n','')))
+                state["env"]["air"] = mq9_grade_from_adc(int(env[2]))
             
             cnt_env = 0
             
