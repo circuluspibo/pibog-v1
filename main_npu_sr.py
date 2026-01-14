@@ -194,7 +194,7 @@ def visualize_segmentation(frame, masks, boxes, classes, scores, class_names, al
             if len(tokens) > 2:
                 state["env"]["temp"] = env[0]
                 state["env"]["humidity"] = env[1]
-                state["env"]["air"] = mq9_grade_from_adc(int(env[2]))
+                state["env"]["air"] = mq9_grade_from_adc(int(env[2].replace('\r\n','')))
             
             cnt_env = 0
             
