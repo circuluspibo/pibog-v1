@@ -16,8 +16,8 @@ import serial
 
 # --- 전역 변수 초기화 (함수 외부에 위치) ---
 
-pw = CPUPowerMonitor(interval=1.0)
-pw.start()
+#pw = CPUPowerMonitor(interval=1.0)
+#pw.start()
 
 
 # ------------------ 기본 설정 ---------------------
@@ -127,7 +127,7 @@ def visualize_face(frame, face_det_results):
 
 # 전역 변수 설정
 send_counter = 0 
-SEND_INTERVAL = 10 
+SEND_INTERVAL = 20 
 current_motor_angle = 0  # 현재 모터의 목표 각도 상태 저장
 
 # 모터이동 포함
@@ -272,6 +272,7 @@ def processing_thread():
             frame_count += 1
             
             # 현재 시간과 1초 전 측정 시작 시간 비교
+            """
             if (time.time() - start_time_sec) >= 1.0 and max_count < 30:
                 # 1초 동안의 평균 FPS 계산
                 avg_fps = frame_count / (time.time() - start_time_sec)
@@ -286,7 +287,7 @@ def processing_thread():
                 # 변수 초기화: 다음 1초 측정을 위해
                 frame_count = 0
                 start_time_sec = time.time()        
-
+            """
 
 # ------------------ FastAPI ---------------------
 app = FastAPI()
