@@ -185,7 +185,7 @@ def visualize_segmentation(frame, masks, boxes, classes, scores, class_names, al
 
                     # 3. 명령어 전송
                     try:
-                        cmd = f"#moter:{current_motor_angle}!\n"
+                        cmd = f"#motor:{current_motor_angle}!\n"
                         conn.write(cmd.encode("utf-8"))
                         print(f"Tracking: {pos} -> Angle: {cmd}") 
                     except Exception as e:
