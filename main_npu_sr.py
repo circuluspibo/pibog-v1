@@ -72,7 +72,7 @@ state = {
     "voltage": 0,
     "cnt_live": 0,
     "cnt_object": 0,
-    "env": 0,
+    "env": { "temp" : 0, "humidity" : 0, "air" : "normal"},
     "boxes": [],
     "human": {"age": "", "gender": "", "emotion": "", "position": ""}
 }
@@ -171,9 +171,10 @@ def visualize_segmentation(frame, masks, boxes, classes, scores, class_names, al
         if cnt_env >= SEND_INTERVAL * 3: # 공기질 정보
             conn.write("#env:!".encode("utf-8"))
             resp = conn.read_all()
-            env = resp.decode('utf-8', errors='ignore')
+            env = resp.decode('utf-8', errors='ignore').split(',')
             print("enviornment", env)
-            state["env"] = env
+            state["env"]["temp"] = env[0]
+            state["env"]["humidity"] = env[1]
             cnt_env = 0
             
 
