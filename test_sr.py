@@ -7,6 +7,22 @@
  - 센서 (온도/습도/가스)
    send >>>  #env:!
    receive >>> 21.0,40.5,50.0   (온도,습도,가스)
+
+def mq9_grade_from_adc(value: int) -> str:
+    """
+    MQ-9 아날로그 값(0~1023)을
+    VG / G / N / B / VB 로 변환
+    """
+    if value <= 200:
+        return "VG"   # Very Good
+    elif value <= 350:
+        return "G"    # Good
+    elif value <= 500:
+        return "N"    # Normal
+    elif value <= 700:
+        return "B"    # Bad
+    else:
+        return "VB"   # Very Bad
 """
 import serial
 
