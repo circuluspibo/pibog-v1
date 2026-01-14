@@ -129,7 +129,7 @@ current_motor_angle = 0  # 현재 모터의 목표 각도 상태 저장
 
 # 모터이동 포함
 def visualize_segmentation(frame, masks, boxes, classes, scores, class_names, alpha=0.5):
-    global state, send_counter, current_motor_angle, SEND_INTERVAL
+    global state, send_counter, current_motor_angle, SEND_INTERVAL, conn
     overlay = frame.copy()
 
     state["boxes"] = []
@@ -213,7 +213,7 @@ def processing_thread():
     cap.set(3, 640)
     cap.set(4, 480)
 
-    print("Webcam Processing Started...")
+    print("Webcam Processing Started... for senior mode")
     # FPS 측정을 위한 변수
     max_count = 0
     frame_count = 0
@@ -340,4 +340,3 @@ def start_collection():
     return {"message": "웹캠 분석 시작"}
 
 
-print("Loaded without RealSense. Ready!")
