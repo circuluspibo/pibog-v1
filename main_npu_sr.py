@@ -72,6 +72,7 @@ state = {
     "voltage": 0,
     "cnt_live": 0,
     "cnt_object": 0,
+    "env": 0,
     "boxes": [],
     "human": {"age": "", "gender": "", "emotion": "", "position": ""}
 }
@@ -164,7 +165,14 @@ def visualize_segmentation(frame, masks, boxes, classes, scores, class_names, al
         col = "L" if cx < cell_w else ("C" if cx < 2 * cell_w else "R")
         position = row + col
         send_counter += 1
-        
+
+        if send_counter >= SEND_INTERVAL * 10: # 공기질 정보
+            conn.write("#env:!".encode("utf-8"))
+            resp = conn.read_all()
+            env = resp.decode('utf-8', errors='ignore')
+            print("enviornment", env)
+            state["env"] = env
+
         if is_living:
             state["cnt_live"] += 1
             state["human"]["position"] = position
@@ -185,7 +193,7 @@ def visualize_segmentation(frame, masks, boxes, classes, scores, class_names, al
 
                     # 3. 명령어 전송
                     try:
-                        cmd = f"#motor:{current_motor_angle}!\n"
+                        cmd = f"#motor:{current_motor_angle}!"
                         conn.write(cmd.encode("utf-8"))
                         print(f"Tracking: {pos} -> Angle: {cmd}") 
                     except Exception as e:
