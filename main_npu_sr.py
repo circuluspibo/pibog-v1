@@ -127,7 +127,7 @@ def visualize_face(frame, face_det_results):
 
 # 전역 변수 설정
 send_counter = 0 
-SEND_INTERVAL = 20 
+SEND_INTERVAL = 10 
 current_motor_angle = 0  # 현재 모터의 목표 각도 상태 저장
 
 # 모터이동 포함
