@@ -132,6 +132,22 @@ cnt_env = 0
 SEND_INTERVAL = 10 
 current_motor_angle = 0  # 현재 모터의 목표 각도 상태 저장
 
+def mq9_grade_from_adc(value: int) -> str:
+    """
+    MQ-9 아날로그 값(0~1023)을
+    VG / G / N / B / VB 로 변환
+    """
+    if value <= 200:
+        return "VG"   # Very Good
+    elif value <= 350:
+        return "G"    # Good
+    elif value <= 500:
+        return "N"    # Normal
+    elif value <= 700:
+        return "B"    # Bad
+    else:
+        return "VB"   # Very Bad
+
 # 모터이동 포함
 def visualize_segmentation(frame, masks, boxes, classes, scores, class_names, alpha=0.5):
     global state, send_counter, current_motor_angle, SEND_INTERVAL, conn
@@ -175,7 +191,8 @@ def visualize_segmentation(frame, masks, boxes, classes, scores, class_names, al
             print("enviornment", env)
             state["env"]["temp"] = env[0]
             state["env"]["humidity"] = env[1]
-            cnt_env = 0
+            state["env"]["air"] = env[1]
+            cnt_env = mq9_grade_from_adc(int(env[2]))
             
 
         if is_living:
