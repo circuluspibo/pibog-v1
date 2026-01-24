@@ -607,7 +607,7 @@ async def prepare2():
   
 @app.get("/hand")
 async def hand(cmd : str):
-  requests.get(f"http://{_IP}:59511/hands?cmd={cmd}")
+  requests.get(f"http://{_IP}:59521/hands?cmd={cmd}")
   return { "result" : True }    
 
 @app.get("/heartbeat")
