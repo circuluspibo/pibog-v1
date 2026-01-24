@@ -7,7 +7,7 @@ model_list = {
     "OpenVINO/Qwen3-Embedding-0.6B-int8-ov": "Qwen3-Embedding-0.6B-int8-ov",
     "Echo9Zulu/gemma-3-4b-it-qat-int4_asym-ov": "gemma-3-4b-it-qat-int4_asym-ov",
     "circulus/whisper-large-v3-turbo-ov": "whisper-large-v3-turbo-ov",
-    "circulus/whisper-large-v3-turbo-ov": "safety-11s_int8_openvino_model"
+    "circulus/yolo-11s-safety-ov": "safety-11s_int8_openvino_model"
 }
 
 base_dir = "./models"
