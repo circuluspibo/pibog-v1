@@ -19,6 +19,9 @@ var audioContext //new audio context to help us record
 let lastTime = 0
 let interval = 0
 
+let isLive = 0
+let human = {}
+
 function listen(){
   //if (document.documentElement.requestFullscreen) 
   // document.documentElement.requestFullscreen()
@@ -77,10 +80,19 @@ function listen(){
   }
 }
 
+let lastPlay = 0
+let lastText = 0
+
 function play(text){
+    if(text == lastText && Date.now() - lastPlay < 3000)
+        return
+
     if(audio)
         audio.pause()
 
+    console.log('play...',text)
+    lastPlay = Date.now()
+    lastText = text
     audio = new Audio(`/v2/tts?voice=31&lang=ko&static=0&isPlay=0&text=${text}`);
     audio.play()
 }
@@ -118,7 +130,7 @@ function playNext(chunk) {
   playNext();
 
 async function generate(prompt) {
-  const response = await fetch(`http://127.0.0.1:59532/v1/txt2chat?prompt=${prompt}&isPlay=0`, {
+  const response = await fetch(`http://127.0.0.1:59532/v1/rag/txt2chat?prompt=${prompt}&lang=ko&isPlay=1`, {
     method: 'GET',
     headers: {
       'Accept': 'application/json'
@@ -255,6 +267,18 @@ function getDirection() {
         rx = smooth(multi)
     
     // 명령어 생성 // pion 은 정지 명령도 필요하여 무조건 전송 - 다만 기존과 다를때만
+
+    if(up && isLive > 0 && human.depth < 2){
+        play("사람이 있어서, 안전상 이유로 정리할께.")
+        console.log("emergency stop!!!!  a1")
+        lx = 0
+        rx = 0
+        ly = 0
+        ry = 0
+
+    }
+
+
     const cmd = `lx=${lx}&rx=${rx}&ly=${ly}&ry=${ry}`
 
     document.getElementById('log').value = cmd
@@ -299,6 +323,7 @@ document.addEventListener("keyup", (event) => {
 */
 
 let mode =  true //'normal'
+let cmdTime = 0
 
 document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('object-speed').textContent = multi
@@ -308,6 +333,11 @@ document.addEventListener('DOMContentLoaded', function() {
     allButtons.forEach(button => {
         button.addEventListener('click', async function() {
             // 버튼을 누르는 시각적 효과
+
+            if(Date.now() - cmdTime < 1000)
+                return
+            cmdTime = Date.now()
+
             this.style.transform = 'scale(0.95)';
             setTimeout(() => {
                 if (this.classList.contains('function-button')) {
@@ -333,7 +363,15 @@ document.addEventListener('DOMContentLoaded', function() {
                     cmd = '/walkG1?lx=0&rx=0&ly=0&ry=0'
                     break;                
                 case 'move-up':
-                    cmd = `/walkG1?lx=0&rx=0&ly=${1 * multi}&ry=${1 * multi}`
+
+                    if(isLive > 0 && human.depth < 2){
+
+                        play("사람이 있어서, 안전상 이유로 정리할께.")
+                        console.log("emergency stop!!!!")
+                        cmd = `/walkG1?lx=0&rx=0&ly=0&ry=0`
+                    } else 
+                        cmd = `/walkG1?lx=0&rx=0&ly=${1 * multi}&ry=${1 * multi}`
+
                     break;
                 case 'move-down':
                     cmd = `/walkG1?lx=0&rx=0&ly=${-1 * multi}&ry=${-1 * multi}`
@@ -360,28 +398,28 @@ document.addEventListener('DOMContentLoaded', function() {
                     break;        
                 case 'tts-hello':
                     cmd = `/arm?cmd=shakeHands_1`
-                    play("안녕? 나는 인텔 코어 울트라 기반의 서큘러스의 파이온이라고 해. 만나서 반가워.")
+                    play("안녕? 나는 경북수학문화관의 파이온이라고 해. 수학의 세계에 대해 알려줄께.")
                     break;
                 case 'tts-intro':
                     cmd = `/arm?cmd=clamp`
-                    play("서큘러스의 휴먼 인공지능기술과 만드로의 로봇 손 기술이 결합되었어.")
+                    play("경상북도교육청 수학문화관 방문을 환영합니다. 방문자 등록후 이용해 주세요.")
                     break; 
                 case 'tts-follow':
                     cmd = `/arm?cmd=lowWave`
-                    play("자 저를 따라 오세요!")
+                    play("자 저를 따라서 수학문화원 안으로 들어 와서 놀라운 경험을 해 보세요!")
                     break;
                 case 'tts-warn':
                     cmd = `/arm?cmd=highFive`
-                    play("안녕하세요. 저와 함께 사진좀 찍어보실래요?")
+                    play("안녕하세요. 로봇중에 인싸인 저와 함께 멋지게 사진좀 찍어보실래요?")
                     break;
                 case 'tts-bye':
                     cmd = `/arm?cmd=lowWave`
-                    play("환영합니다. 저는 휴머노이드 로봇 파이온입니다.")
+                    play("방문해 줘서 고마워. 다음번에 수학문화원에서 또 만나길 기대할께. 조심히 들어가!")
                     break;
                 case 'tts-poet':
                     cmd = `/arm?cmd=Refuse`
                     //cmd = 'http://127.0.0.1:59532/v2/img2chat?isPlay=1&lang=ko&prompt="이 장면에 적합한 인사말을 해 주겠니?"'
-                    play("저는 업무를 처리중이므로, 가까이 오시면 위험합니다.")
+                    play("저는 막중한 업무를 처리중이므로, 가까이 오시면 위험합니다.")
                     break;    
                 case 'mode':
                     if(mode){
@@ -432,6 +470,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
                             console.log(data.human.position,data)
 
+                            isLive = data.cnt_live
+                            human = data.human // copy value
+
                             const pos = data.human.position
                             /*
                             if(pos.startsWith('T'))
@@ -447,9 +488,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
                             if(Date.now() - lastTime > 30000 && data.cnt_live > 0 && mode){
                                 lastTime = Date.now()
-                                fetch('http://127.0.0.1:59532/v2/img2chat?isPlay=1&lang=ko&prompt="이런 상황에 어울리는 짧은 인사말을 해줘!"')
+                                fetch('http://127.0.0.1:59532/v1/rag/img2chat?isPlay=1&lang=ko&prompt="이런 상황에 어울리는 짧은 인사말을 해줘!"')
                                 
-                                fetch(`/arm?cmd=lowWave`)
+                                if(isLive == 0 || human.depth > 2)
+                                    fetch(`/arm?cmd=lowWave`)
                             }                        
                         },10000)
 
