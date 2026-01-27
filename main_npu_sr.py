@@ -184,13 +184,13 @@ def visualize_segmentation(frame, masks, boxes, classes, scores, class_names, al
         cnt_send += 1
         cnt_env += 1
 
-        if cnt_env >= SEND_INTERVAL * 5: # 공기질 정보
+        if cnt_env >= SEND_INTERVAL * 3: # 공기질 정보
             conn.write("#env:!".encode("utf-8"))
             resp = conn.read_all()
             env = resp.decode('utf-8', errors='ignore').strip().split(',')
             print(len(env),env)
 
-            if len(env) == 3:
+            if len(env) == 2:
                 state["env"]["temp"] = env[0]
                 state["env"]["humidity"] = env[1]
                 state["env"]["air"] = mq9_grade_from_adc(int(env[2]))
@@ -268,7 +268,7 @@ def processing_thread():
 
         start_time_sec = time.time()
 
-        while True:
+        while is_collecting:
             ret, frame = cap.read()
             if not ret:
                 continue
@@ -376,5 +376,13 @@ def start_collection():
     threading.Thread(target=processing_thread, daemon=True).start()
 
     return {"message": "웹캠 분석 시작"}
+
+
+@app.get("/stop_collection")
+def stop_collection():
+    global is_collecting
+
+    is_collecting = False
+    return {"message": "웹캠 분석 종료"}    
 
 

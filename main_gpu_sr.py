@@ -533,17 +533,21 @@ def face2img(file : UploadFile = File(...), prompt: str = "", model : str = "rea
 
 
 @app.post("/voice2wav", response_class=FileResponse)
-def voice2wav(file : UploadFile = File(...), gender : str = "man"):
-  tgt_file = f"uploads/{file.filename}"
+def voice2wav(src : UploadFile = File(...), tgt : UploadFile = File(...)):
+  src_file = f"uploads/{src.filename}"
+  tgt_file = f"uploads/{tgt.filename}"
 
   with open(src_file,"wb+") as file_object:
-    file_object.write(file.file.read())
+    file_object.write(src.file.read())
+
+  with open(tgt_file,"wb+") as file_object:
+    file_object.write(tgt.file.read())    
 
   ### 4. 실행 및 결과 저장
   print('추론 시작...')
   start_time = time.time()
 
-  src_file = f"{gender}.wav"
+  #src_file = f"{gender}.wav"
 
   output_audio = synthesize_audio(src_file, tgt_file)
 
