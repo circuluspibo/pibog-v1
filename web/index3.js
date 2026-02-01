@@ -1,4 +1,4 @@
-alert("Nice to meet you again! 2508051200")
+alert("Nice to meet you again! 2602010700")
 // 버튼 클릭 효과 및 상태 변화 시뮬레이션
 const list_tts = []
 let audio = 0
@@ -10,51 +10,18 @@ var gumStream;              //stream from getUserMedia()
 var rec;                    //Recorder.js object
 var input;                  //MediaStreamAudioSourceNode we'll be recording
 
-let multi = 0.5
-let state = 'Walk2_G1'
-
-const colors = {
-    "white": [255, 255, 255],
-    "red": [255, 0, 0],
-    "yellow": [255, 255, 0],
-    "blue": [0, 0, 255],
-    "green": [0, 255, 0],
-    "cyan": [0, 255, 255],
-    "purple": [128, 0, 128],
-}
-
-const cmds = {
-  "clamp": 17, 
-  "highFive": 18, 
-  "shakeHands_1": 27,
-  "makeHeartBothHands": 20, 
-  "makeHeartSingleHands": 21,
-  "blowKiss": 12, 
-  "hug": 19,
-  "hightWave": 26, 
-  "lowWave" : 25,
-  "ultramanRay" : 24, 
-  "bothHandsUp" : 15,
-  "singleHandsUp" : 23,
-  "Refuse" : 22, 
-  "Release_Arm" : 99,
-  
-  "ZeroTorque" : 0,
-  "Damp" : 1,
-  "Preparation": 4,
-  "Seating": 3,       
-  "Walk_G1": 500,
-  "Walk2_G1" : 501,
-  "Run_G1" : 801,
-  "Squat_G1" : 706,  
-  "SquatUp_G1" : 706,
-  "LieUp_G1" : 702,  
-}
+let multi = 1
+let state = 'Walk_G1'
 
 // shim for AudioContext when it's not avb.
 var AudioContext = window.AudioContext || window.webkitAudioContext;
 var audioContext //new audio context to help us record
 let lastTime = 0
+let interval = 0
+let tag = 0
+
+let isLive = 0
+let human = {}
 
 function listen(){
   //if (document.documentElement.requestFullscreen) 
@@ -114,56 +81,60 @@ function listen(){
   }
 }
 
-function play(text, lang='en'){
-    //if(audio)
-    //    audio.pause()
+let lastPlay = 0
+let lastText = 0
 
-    //audio = new Audio(`/v2/tts?voice=31&lang=ko&static=0&isPlay=0&text=${text}`);
-    //audio.play()
-    // korean 31 
-    switch(lang){
-        case 'ko':
-            new Audio(`/v2/tts?text=${text}&lang=ko&voice=31`)
-        case 'zh':
-            new Audio(`/v2/tts?text=${text}&lang=zh&voice=65`)
-        default:
-            new Audio(`/v2/tts?text=${text}&lang=en&voice=6`)
-    }
+function play(text){
+    if(text == lastText && Date.now() - lastPlay < 3000)
+        return
+
+    if(audio)
+        audio.pause()
+
+    console.log('play...',text)
+    lastPlay = Date.now()
+    lastText = text
+    audio = new Audio(`/v2/tts?voice=31&lang=ko&static=0&isPlay=1&text=${text}`);
+    audio.play()
 }
 
 function playNext(chunk) {
-    fetch(`http://192.168.12.128:59521/led?r=0&g=255&b=0`)
+    fetch(`http://192.168.12.106:59521/led?r=0&g=255&b=0`)
+
     let cmd = ''
 
     if(chunk)
         list_tts.push(chunk)
 
     if(audio == 0 && list_tts.length > 0){
-        pose = poses[Math.floor(Math.random() * poses.length)]
-        fetch(`http://192.168.12.128:59521/action?value=${pose}`)
+        if(pose == 'Release_Arm'){
+            pose = poses[Math.floor(Math.random() * poses.length)]
+            fetch(`/arm?cmd=${pose}`)
+        } else {
+            pose = 'Release_Arm'
+            fetch(`/arm?cmd=${pose}`)
+        }
 
-        const text = list_tts.shift() // 31 ko  65 zh
-        audio = new Audio(`/v2/tts?voice=6&lang=en&static=0&isPlay=0&text=${text}`);
+        fetch(cmd)
+
+        const text = list_tts.shift()
+        audio = new Audio(`/v2/tts?voice=31&lang=ko&static=0&isPlay=1&text=${text}`);
         audio.play()
 
         audio.addEventListener('ended', () => {
             audio = 0
-            //fetch(`http://192.168.12.128:59521/action?value="Release Arm"`)
             playNext()  // Play next audio when current one ends
         })
-    } else {
-        console.log('finish to speaking')
-        fetch(`http://192.168.12.128:59521/led?r=0&g=255&b=255`)
-        fetch(`http://192.168.12.128:59521/action?value="Release_Arm"`)
+    } else { // end of audio
+        fetch(`http://192.168.12.106:59521/led?r=0&g=255&b=255`)
     }
 }
 
   // Start playing the list
+  playNext();
 
 async function generate(prompt) {
-    fetch(`http://192.168.12.128:59521/led?r=0&g=255&b=0`)
-
-  const response = await fetch(`http://127.0.0.1:59532/v1/txt2chat?prompt=${prompt} response like human dialogue and shortly!&isPlay=0`, {
+  const response = await fetch(`http://127.0.0.1:59532/v1/rag/txt2chat?prompt=${prompt}&lang=ko&isPlay=1`, {
     method: 'GET',
     headers: {
       'Accept': 'application/json'
@@ -179,9 +150,6 @@ async function generate(prompt) {
   const decoder = new TextDecoder("utf-8");
   let result = "";
 
-    pose = poses[Math.floor(Math.random() * poses.length)]
-    fetch(`http://192.168.12.128:59521/action?value=${pose}`)
-
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
@@ -191,14 +159,10 @@ async function generate(prompt) {
 
     // Update your UI with the streamed text here
     console.log(chunk); // for demo
-    play(chunk)
-    //playNext(chunk)
+    playNext(chunk)
     //document.getElementById("output").textContent += chunk;
   }
 
-
-    fetch(`http://192.168.12.128:59521/led?r=0&g=255&b=255`)
-    fetch(`http://192.168.12.128:59521/action?value="Release_Arm"`)
   console.log("Final result:", result);
 }
 
@@ -206,7 +170,7 @@ function stt(blob){
   var fd = new FormData();
   fd.append("file", blob, 'voice.wav')
 
-  fetch(`http://127.0.0.1:59532/v1/stt?lang=en`,{ //?prompt=${query}&temp=${temp}&lang=en
+  fetch(`http://127.0.0.1:59532/v1/stt`,{ //?prompt=${query}&temp=${temp}&lang=en
     method: 'POST',
     body: fd
   }).then(async res=>{
@@ -257,7 +221,6 @@ let intv = 0
 const lastPressed = {}
 let lastCmd = ''
 let lastState = 'stop'
-let beforeTime = 0
 
 function getDirection() {
 
@@ -282,71 +245,66 @@ function getDirection() {
         lastPressed['PageDown'] = keysPressed['PageDown']
     }
         
-    //let lx = 0, ly = 0, rx = 0, ry=0
-    let vx = 0, vy=0, omega =0
+    let lx = 0, ly = 0, rx = 0, ry=0
+ 
 
     // 방향 이동 처리
     if (up) { // ⬆ 북쪽
-        vx = multi
+        ly = multi
+        ry = multi
         lastState = 'up'
     } else if (down) { // ⬇ 남쪽
         lastState = 'down'        
-        vx = -1 * multi
+        ly = -1 * multi
+        ry = -1 * multi
     }
     
-    if (left){  // ⬅ 서쪽
-        lastState = 'left'
-        vy = smooth(multi)
-    } else if (right) { // ➡ 동쪽
-        vy = -1 * smooth(multi)
-        lastState = 'left'
-    }
+    if (left)  // ⬅ 서쪽
+        lx = - 1 * smooth(multi)
+    else if (right) // ➡ 동쪽
+        lx = smooth(multi)
+
     // 회전 처리
-    if (rt_left){
-        lastState = 'turn_left'
-        omega = smooth(multi)
-    } else if (rt_right){
-        lastState = 'turn_right'
-        omega = -1 * smooth(multi)
-    }
+    if (rt_left)
+        rx = -1 * smooth(multi)
+    else if (rt_right)
+        rx = smooth(multi)
+    
     // 명령어 생성 // pion 은 정지 명령도 필요하여 무조건 전송 - 다만 기존과 다를때만
-    const cmd = `${vx} ${vy} ${omega}`
+
+    if(up && isLive > 0 && human.depth < 2){
+        play("사람이 있어서, 안전상 이유로 정리할께.")
+        console.log("emergency stop!!!!  a1")
+        lx = 0
+        rx = 0
+        ly = 0
+        ry = 0
+
+    }
+
+
+    const cmd = `lx=${lx}&rx=${rx}&ly=${ly}&ry=${ry}`
 
     document.getElementById('log').value = cmd
-     
-    clearInterval(intv)
 
-    if(Date.now() - beforeTime < 200 && lastCmd == cmd)
-        return
- 
-    lastCmd = cmd
-
-
-    if(cmd == '0 0 0' && lastState == 'up' && multi > 1){
-        console.log(lastState,cmd)
-        beforeTime = Date.now()
-        lastState = 'stop'
-        fetch(`http://192.168.12.128:59521/cmd?key=move&value="0.5 0 0"`)
-
-        intv = setTimeout(function(){
-            console.log('smooth stop....')
-            fetch(`http://192.168.12.128:59521/cmd?key=move&value="0 0 0"`)
-        },1500)
+    if(lastCmd != cmd){
+        console.log('cmd',cmd)    
+        lastCmd = cmd
         
-    } else if(cmd != '0 0 0' && lastState != 'stop'){
-        console.log('call here', cmd != '0 0 0')
-        console.log(lastState,cmd)
-        beforeTime = Date.now()
-        fetch(`http://192.168.12.128:59521/cmd?key=move&value=${cmd}`)
-    } else if(cmd == '0 0 0' && lastState != 'stop'){
+        clearInterval(intv)
+        
+        if(cmd == 'lx=0&rx=0&ly=0&ry=0' && lastState == 'up' && multi > 1){
+            lastState = 'stop'
+            fetch(`/walkG1?lx=0&rx=0&ly=0.5&ry=0.5`)
 
-        console.log('call stop', cmd == '0 0 0')
-        console.log(lastState,cmd)
-        beforeTime = Date.now()
-        lastState = 'stop'
-        fetch(`http://192.168.12.128:59521/cmd?key=move&value=${cmd}`)
+            intv = setTimeout(function(){
+                console.log('smooth stop....')
+                fetch(`/walkG1?lx=0&rx=0&ly=0&ry=0`)
+            },1000)
+            
+        } else
+            fetch(`/walkG1?${cmd}`)
     }
-    
 }
 
 
@@ -357,8 +315,31 @@ function gameLoop() {
 
 gameLoop() // 루프 시작
 
+// 글로벌 키 입력 감지
+/*
+document.addEventListener("keydown", (event) => {
+    console.log(`Global Keydown: ${event.key}`);
+});
 
-let mode = 'normal'
+document.addEventListener("keyup", (event) => {
+    console.log(`Global Keyup: ${event.key}`);
+});
+*/
+
+let mode =  true //'normal'
+let cmdTime = 0
+
+async function autoMove(){
+    cmd = `/walkG1?lx=0&rx=0&ly=0.5&ry=0.5`
+
+    const response = await fetch(cmd)
+    if (!response.ok) {
+        throw new Error(`Response status: ${response.status}`)
+    }
+
+    const json = await response.json()
+    console.log(cmd ,json)
+}
 
 document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('object-speed').textContent = multi
@@ -368,6 +349,11 @@ document.addEventListener('DOMContentLoaded', function() {
     allButtons.forEach(button => {
         button.addEventListener('click', async function() {
             // 버튼을 누르는 시각적 효과
+
+            if(Date.now() - cmdTime < 1000)
+                return
+            cmdTime = Date.now()
+
             this.style.transform = 'scale(0.95)';
             setTimeout(() => {
                 if (this.classList.contains('function-button')) {
@@ -388,13 +374,20 @@ document.addEventListener('DOMContentLoaded', function() {
             }
 
             switch(this.id){
-                /*
                 case 'rotation-center':
                 case 'move-center':
                     cmd = '/walkG1?lx=0&rx=0&ly=0&ry=0'
                     break;                
                 case 'move-up':
-                    cmd = `/walkG1?lx=0&rx=0&ly=${1 * multi}&ry=${1 * multi}`
+
+                    if(isLive > 0 && human.depth < 2){
+
+                        play("사람이 있어서, 안전상 이유로 정리할께.")
+                        console.log("emergency stop!!!!")
+                        cmd = `/walkG1?lx=0&rx=0&ly=0&ry=0`
+                    } else 
+                        cmd = `/walkG1?lx=0&rx=0&ly=${1 * multi}&ry=${1 * multi}`
+
                     break;
                 case 'move-down':
                     cmd = `/walkG1?lx=0&rx=0&ly=${-1 * multi}&ry=${-1 * multi}`
@@ -418,93 +411,129 @@ document.addEventListener('DOMContentLoaded', function() {
                     break;
                 case 'tilt-down':
                     cmd = `/walkG1?lx=0&rx=0&ly=${-1.5 * multi}&ry=${-1.5 * multi}`
-                    break; 
-                */       
+                    break;        
                 case 'tts-hello':
-                    //cmd = 'http://192.168.12.128:59521/action?value=shakeHands_1'
-                    //fetch('http://192.168.12.128:59521/action?value=shakeHands_1')
-                    fetch('http://192.168.12.128:59521/action?value=shakeHands_1')
-                    play("Hi, I am pai-on, the humanoid robot inside intel core ultra")
-                    return;
+                    cmd = `/arm?cmd=shakeHands_1`
+                    play("안녕? 나는 경북수학문화관의 파이온이라고 해. 수학의 세계에 대해 알려줄께.")
+                    break;
                 case 'tts-intro':
-                    //cmd = 'http://192.168.12.128:59521/action?value=clamp'
-                    //fetch('http://192.168.12.128:59521/action?value=clamp')
-                    fetch('http://192.168.12.128:59521/action?value=clamp')
-                    play("大家好，我是 PI ON. 基於 Intel Core Ultra，我整合 CPU、GPU、NPU，打造智慧引擎。別人還依賴單一加速器，我已能即時靈活調度，效率更高. CUDA 是過去，未來是靈活的. 而我是未來. 我是 PI-ON，很高興認識大家.","zh")
-                    return;
+                    cmd = `/arm?cmd=clamp`
+                    play("경상북도교육청 수학문화관 방문을 환영합니다. 방문자 등록후 이용해 주세요.")
+                    break; 
                 case 'tts-follow':
-                    //cmd = 'http://192.168.12.128:59521/action?value=lowWave'
-                    //fetch('http://192.168.12.128:59521/action?value=lowWave')
-                    play("Follow me now!")
-                    return;
+                    cmd = `/arm?cmd=lowWave`
+                    play("자 저를 따라서 수학문화원 안으로 들어 와서 놀라운 경험을 해 보세요!")
+                    break;
                 case 'tts-warn':
-                    //cmd = 'http://192.168.12.128:59521/action?value=highFive'
-                    //fetch('http://192.168.12.128:59521/action?value=highFive')
-                    play("How about take a photo with me?")
-                    return;
+                    cmd = `/arm?cmd=highFive`
+                    play("안녕하세요. 로봇중에 인싸인 저와 함께 멋지게 사진좀 찍어보실래요?")
+                    break;
                 case 'tts-bye':
-                    cmd = 'http://127.0.0.1:59532/v1/txt2chat?isPlay=1&prompt="what is future of the robot? response like human dialogue and shortly!"'
-                    //cmd = 'http://192.168.12.128:59521/action?value=lowWave'
-                    //play("환영합니다. 저는 휴머노이드 로봇 파이온입니다.")
+                    cmd = `/arm?cmd=lowWave`
+                    play("방문해 줘서 고마워. 다음번에 수학문화원에서 또 만나길 기대할께. 조심히 들어가!")
                     break;
                 case 'tts-poet':
-                    //cmd = 'http://192.168.12.128:59521/action?value=Refuse'
-                    cmd = 'http://127.0.0.1:59532/v1/img2chat?isPlay=1&prompt="describe the image, what you see? response like human dialogue and shortly!"'
-                    //play("저는 업무를 처리중이므로, 가까이 오시면 위험합니다.")
-                    break;    
-                case 'mode': // discard
-                    if(mode == 'Walk2_G1'){
-                        mode = 'Run_G1'
+                    cmd = `/arm?cmd=Refuse`
+                    //cmd = 'http://127.0.0.1:59532/v2/img2chat?isPlay=1&lang=ko&prompt="이 장면에 적합한 인사말을 해 주겠니?"'
+                    play("저는 막중한 업무를 처리중이므로, 가까이 오시면 위험합니다.")
+                    break;
+                case 'marker':
+                    alert('marker')
+                    if(tag){
+                        if(tag.id == 0 && tag.dist > 1)
+                            moveIntv = setInterval(autoMove,500)
+                    } 
+                    break;
+                case 'mode':
+                    if(mode){
+                        document.getElementById("mode").textContent = 'mode'
+                        mode = false
+                    } else {
+                        document.getElementById("mode").textContent = 'auto'
+                        mode = true      
+                    }
+
+                    return
+                    /*
+                    if(mode == 'Step_G1'){
+                        mode = 'Stand_G1'
+                        cmd = '/balanceG1?cmd=Stand_G1'
                         multi = 1
                     } else {
-                        mode = 'Walk2_G1'
+                        mode = 'Step_G1'
+                        cmd = '/balanceG1?cmd=Step_G1'
                         multi = 2
                     }
-                    
-                    cmd = `http://192.168.12.128:59521/cmd?value=${cmds[mode]}`
+                    */
                     break;     
-                case 'connect': // discard
-                    alert('connect!!!')
+                case 'connect':
 
-                    
                     fetch(`/start_collection`).then(async response=>{
                         if (!response.ok) {
                             throw new Error(`Response status: ${response.status}`)
                         }
    
-                        //const json = await response.json()
-                        //console.log('connect ok',json)  
-                        
-                    })
-
-                    setTimeout(()=>{
-                        document.getElementById('background-video').src = '/video_feed'
-                    },1000)
-
-                    return;
-                case 'prepare':
-                    fetch(`/start_collection`).then(async response=>{
-                        if (!response.ok) {
-                            throw new Error(`Response status: ${response.status}`)
-                        }
-   
-                        fetch('http://192.168.12.128:59521/intel')
-
                         document.getElementById('background-video').src = '/video_feed'
                         
                     })
               
-                    cmd = '/prepare2'
+
+                    fetch(`/connect2`).then(async response=>{
+                        if (!response.ok) {
+                            throw new Error(`Response status: ${response.status}`)
+                        }
+
+                        const json = await response.json()
+                        console.log('connect ok',json)
+
+                        clearInterval(interval)
+                        interval = setInterval(async ()=>{
+                            const resp = await fetch(`http://127.0.0.1:59531/heartbeat`)
+                            const data = (await resp.json()).data
+
+                            console.log(data.human.position,data)
+
+                            isLive = data.cnt_live
+                            human = data.human // copy value
+                            tag = data.tag
+
+                            const pos = data.human.position
+                            /*
+                            if(pos.startsWith('T'))
+                                fetch(`http://127.0.0.1:8000/head/down`)
+                            else if(pos.startsWith('B')) 
+                                fetch(`http://127.0.0.1:8000/head/up`)
+                            
+                            if(pos.endsWith('L'))
+                                fetch(`http://127.0.0.1:8000/head/right`)
+                            else if(pos.endsWith('R'))
+                                fetch(`http://127.0.0.1:8000/head/left`)
+                            */
+
+                            if(Date.now() - lastTime > 30000 && data.cnt_live > 0 && mode){
+                                lastTime = Date.now()
+                                fetch('http://127.0.0.1:59532/v1/rag/img2chat?isPlay=1&lang=ko&prompt="이런 상황에 어울리는 짧은 인사말을 해줘!"')
+                                
+                                if(isLive == 0 || human.depth > 2)
+                                    fetch(`/arm?cmd=lowWave`)
+                            }                        
+                        },10000)
+
+
+                    })
+                    break;
+                case 'prepare':
+                    cmd = '/prepare'
                     break;                    
-                default: // hands 구현 필요
-                    if(this.classList.contains('arms')){ // ....
-                        cmd = `http://192.168.12.128:59521/action?value=${this.id}`
-                    } else if(this.classList.contains('states')){
+                default:
+                    if(this.classList.contains('hands'))
+                        cmd = `/hand?cmd=${this.id}`
+                    else if(this.classList.contains('states')){
                         state = this.id
                         multi = 0.5
-                        cmd = `http://192.168.12.128:59521/cmd?value=${cmds[this.id]}`                 
+                        cmd = `/stateG1?cmd=${this.id}`                    
                     } else
-                        cmd = `http://192.168.12.128:59521/cmd?value=${cmds[this.id]}`
+                        cmd = `/arm?cmd=${this.id}`
             }
 
 
@@ -546,7 +575,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 // 잠시 후 명령어 실행 시뮬레이션
                 setTimeout(() => {
                     document.querySelector('.voice-input input').value = '';
-                    document.getElementById('move-up').click();
+                    //document.getElementById('move-up').click();
                 }, 1000);
             }, 500);
         }
@@ -682,11 +711,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const color = this.getAttribute('data-color');
             const theme = themeColors[color];
 
-            const r = colors[color][0]
-            const g = colors[color][1]
-            const b = colors[color][2]
-
-            const response = await fetch(`http://192.168.12.128:59521/led?r=${r}&g=${g}&b=${b}`)
+            const response = await fetch(`/color?value=${color}`)
             if (!response.ok) {
                 throw new Error(`Response status: ${response.status}`)
             }
@@ -874,19 +899,19 @@ document.addEventListener('DOMContentLoaded', function() {
             if(isUp){
                 if(multi < 1)
                     multi = 1
+                else if(multi < 1.5)
+                    multi = 1.5
                 else if(multi < 2)
-                    multi = 2
-                else if(multi < 3)
-                    multi = 3
+                    multi = 2.5
                 else
                     multi = 3
             } else {
-                if(multi < 2)
+                if(multi < 1.5)
                     multi = 1
+                else if(multi < 2)
+                    multi = 1.5
                 else if(multi < 3)
                     multi = 2
-                else if(multi < 4)
-                    multi = 3
                 else
                     multi = 1
             }            
@@ -908,15 +933,23 @@ document.addEventListener('DOMContentLoaded', function() {
         posX = Math.max(0, Math.min(window.innerWidth, posX));
         posY = Math.max(0, Math.min(window.innerHeight, posY));
 
-        if(dy > 0) // down
+        if(dy > 0){ // down
             multi = 0.5
-        else if(dy < 0) // up
-            multi = 2
+        } else if(dy < 0){ // up
+            if(state == 'Walk_G1' || state == 'Walk2_G1')    
+                multi = 2
+            else
+                multi = 3.5
+        }
 
-        if(dx > 0) // right
-            multi = 1.5 //setHeight(true)
-        else if(dx < 0) // left
-            multi = 1    
+        if(dx > 0){ // right
+            if(state == 'Walk_G1' || state == 'Walk2_G1')    
+                multi = 1.5
+            else
+                multi = 2      
+        } else if(dx < 0) // left
+            multi = 1
+        
 
         document.getElementById('object-speed').textContent = multi
         // 방향 감지

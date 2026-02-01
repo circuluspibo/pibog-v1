@@ -48,7 +48,7 @@ def getHash(text):
   hash_func.update(text.encode('utf-8'))
   return hash_func.hexdigest()
 
-_IP = "192.168.3.67"#"192.168.12.112"
+_IP = "192.168.12.106"#"192.168.12.112"
 
 ov = Core()
 
@@ -107,7 +107,7 @@ audio_hub = None
 track = None
 lastColor = 'cyan'
 state = { "charge" : 0, "temp" : 0, "voltage" : 0, "cnt_live" : 0, "cnt_object" : 0,  "boxes" : [], 
-         "human" : { "age" : "", "gender" : "", "emotion" : "", "position" : ""} }
+         "human" : { "age" : "", "gender" : "", "emotion" : "", "position" : ""}, "tag" : { "id" : None, "dist" : 0} }
 G1_ARM = {
   "clamp": 17, 
   "highFive": 18, 
@@ -487,6 +487,8 @@ async def processing_loop():
                 dist = depth_ai[cy, cx] / 1000.0  # mm -> m
 
             info_str = f"ID: {tag_id} / Dist: {dist:.2f}m"
+            state["tag"]["id"] = tag_id
+            state["tag"]["dist"] = dist
             (w, h), baseline = cv2.getTextSize(info_str, cv2.FONT_HERSHEY_SIMPLEX, 0.7, 2)
             
             # 우측 하단 여백 설정 (20px)
