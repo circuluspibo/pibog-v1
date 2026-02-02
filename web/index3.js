@@ -99,7 +99,7 @@ function play(text){
 }
 
 function playNext(chunk) {
-    fetch(`http://192.168.12.106:59521/led?r=0&g=255&b=0`)
+    fetch(`/led?r=0&g=0&b=255`)
 
     let cmd = ''
 
@@ -126,7 +126,7 @@ function playNext(chunk) {
             playNext()  // Play next audio when current one ends
         })
     } else { // end of audio
-        fetch(`http://192.168.12.106:59521/led?r=0&g=255&b=255`)
+        fetch(`/led?r=0&g=255&b=255`)
     }
 }
 
@@ -711,7 +711,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const color = this.getAttribute('data-color');
             const theme = themeColors[color];
 
-            const response = await fetch(`/color?value=${color}`)
+            const response = await fetch(`/color?=value=${color}`)
             if (!response.ok) {
                 throw new Error(`Response status: ${response.status}`)
             }

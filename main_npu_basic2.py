@@ -972,6 +972,21 @@ def tts(text = "", voice=6, lang='ko', static=0, isPlay=0):
 
     return f"output/{filename}.wav"
 
+@app.get("/led")
+async def led(r : int = 0,g : int = 0,b : int = 0,):
+  response = requests.get(f"http://{_IP}:59521/led?r={r}&g={g}&b={b}", )
+  return { "result" : True }
+
+import matplotlib.colors
+
+@app.get("/color")
+async def color(value : str = 'red'):
+  colors = matplotlib.colors.to_rgb(value)
+  arr = (np.array(colors) * 255).astype(int)
+  print("colors", arr)
+  response = requests.get(f"http://{_IP}:59521/led?r={arr[0]}&g={arr[1]}&b={arr[2]}", )
+  return { "result" : True }
+
 
 @app.get("/start_collection")
 async def start_frame_collection():
