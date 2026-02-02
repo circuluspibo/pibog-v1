@@ -974,17 +974,19 @@ def tts(text = "", voice=6, lang='ko', static=0, isPlay=0):
 
 @app.get("/led")
 async def led(r : int = 0,g : int = 0,b : int = 0,):
-  response = requests.get(f"http://{_IP}:59521/led?r={r}&g={g}&b={b}", )
+  print(f"http://{_IP}:59521/led?r={r}&g={g}&b={b}")
+  response = requests.get(f"http://{_IP}:59521/led?r={r}&g={g}&b={b}")
   return { "result" : True }
 
 import matplotlib.colors
 
 @app.get("/color")
 async def color(value : str = 'red'):
+  print(value)
   colors = matplotlib.colors.to_rgb(value)
   arr = (np.array(colors) * 255).astype(int)
-  print("colors", arr)
-  response = requests.get(f"http://{_IP}:59521/led?r={arr[0]}&g={arr[1]}&b={arr[2]}", )
+  print("color", arr)
+  response = requests.get(f"http://{_IP}:59521/led?r={arr[0]}&g={arr[1]}&b={arr[2]}")
   return { "result" : True }
 
 
@@ -1016,4 +1018,4 @@ async def start_frame_collection():
     
     return {"message": "수신 및 분석 파이프라인이 시작되었습니다."}
 
-print("Loading Complete","NPU")
+print("NPU","2502010900")

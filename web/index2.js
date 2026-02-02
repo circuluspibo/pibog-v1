@@ -1,4 +1,4 @@
-alert("Nice to meet you again! 2506260700")
+alert("Nice to meet you again! 2602010900")
 // 버튼 클릭 효과 및 상태 변화 시뮬레이션
 const list_tts = []
 let audio = 0
@@ -85,6 +85,7 @@ let lastPlay = 0
 let lastText = 0
 
 function play(text){
+    fetch(`http://127.0.0.1:59531/led?r=0&g=255&b=0`)
     if(text == lastText && Date.now() - lastPlay < 3000)
         return
 
@@ -94,11 +95,12 @@ function play(text){
     console.log('play...',text)
     lastPlay = Date.now()
     lastText = text
-    audio = new Audio(`/v2/tts?voice=31&lang=ko&static=0&isPlay=0&text=${text}`);
+    audio = new Audio(`/v2/tts?voice=31&lang=ko&static=0&isPlay=1&text=${text}`);
     audio.play()
 }
 
 function playNext(chunk) {
+    fetch(`http://127.0.0.1:59531/led?r=0&g=255&b=0`)
 
     let cmd = ''
 
@@ -117,21 +119,23 @@ function playNext(chunk) {
         fetch(cmd)
 
         const text = list_tts.shift()
-        audio = new Audio(`/v2/tts?voice=31&lang=ko&static=0&isPlay=0&text=${text}`);
+        audio = new Audio(`/v2/tts?voice=31&lang=ko&static=0&isPlay=1&text=${text}`);
         audio.play()
 
         audio.addEventListener('ended', () => {
             audio = 0
             playNext()  // Play next audio when current one ends
         })
-    } 
+    } else { // end of audio
+        fetch(`http://127.0.0.1:59531/led?r=0&g=255&b=255`)
+    }
 }
 
   // Start playing the list
   playNext();
 
 async function generate(prompt) {
-  const response = await fetch(`http://127.0.0.1:59532/v1/rag/txt2chat?prompt=${prompt}&lang=ko&isPlay=0`, {
+  const response = await fetch(`http://127.0.0.1:59532/v1/rag/txt2chat?prompt=${prompt}&lang=ko&isPlay=1`, {
     method: 'GET',
     headers: {
       'Accept': 'application/json'
@@ -268,7 +272,7 @@ function getDirection() {
         rx = smooth(multi)
     
     // 명령어 생성 // pion 은 정지 명령도 필요하여 무조건 전송 - 다만 기존과 다를때만
-
+    /*
     if(up && isLive > 0 && human.depth < 2){
         play("사람이 있어서, 안전상 이유로 정리할께.")
         console.log("emergency stop!!!!  a1")
@@ -278,7 +282,7 @@ function getDirection() {
         ry = 0
 
     }
-
+    */
 
     const cmd = `lx=${lx}&rx=${rx}&ly=${ly}&ry=${ry}`
 
@@ -411,15 +415,15 @@ document.addEventListener('DOMContentLoaded', function() {
                     break;        
                 case 'tts-hello':
                     cmd = `/arm?cmd=shakeHands_1`
-                    play("안녕? 나는 경북수학문화관의 파이온이라고 해. 수학의 세계에 대해 알려줄께.")
+                    play("안녕? 나는 카이스트 테스트베드의 파이온이라고 해. 로봇의 세계에 대해 알려줄께.")
                     break;
                 case 'tts-intro':
                     cmd = `/arm?cmd=clamp`
-                    play("경상북도교육청 수학문화관 방문을 환영합니다. 방문자 등록후 이용해 주세요.")
+                    play("카이스트 테스트베드 방문을 환영합니다. 방문자 등록후 이용해 주세요.")
                     break; 
                 case 'tts-follow':
                     cmd = `/arm?cmd=lowWave`
-                    play("자 저를 따라서 수학문화원 안으로 들어 와서 놀라운 경험을 해 보세요!")
+                    play("자 저를 따라서 테스트베드 안으로 들어 와서 놀라운 경험을 해 보세요!")
                     break;
                 case 'tts-warn':
                     cmd = `/arm?cmd=highFive`
@@ -427,7 +431,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     break;
                 case 'tts-bye':
                     cmd = `/arm?cmd=lowWave`
-                    play("방문해 줘서 고마워. 다음번에 수학문화원에서 또 만나길 기대할께. 조심히 들어가!")
+                    play("방문해 줘서 고마워. 다음번에 카이스트 태스트베드에서 또 만나길 기대할께. 조심히 들어가!")
                     break;
                 case 'tts-poet':
                     cmd = `/arm?cmd=Refuse`
@@ -509,7 +513,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
                             if(Date.now() - lastTime > 30000 && data.cnt_live > 0 && mode){
                                 lastTime = Date.now()
-                                fetch('http://127.0.0.1:59532/v1/rag/img2chat?isPlay=0&lang=ko&prompt="이런 상황에 어울리는 짧은 인사말을 해줘!"')
+                                fetch('http://127.0.0.1:59532/v1/rag/img2chat?isPlay=1&lang=ko&prompt="이런 상황에 어울리는 짧은 인사말을 해줘!"')
                                 
                                 if(isLive == 0 || human.depth > 2)
                                     fetch(`/arm?cmd=lowWave`)
@@ -708,13 +712,17 @@ document.addEventListener('DOMContentLoaded', function() {
             const color = this.getAttribute('data-color');
             const theme = themeColors[color];
 
+            fetch(`http://127.0.0.1:59531/led?r=255&g=0&b=0`)
+            /*
             const response = await fetch(`/color?value=${color}`)
             if (!response.ok) {
                 throw new Error(`Response status: ${response.status}`)
             }
+            */
         
-            const json = await response.json()
-            console.log(color ,json)
+            
+            //const json = await response.json()
+            //console.log(color ,json)
 
             
             root.style.setProperty('--primary-color', theme.primary);
