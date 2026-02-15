@@ -67,7 +67,7 @@ class CPUPowerMonitor:
 # Usage Example
 # ==========================
 if __name__ == "__main__":
-    monitor = JetsonPowerMonitor(interval=1.0)
+    monitor = CPUPowerMonitor(interval=1.0)
     monitor.start()
 
     try:
