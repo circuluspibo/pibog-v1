@@ -2,7 +2,7 @@ import os
 import threading
 import time
 
-class JetsonPowerMonitor:
+class CPUPowerMonitor:
     def __init__(self, hwmon_path="/sys/class/hwmon/hwmon5", interval=1.0):
         self.hwmon_path = hwmon_path
         self.interval = interval
