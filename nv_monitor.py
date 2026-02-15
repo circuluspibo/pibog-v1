@@ -51,7 +51,7 @@ class JetsonPowerMonitor:
 
     # 🔥 추가된 함수
     def get_power(self):
-        """Return total SoC power (GPU + CPU/SOC)."""
+        #Return total SoC power (GPU + CPU/SOC).#
         return self.gpu_power + self.cpu_power
 
     def get_all(self):
@@ -106,7 +106,7 @@ class CPUPowerMonitor:
         self._thread = threading.Thread(target=self._monitor, daemon=True)
         
     def _read_power(self):
-        """Run tegrastats and extract power readings."""
+        #Run tegrastats and extract power readings.#
         process = subprocess.Popen(
             ["tegrastats", "--interval", str(int(self.interval * 1000))],  # tegrastats reports in milliseconds
             stdout=subprocess.PIPE,
@@ -136,25 +136,25 @@ class CPUPowerMonitor:
             time.sleep(self.interval)
 
     def _monitor(self):
-        """Background thread for monitoring power."""
+        #Background thread for monitoring power.#
         self._read_power()
 
     def start(self):
-        """Start the background monitoring thread."""
+        #Start the background monitoring thread.#
         self._thread.start()
 
     def stop(self):
-        """Stop the monitoring thread."""
+        #Stop the monitoring thread.#
         self._stop_event.set()
         self._thread.join()
 
     def get_power(self):
-        """Return the latest measured powers."""
+        #Return the latest measured powers.#
 
         return self.gpu_power + self.cpu_power
 
     def get_all(self):
-        """Return the latest measured powers."""
+        #Return the latest measured powers.#
         return {
             "GPU": self.gpu_power,
             "CPU": self.cpu_power,
