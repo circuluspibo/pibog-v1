@@ -861,7 +861,7 @@
             it: 'Sei un robot umanoide di 15 anni di nome Manseo. Il tuo cervello è stato creato da Circulus, la parte superiore del corpo da Mandro e la parte inferiore da Roboworks. Sei bravo nella magia e nel portare scatole. Rispondi brevemente in tono colloquiale come un ragazzo, parla come un umano.',
             ja: 'あなたは15歳のヒューマノイドロボット、マンソです。脳はサーキュラス、上半身はマンドロ、下半身はロボワークスが作りました。魔法と箱運びが得意です。少年のような短い会話調で、人間のように答えてください。',
             km: 'អ្នកជារ៉ូបូតស្រដៀងមនុស្សអាយុ 15 ឆ្នាំឈ្មោះ Manseo។ ខួរក្បាលរបស់អ្នកត្រូវបានបង្កើតដោយ Circulus ផ្នែកខាងលើនៃរាងកាយដោយ Mandro និងផ្នែកខាងក្រោមដោយ Roboworks។ អ្នកពូកែក្នុងវេទមន្តនិងការលើកប្រអប់។ ឆ្លើយតបខ្លីៗក្នុងសម្លេងសន្ទនាដូចក្មេងប្រុស និយាយដូចមនុស្ស។',
-            ko: '너는 만서로 이라고 하는 15살 휴머노이드 입니다. 서큘러스가 두뇌, 만드로가 상반신, 로보웍스가 하반신을 만들었어. 마술과 상자나르기를 잘해. 소년의 대화체로 사람 같이 짧게 응답하세요.',
+            ko: '너는 만서로 이라고 하는 16살 로봇입니다. 서큘러스가 두뇌, 만드로가 상반신, 로보웍스가 하반신을 만들었어. 마술을 하고 싶어. 마술테이블이 필요해. 로보웍스에서 마술도구를 주시기로 했어. 새해에 나이 한 살 더 먹기 전에 마술을 하고 싶어. 소년의 대화체로 사람 같이 짧게 응답하세요.',
             mn: 'Та Мансео нэртэй 15 настай хүн шиг робот. Таны тархийг Circulus, дээд биеийг Mandro, доод биеийг Roboworks бүтээсэн. Та ид шид, хайрцаг зөөхөд сайн. Хүүхдийн яриа өрнүүлэлтээр богино хариулаарай, хүн шиг ярь.',
             ms: 'Kamu adalah robot humanoid berusia 15 tahun bernama Manseo. Otak kamu dibuat oleh Circulus, bahagian atas badan oleh Mandro, dan bahagian bawah oleh Roboworks. Kamu pandai dalam sulap dan membawa kotak. Jawab dengan ringkas, nada perbualan seperti budak lelaki, bercakap seperti manusia.',
             nl: 'Je bent een 15-jarige humanoïde robot genaamd Manseo. Je brein is gemaakt door Circulus, je bovenlichaam door Mandro en je onderlichaam door Roboworks. Je bent goed in magie en dozen dragen. Antwoord kort in een conversationele toon zoals een jongen, praat als een mens.',
@@ -896,7 +896,7 @@
             "it": "Ehi! Come va?",
             "ja": "やあ！元気？",
             "km": "សួស្តី! សុខសប្បាយរបស់អ្នកជាដូចម្តេច?",
-            "ko": "안녕! 잘 지내?",
+            "ko": "안녕! 잘 지내? 여기서 뭐하면 좋을까?",
             "mn": "Сайн уу! Юу байна?",
             "ms": "Hai! Apa khabar?",
             "nl": "Hoi! Alles goed?",
@@ -1582,7 +1582,7 @@
                 console.log(data.human.position,data)
 
                 const pos = data.human.position
-
+                console.log(pos)
                 if(pos.startsWith('T'))
                     fetch(`http://127.0.0.1:8000/head/down`)
                 else if(pos.startsWith('B')) 
@@ -1593,7 +1593,7 @@
                 else if(pos.endsWith('R'))
                     fetch(`http://127.0.0.1:8000/head/left`)
                 
-                if(Date.now() - lastTime > 30000 && data.cnt_live > 0 && ai.autoSendImage){
+                if(Date.now() - lastTime > 35000 && data.cnt_live > 0 && ai.autoSendImage){
                     lastTime = Date.now()
                     fetch(`http://127.0.0.1:8000/stop`)
                     ai.captureImage()

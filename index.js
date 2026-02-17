@@ -188,8 +188,8 @@ app.get('/', {
 
 // Swagger 스키마 정의 (생략 없이 그대로 유지)
 const RobotMotionSchema = {
-  type: 'object',
-  required: ['arm', 'head_tilt', 'head_pan', 'shoulder_front', 'shoulder_side', 'elbow_front', 'elbow_side', 'finger', 'duration'],
+  type: 'object',  // required 'head_tilt' , 'head_pan'
+  required: ['arm', 'shoulder_front', 'shoulder_side', 'elbow_front', 'elbow_side', 'finger', 'duration'],
   properties: {
     arm: {
       type: 'integer',
@@ -235,7 +235,7 @@ const RobotMotionSchema = {
     finger: {
       type: 'integer',
       minimum: 0,
-      maximum: 6,
+      maximum: 63,
       description: '손가락 구동 (0:대기, 1:엄지잡기, 2:엄지놓기, 3:4손가락잡기, 6:4손가락펴기)'
     },
     duration: {
@@ -321,6 +321,13 @@ app.post('/motion/execute', {
 let pos_w = 90 // HEAD RIGHT-LEFT
 let pos_h = 10 // HEAD UP-DOWN 
 
+setInterval(()=>{
+  pos_w = 90 // HEAD RIGHT-LEFT
+  pos_h = 25
+},60000)
+
+let lastTime = 0
+
 // head 처리
 app.get('/head/:name', {
   schema: {
@@ -347,20 +354,20 @@ app.get('/head/:name', {
 
     switch(name){
       case 'up':
-        if (pos_h > 2)
-          pos_h -= 1                
+        if (pos_h > 4)
+          pos_h -= 3              
         break
       case 'down':
-        if (pos_h < 43)
-            pos_h += 1                
+        if (pos_h < 33)
+            pos_h += 3                
         break
       case 'left':
         if (pos_w > 11)
-            pos_w -= 1  
+            pos_w -= 5  
         break;      
       case 'right':
         if (pos_w < 169)
-            pos_w += 1                
+            pos_w += 5                
         break
       }
 
@@ -390,15 +397,22 @@ app.get('/sequence/:name', {
     }
   }
 }, async (request, reply) => {
+  console.log("=================11")
   try {
     const data = JSON.parse(await fs.readFile(MOTION_DATA_PATH, 'utf-8'));
     const { name } = request.params;
     
+  console.log("=================2",data[name])
+
     if (!data[name]) {
       return reply.code(404).send({ error: '시퀀스를 찾을 수 없습니다' });
     }
     
+
+    console.log('here')
     return data[name];
+
+
   } catch (e) {
     return reply.code(500).send({ error: `조회 실패: ${e.message}` });
   }
@@ -675,7 +689,8 @@ app.get('/stop', {
     }
   }
 }, async (request, reply) => {
-  await move(Buffer.from([0xFF, 0x00, 0x00, 0x00, 0x00, 0x00]), 1000);
+  await move(Buffer.from([0xFF, 0x23, 0x00, 0x00, 0x43, 0x00]), 1000);
+  await move(Buffer.from([0xFC, 0x15, 0x5A, 0x00, 0x00, 0x00]), 1000);
   return { result: true };
 });
 
