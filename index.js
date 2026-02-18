@@ -379,6 +379,32 @@ app.get('/head/:name', {
   }
 });
 
+function getWifiIP() {
+  const nets = os.networkInterfaces()
+  const wifiRegex = /^(wlan|wlp|wlx)/
+
+  for (const name of Object.keys(nets)) {
+    if (!wifiRegex.test(name)) continue
+    for (const net of nets[name]) {
+      if (net.family === 'IPv4' && !net.internal) {
+        return net.address
+      }
+    }
+  }
+  return null
+}
+
+// ✅ API: Wi-Fi IP
+app.get('/ip', async (request, reply) => {
+  const ip = getWifiIP()
+
+  return {
+    ip,
+    port: PORT,
+    url: ip ? `http://${ip}:${PORT}` : null
+  }
+})
+
 // 시퀀스 조회
 app.get('/sequence/:name', {
   schema: {
