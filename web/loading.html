@@ -227,6 +227,20 @@
       .catch(() => {
         document.getElementById('debugInfo').textContent = 'IP: 조회 실패';
       })
+
+  const TARGET_URL = "http://127.0.0.1:8000/web/tron.html";
+  const CHECK_URL = "http://127.0.0.1:59532"; 
+
+  async function checkServerReady() {
+    try {
+      // 59532 포트의 서버가 살아있는지 확인
+      await fetch(CHECK_URL, { mode: 'no-cors' });
+      window.location.replace(TARGET_URL); // 히스토리를 남기지 않고 이동
+    } catch (e) {
+      setTimeout(checkServerReady, 500); // 0.5초마다 재시도
+    }
+  }
+  window.onload = checkServerReady;
   </script>
 </body>
 </html>
