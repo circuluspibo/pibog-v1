@@ -10,6 +10,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import crypto from 'crypto';
 import { fileURLToPath } from 'url';
+import os;
 
 // __dirname 대체 (ESM 환경에서는 __dirname이 정의되지 않음)
 const __filename = fileURLToPath(import.meta.url);
