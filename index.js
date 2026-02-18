@@ -16,6 +16,8 @@ import os from 'os';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+const PORT = 8000
+
 const app = fastify({ logger: true });
 
 // 전역 변수
@@ -775,7 +777,7 @@ app.post('/api/play_motion', async (request, reply) => {
 
 // 서버 시작
 const start = async () => {
-  let PORT = 8000;
+  //let PORT = 8000;
   
   // 2. 최상위 await (top-level await)를 사용하여 포트 파일을 읽어옴 (ESM에서 지원됨)
   /*
