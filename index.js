@@ -384,7 +384,7 @@ app.get('/head/:name', {
 
 function getWifiIP() {
   const nets = os.networkInterfaces()
-  const wifiRegex = /^(wlan|wlp|wlx)/
+  const wifiRegex = /^(enp|wlo|wlx)/
 
   for (const name of Object.keys(nets)) {
     if (!wifiRegex.test(name)) continue
