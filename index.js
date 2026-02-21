@@ -523,6 +523,15 @@ app.get("/speak", async (request, reply) => {
   });
 });
 
+app.get("/command", async (request, reply) => {
+  const text = request.query.text || "안녕하세요";
+  const encodedText = encodeURIComponent(`"${text}"`);
+
+  return { result : true , data : "START" };
+});
+});
+
+
 // 시퀀스 실행
 app.get('/sequence/play/:name', {
   schema: {
