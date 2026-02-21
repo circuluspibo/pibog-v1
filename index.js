@@ -11,6 +11,45 @@ import path from 'path';
 import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 import os from 'os';
+import { spawn } from "child_process";
+
+const TTS_URL = 'http://127.0.0.1:59530/v1/tts?text="';
+
+async function fetchAndPlay(text) {
+  try {
+    console.log("TTS 요청 중...");
+
+    const response = await fetch(`${TTS_URL}${text}`);
+
+    if (!response.ok) {
+      throw new Error(`HTTP error: ${response.status}`);
+    }
+
+    // play 프로세스 실행 (stdin으로 받기)
+    const player = spawn("play", ["-"]);
+
+    // Web Stream → Node Stream 변환
+    const readable = response.body;
+
+    readable.pipeTo(
+      new WritableStream({
+        write(chunk) {
+          player.stdin.write(chunk);
+        },
+        close() {
+          player.stdin.end();
+        }
+      })
+    );
+
+    player.on("close", (code) => {
+      console.log("재생 종료:", code);
+    });
+
+  } catch (err) {
+    console.error("에러:", err.message);
+  }
+}
 
 // __dirname 대체 (ESM 환경에서는 __dirname이 정의되지 않음)
 const __filename = fileURLToPath(import.meta.url);
@@ -445,6 +484,42 @@ app.get('/sequence/:name', {
   } catch (e) {
     return reply.code(500).send({ error: `조회 실패: ${e.message}` });
   }
+});
+
+app.get("/speak", async (request, reply) => {
+  const text = request.query.text || "안녕하세요";
+
+  const encodedText = encodeURIComponent(`"${text}"`);
+
+  const options = {
+    hostname: "127.0.0.1",
+    port: 59530,
+    path: `/v1/tts?text=${encodedText}`,
+    method: "GET",
+  };
+
+  return new Promise((resolve, reject) => {
+    const req = http.request(options, (res) => {
+      const player = spawn("play", ["-"]); // stdin으로 재생
+
+      res.pipe(player.stdin);
+
+      player.on("close", (code) => {
+        fastify.log.info("재생 종료:", code);
+        resolve({ status: "played" });
+      });
+
+      player.on("error", (err) => {
+        reject(err);
+      });
+    });
+
+    req.on("error", (err) => {
+      reject(err);
+    });
+
+    req.end();
+  });
 });
 
 // 시퀀스 실행
