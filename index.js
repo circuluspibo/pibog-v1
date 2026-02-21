@@ -12,6 +12,7 @@ import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 import os from 'os';
 import { spawn } from "child_process";
+import http from "http";
 
 const TTS_URL = 'http://127.0.0.1:59530/v1/tts?text="';
 
