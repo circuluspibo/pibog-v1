@@ -529,8 +529,6 @@ app.get("/command", async (request, reply) => {
 
   return { result : true , data : "START" };
 });
-});
-
 
 // 시퀀스 실행
 app.get('/sequence/play/:name', {
