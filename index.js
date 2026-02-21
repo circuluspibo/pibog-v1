@@ -372,6 +372,7 @@ setInterval(()=>{
 let lastTime = 0
 
 // head 처리
+/*
 app.get('/head/:name', {
   schema: {
     tags: ['head'],
@@ -421,7 +422,7 @@ app.get('/head/:name', {
     return reply.code(500).send({ error: `조회 실패: ${e.message}` });
   }
 });
-
+*/
 function getWifiIP() {
   const nets = os.networkInterfaces()
   const wifiRegex = /^(enp|wlo|wlx)/
