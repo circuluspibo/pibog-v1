@@ -507,7 +507,6 @@ app.get("/speak", async (request, reply) => {
       res.pipe(player.stdin);
 
       player.on("close", (code) => {
-        fastify.log.info("재생 종료:", code);
         resolve({ status: "played" });
       });
 
