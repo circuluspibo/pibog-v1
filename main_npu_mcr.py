@@ -207,6 +207,7 @@ def visualize_segmentation(frame, masks, boxes, classes, scores, depths, class_n
 def get_mask_depths(masks, depth_frame, low_percentile=5):
     depths = []
     depth_image = np.asanyarray(depth_frame.get_data())
+    depth_image = cv2.resize(depth_image, (640, 640), interpolation=cv2.INTER_NEAREST)
     for mask in masks:
         if mask.sum() == 0:
             depths.append(0.0)
@@ -283,6 +284,7 @@ def processing_thread():
             continue
 
         frame = np.asanyarray(color_frame.get_data())        
+        frame = cv2.resize(frame, (640, 640))
 
         if cnt_image % 100 == 0:
             cv2.imwrite("capture.jpg", frame) #cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
@@ -303,6 +305,7 @@ def processing_thread():
         classes = res.boxes.cls.cpu().numpy().astype(int)
         scores = res.boxes.conf.cpu().numpy()
 
+
         # 시각화
         out = visualize_segmentation(frame, masks, boxes, classes, scores, get_mask_depths(masks, depth_frame), class_names)
 
@@ -317,6 +320,7 @@ def processing_thread():
         curr_time = time.time()
         fps = 1.0 / (curr_time - start_time)
         cv2.putText(out, f"FPS: {fps:.2f}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
+        out = cv2.resize(out, (640, 480), interpolation=cv2.INTER_NEAREST)
 
         if processed_frame_queue.full():
             processed_frame_queue.get()  # 가장 오래된 프레임 제거   
