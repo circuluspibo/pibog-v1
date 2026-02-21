@@ -1,4 +1,4 @@
-#optimum-cli export openvino --task text-classification --weight-format int4 --ratio 0.8 --model Qwen/Qwen3-Reranker-0.6B models/Qwen3-Reranker-0.6B-ov
+C#optimum-cli export openvino --task text-classification --weight-format int4 --ratio 0.8 --model Qwen/Qwen3-Reranker-0.6B models/Qwen3-Reranker-0.6B-ov
 #optimum-cli export openvino --task text-classification --weight-format int4 --ratio 0.8 --model Qwen/Qwen3-Reranker-4B models/Qwen3-Reranker-4B-ov
 
 #optimum-cli export openvino --task feature-extraction --weight-format int4 --ratio 0.8 --model Qwen/Qwen3-Embedding-0.6B models/Qwen3-Embedding-0.6B-ov
@@ -151,7 +151,7 @@ class Chat(BaseModel):
   top_k : int = 50
   max : int = 256 #16384
 
-model_txt = "./models/gemma-3-4b-it-qat-int4_asym-ov"#snapshot_download(repo_id='Echo9Zulu/gemma-3-4b-it-qat-int4_asym-ov') # circulus/gemma-3-4b-it-ov-awq-sym helenai/Qwen2.5-VL-3B-Instruct-ov-int4
+model_txt = "./models/gemma-3-4b-it-ov-awq" #snapshot_download(repo_id='Echo9Zulu/gemma-3-4b-it-qat-int4_asym-ov') # circulus/gemma-3-4b-it-ov-awq-sym helenai/Qwen2.5-VL-3B-Instruct-ov-int4
 model_stt = "./models/whisper-large-v3-turbo-ov"#snapshot_download(repo_id='circulus/whisper-large-v3-turbo-ov')
 
 config = {
