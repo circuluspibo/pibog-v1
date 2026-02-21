@@ -1,4 +1,4 @@
-C#optimum-cli export openvino --task text-classification --weight-format int4 --ratio 0.8 --model Qwen/Qwen3-Reranker-0.6B models/Qwen3-Reranker-0.6B-ov
+#optimum-cli export openvino --task text-classification --weight-format int4 --ratio 0.8 --model Qwen/Qwen3-Reranker-0.6B models/Qwen3-Reranker-0.6B-ov
 #optimum-cli export openvino --task text-classification --weight-format int4 --ratio 0.8 --model Qwen/Qwen3-Reranker-4B models/Qwen3-Reranker-4B-ov
 
 #optimum-cli export openvino --task feature-extraction --weight-format int4 --ratio 0.8 --model Qwen/Qwen3-Embedding-0.6B models/Qwen3-Embedding-0.6B-ov
