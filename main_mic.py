@@ -68,7 +68,7 @@ app.add_middleware(
 def queue_to_list(queue: Queue):
     return [queue.get() for _ in range(queue.qsize())]
 
-@app.post("/rec/start")
+@app.get("/rec/start")
 async def manual_record_start():
     global is_recording
     
@@ -86,7 +86,7 @@ async def manual_record_start():
     }
 
 
-@app.post("/rec/stop")
+@app.get("/rec/stop")
 async def manual_record_stop():
     global is_recording
     
