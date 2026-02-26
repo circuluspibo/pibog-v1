@@ -157,52 +157,95 @@ def preprocess_audio_aclnet(audio_chunk: np.ndarray):
 
 def process_stt(filepath: str):
     """
-    STT 서버에 WAV 파일을 전송하고 결과를 출력합니다.
+    STT 서버에 WAV 파일을 전송하고,
+    인식된 text가 있으면 RAG txt2chat API까지 자동 호출합니다.
     """
     print(f"[STT] 🚀 Sending {os.path.basename(filepath)} to STT server...")
-    
-    # 쿼리 파라미터 설정
+
     params = {
         'lang': STT_LANG,
         'isPlay': STT_IS_PLAY
     }
-    
-    # files 딕셔너리를 사용하여 multipart/form-data로 파일 전송
-    # requests가 Content-Type과 boundary를 자동으로 설정합니다.
+
     try:
         with open(filepath, 'rb') as f:
-            # files = {'폼 필드 이름': ('파일 이름', 파일 객체, 'Content-Type')}
-            # curl 명령어 -F 'file=@filename;type=audio/wav' 에 맞춰 'file' 필드 사용
             files = {
                 'file': (os.path.basename(filepath), f, 'audio/wav')
             }
-            
-            response = requests.post(STT_API_URL, params=params, files=files, timeout=30)
-            
-            # 응답 확인
-            if response.status_code == 200:
-                print("[STT] ✅ STT API Success!")
-                try:
-                    result_json = response.json()
-                    # STT 결과 출력 (응답 JSON 구조에 따라 키는 달라질 수 있습니다.)
-                    if 'text' in result_json:
-                        print(f"==================================================")
-                        print(f"🗣️ STT Result: {result_json['text']}")
-                        print(f"==================================================")
-                    else:
-                        print(f"[STT] 📝 STT Result JSON (Full): {result_json.replace("알렉사","얌마,")}")
-                except requests.exceptions.JSONDecodeError:
-                    print(f"[STT] ⚠️ Failed to decode JSON response. Raw text: {response.text}")
-            else:
-                print(f"[STT] ❌ STT API Failed. Status: {response.status_code}, Response: {response.text}")
-                
-    except requests.exceptions.ConnectionError as e:
-        print(f"[STT] ❌ Connection Error: Could not connect to STT server at {STT_API_URL}. Is the server running? ({e})")
-    except requests.exceptions.Timeout:
-        print("[STT] ❌ Request Timeout: STT server took too long to respond.")
-    except Exception as e:
-        print(f"[STT] ❌ An unexpected error occurred during STT: {e}")
 
+            response = requests.post(
+                STT_API_URL,
+                params=params,
+                files=files,
+                timeout=30
+            )
+
+        # ---------------- STT 응답 처리 ----------------
+        if response.status_code == 200:
+            print("[STT] ✅ STT API Success!")
+
+            try:
+                result_json = response.json()
+
+                if 'text' in result_json and result_json['text'].strip():
+                    recognized_text = result_json['text'].strip()
+
+                    print("==================================================")
+                    print(f"🗣️ STT Result: {recognized_text}")
+                    print("==================================================")
+
+                    # ---------------- RAG 호출 ----------------
+                    call_rag_api(recognized_text)
+
+                else:
+                    print(f"[STT] ⚠️ No 'text' field found in response: {result_json}")
+
+            except requests.exceptions.JSONDecodeError:
+                print(f"[STT] ⚠️ Failed to decode JSON. Raw: {response.text}")
+
+        else:
+            print(f"[STT] ❌ STT API Failed. Status: {response.status_code}, Response: {response.text}")
+
+    except requests.exceptions.ConnectionError as e:
+        print(f"[STT] ❌ Connection Error: {e}")
+
+    except requests.exceptions.Timeout:
+        print("[STT] ❌ Request Timeout")
+
+    except Exception as e:
+        print(f"[STT] ❌ Unexpected Error: {e}")
+def call_rag_api(prompt_text: str):
+    """
+    STT 결과를 RAG txt2chat API로 전달
+    """
+    print(f"[RAG] 🤖 Sending prompt to RAG: {prompt_text}")
+
+    rag_url = "http://127.0.0.1:59532/v1/rag/txt2chat"
+
+    params = {
+        "prompt": prompt_text,
+        "lang": "ko",
+        "isPlay": 1
+    }
+
+    try:
+        rag_response = requests.get(rag_url, params=params, timeout=60)
+
+        if rag_response.status_code == 200:
+            print("[RAG] ✅ RAG API Success")
+
+            try:
+                rag_json = rag_response.json()
+                print(f"[RAG] 💬 Response: {rag_json}")
+            except:
+                print(f"[RAG] Raw Response: {rag_response.text}")
+
+        else:
+            print(f"[RAG] ❌ Failed. Status: {rag_response.status_code}")
+            print(rag_response.text)
+
+    except Exception as e:
+        print(f"[RAG] ❌ Error calling RAG API: {e}")
 
 def set_recording_active():
     """녹음 상태를 활성화하고 시간 변수를 초기화합니다."""
@@ -231,7 +274,7 @@ def stop_recording_and_save():
     
     # WAV 파일로 저장
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = "recorded.wav" #f"wakeword_recording_{timestamp}.wav"
+    filename = f"wakeword_recording_{timestamp}.wav"
     filepath = os.path.join(RECORDING_OUTPUT_DIR, filename)
     write_wav(filepath, RATE, recording_data)
 
@@ -241,7 +284,7 @@ def stop_recording_and_save():
     
     # --- STT 처리 추가 ---
     # 녹음된 파일을 STT API로 전송
-    #process_stt(filepath) # <--- STT 함수 호출
+    process_stt(filepath) # <--- STT 함수 호출
 
 # --- 4. 메인 루프 ---
 # (run_mic_loop 함수는 변경 없음)
