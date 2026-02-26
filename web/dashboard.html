@@ -1,0 +1,1307 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>G1 HUMANOID :: ARCos VISION SYSTEM</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@300;500;700&family=Orbitron:wght@400;700;900&display=swap');
+:root{
+  --red:#EE0000;--dred:#CC0000;--crim:#8B0000;--org:#FF4500;
+  --grn:#00FF41;--blu:#00BFFF;--bg:#080808;
+  --bord:rgba(238,0,0,.4);
+  --gred:0 0 10px rgba(238,0,0,.8),0 0 20px rgba(238,0,0,.4);
+  --gorg:0 0 10px rgba(255,69,0,.8);--ggrn:0 0 10px rgba(0,255,65,.8);
+  --t1:#FF2222;--t2:#FF6666;--tdim:#663333;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--t1);font-family:'Share Tech Mono',monospace;overflow:hidden;height:100vh;width:100vw;cursor:crosshair}
+body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.15)2px,rgba(0,0,0,.15)4px);pointer-events:none;z-index:9999}
+body::after{content:'';position:fixed;inset:0;background:radial-gradient(ellipse at center,transparent 60%,rgba(0,0,0,.7)100%);pointer-events:none;z-index:9998;animation:flicker .15s infinite}
+@keyframes flicker{0%,100%{opacity:1}93%{opacity:.97}97%{opacity:.98}}
+.gridbg{position:fixed;inset:0;background-image:linear-gradient(rgba(238,0,0,.05)1px,transparent 1px),linear-gradient(90deg,rgba(238,0,0,.05)1px,transparent 1px);background-size:40px 40px;z-index:0}
+
+/* ── BOOT ── */
+#boot{position:fixed;inset:0;background:#000;z-index:9990;display:flex;flex-direction:row;transition:opacity .8s ease}
+#boot.out{opacity:0;pointer-events:none}
+#boot-canvas{width:56%;height:100%;display:block;flex-shrink:0;min-height:400px}
+.boot-r{flex:1;display:flex;flex-direction:column;justify-content:center;padding:36px 32px 36px 18px;gap:13px;position:relative;overflow:hidden}
+.boot-r::before{content:'';position:absolute;left:0;top:10%;bottom:10%;width:1px;background:linear-gradient(transparent,var(--red),transparent)}
+.boot-grid{position:absolute;inset:0;background-image:linear-gradient(rgba(238,0,0,.04)1px,transparent 1px),linear-gradient(90deg,rgba(238,0,0,.04)1px,transparent 1px);background-size:28px 28px;pointer-events:none}
+.boot-title{font-family:'Orbitron',monospace;font-size:32px;font-weight:900;color:var(--red);text-shadow:var(--gred);letter-spacing:8px;animation:bfade .6s .2s both}
+.boot-sub{font-family:'Rajdhani',sans-serif;font-size:12px;color:var(--t2);letter-spacing:4px;text-transform:uppercase;animation:bfade .6s .5s both}
+.boot-id{font-size:9px;color:var(--tdim);letter-spacing:2px;animation:bfade .6s .7s both}
+@keyframes bfade{from{opacity:0;transform:translateX(14px)}to{opacity:1;transform:none}}
+.boot-speech{background:rgba(139,0,0,.15);border:1px solid rgba(238,0,0,.35);border-left:3px solid var(--red);padding:11px 13px;font-size:11px;color:#FF9999;line-height:1.8;letter-spacing:1px;min-height:68px;animation:bfade .6s 1s both}
+.boot-speech::before{content:'G1 ▶';display:block;font-family:'Orbitron',monospace;font-size:8px;color:var(--red);text-shadow:var(--gred);margin-bottom:5px;letter-spacing:3px}
+.boot-cursor{display:inline-block;width:7px;height:11px;background:var(--red);vertical-align:text-bottom;margin-left:2px;animation:cur .6s step-end infinite}
+@keyframes cur{0%,100%{opacity:1}50%{opacity:0}}
+.boot-wave{display:flex;align-items:center;gap:2px;height:24px;animation:bfade .6s 1.1s both}
+.wbar{width:3px;min-height:3px;background:var(--red);box-shadow:0 0 4px var(--red);border-radius:1px;transition:height .05s ease}
+.boot-prog-sec{animation:bfade .6s 1.3s both}
+.boot-prog-lbl{display:flex;justify-content:space-between;font-size:8px;color:var(--tdim);letter-spacing:2px;margin-bottom:4px}
+.boot-prog-track{height:5px;background:rgba(238,0,0,.1);border:1px solid rgba(238,0,0,.22);overflow:hidden}
+.boot-prog-fill{height:100%;background:linear-gradient(90deg,#8B0000,#EE0000,#FF4500);box-shadow:0 0 8px rgba(238,0,0,.7);width:0%;transition:width .25s ease}
+.boot-log{font-size:8px;color:var(--tdim);letter-spacing:1px;line-height:2;max-height:105px;overflow:hidden;animation:bfade .6s 1.5s both}
+.blog{padding:1px 2px}
+.blog.ok{color:#00AA33}.blog.info{color:#3377BB}.blog.warn{color:#CC5500}
+.boot-skip{position:absolute;bottom:18px;right:22px;font-size:9px;color:var(--tdim);letter-spacing:2px;cursor:pointer;border:1px solid rgba(238,0,0,.2);padding:5px 11px;transition:all .2s;animation:bfade .6s 2.2s both}
+.boot-skip:hover{color:var(--red);border-color:var(--red)}
+
+/* ── HEADER ── */
+.hdr{position:fixed;top:0;left:0;right:0;height:52px;background:linear-gradient(90deg,rgba(139,0,0,.95),rgba(13,13,13,.98)40%,rgba(13,13,13,.98)60%,rgba(139,0,0,.95));border-bottom:2px solid var(--red);box-shadow:var(--gred);display:flex;align-items:center;padding:0 16px;z-index:100;gap:14px}
+.hdr-logo{display:flex;align-items:center;gap:9px;flex-shrink:0}
+.hdr-logo svg{width:32px;height:32px}
+.hdr-nm{font-family:'Orbitron',monospace;font-size:10px;font-weight:700;color:var(--red);letter-spacing:3px;text-shadow:var(--gred)}
+.hdr-sb{font-size:8px;color:var(--t2);letter-spacing:2px}
+.hdr-div{width:1px;height:26px;background:linear-gradient(transparent,var(--red),transparent)}
+.hdr-title{font-family:'Orbitron',monospace;font-size:12px;font-weight:900;color:#FF2222;letter-spacing:5px;text-shadow:var(--gred);flex:1}
+.hdr-stat{display:flex;align-items:center;gap:14px;font-size:9px;color:var(--t2);letter-spacing:2px}
+.sdot{width:6px;height:6px;border-radius:50%}
+.sg{background:var(--grn);box-shadow:var(--ggrn);animation:pd 1.5s ease-in-out infinite}
+.sr{background:var(--red);box-shadow:var(--gred);animation:pd 1.5s .5s ease-in-out infinite}
+.so{background:var(--org);box-shadow:var(--gorg);animation:pd 1.5s 1s ease-in-out infinite}
+@keyframes pd{0%,100%{opacity:1}50%{opacity:.3}}
+.stime{font-family:'Orbitron',monospace;font-size:11px;color:var(--red);text-shadow:var(--gred)}
+
+/* ── TABS ── */
+.tabs{position:fixed;top:52px;left:0;right:0;height:34px;background:rgba(8,8,8,.97);border-bottom:1px solid var(--bord);display:flex;z-index:99;padding:0 16px;gap:2px}
+.tab{display:flex;align-items:center;padding:0 16px;font-family:'Rajdhani',sans-serif;font-size:11px;font-weight:600;letter-spacing:2px;color:var(--tdim);cursor:pointer;border-bottom:2px solid transparent;transition:all .2s;text-transform:uppercase;gap:5px}
+.tab:hover{color:var(--t2)}
+.tab.on{color:var(--red);border-bottom-color:var(--red);background:rgba(238,0,0,.05);text-shadow:var(--gred)}
+.tnum{font-size:8px;color:var(--tdim);font-family:'Share Tech Mono',monospace}
+
+/* ── CONNECT BTN ── */
+.conn-btn{margin-left:auto;font-family:'Orbitron',monospace;font-size:9px;letter-spacing:2px;color:var(--red);background:rgba(139,0,0,.2);border:1px solid var(--red);padding:5px 14px;cursor:pointer;transition:all .2s;text-transform:uppercase}
+.conn-btn:hover{background:rgba(238,0,0,.3);box-shadow:var(--gred)}
+.conn-btn.connected{color:var(--grn);border-color:var(--grn);background:rgba(0,255,65,.08)}
+
+/* ── MAIN ── */
+.main{position:fixed;top:86px;left:0;right:0;bottom:0;z-index:1;overflow:hidden}
+.screen{position:absolute;inset:0;display:none;padding:9px;gap:8px}
+.screen.on{display:flex}
+
+/* ── PANELS ── */
+.pnl{background:rgba(13,13,13,.93);border:1px solid var(--bord);position:relative;overflow:hidden}
+.pnl::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--red),transparent)}
+.ph{padding:5px 10px;border-bottom:1px solid rgba(238,0,0,.16);display:flex;align-items:center;justify-content:space-between;background:rgba(238,0,0,.04)}
+.pt{font-family:'Orbitron',monospace;font-size:8px;font-weight:700;color:var(--red);letter-spacing:3px;text-shadow:var(--gred)}
+.pb{font-size:7px;padding:1px 5px;border:1px solid var(--red);color:var(--red);letter-spacing:1px;animation:blink 2s step-end infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.4}}
+
+/* ── VISION SCREEN ── */
+#vs{flex-direction:row}
+.vleft,.vright{display:flex;flex-direction:column;gap:8px;flex:0 0 186px}
+.vcenter{flex:1;display:flex;flex-direction:column;gap:8px;min-width:0}
+
+/* Video feed: uses <img> tag for MJPEG stream */
+.vid-wrap{flex:1;position:relative;overflow:hidden;background:#000;display:flex;flex-direction:column}
+.vid-inner{flex:1;position:relative;overflow:hidden}
+#vfeed{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+#vcanvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.vhud{position:absolute;inset:0;pointer-events:none}
+.hc{position:absolute;width:26px;height:26px;border-color:var(--red);border-style:solid}
+.tl{top:8px;left:8px;border-width:2px 0 0 2px}
+.tr{top:8px;right:8px;border-width:2px 2px 0 0}
+.bl{bottom:8px;left:8px;border-width:0 0 2px 2px}
+.br{bottom:8px;right:8px;border-width:0 2px 2px 0}
+.scanh{position:absolute;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--red),transparent);opacity:.7;animation:scv 4s linear infinite;box-shadow:0 0 8px var(--red)}
+@keyframes scv{0%{top:0}100%{top:100%}}
+.scanv{position:absolute;top:0;bottom:0;width:2px;background:linear-gradient(180deg,transparent,rgba(255,69,0,.4),transparent);animation:sch 7s linear infinite;opacity:.4}
+@keyframes sch{0%{left:0}100%{left:100%}}
+.hret{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:24px;color:rgba(238,0,0,.5);text-shadow:var(--gred);pointer-events:none}
+.hudtop{position:absolute;top:36px;left:50%;transform:translateX(-50%);font-size:8px;color:rgba(238,0,0,.7);letter-spacing:3px;white-space:nowrap}
+.hudfps{position:absolute;top:36px;right:10px;font-size:9px;color:var(--grn);letter-spacing:2px}
+.hudmode{position:absolute;bottom:10px;right:10px;font-size:9px;color:var(--org);letter-spacing:2px}
+.vid-status{height:24px;display:flex;align-items:center;justify-content:space-between;padding:0 8px;background:rgba(0,0,0,.6);font-size:8px;letter-spacing:2px;flex-shrink:0}
+.vid-status .vs-dot{width:5px;height:5px;border-radius:50%;background:#666;margin-right:5px;display:inline-block}
+.vid-status .vs-dot.active{background:var(--red);box-shadow:0 0 5px var(--red);animation:pd 1s ease-in-out infinite}
+.vmetrow{display:flex;gap:8px;flex:0 0 78px}
+
+/* ── DETECTION LIST ── */
+.detlist{padding:4px 0;max-height:160px;overflow-y:auto}
+.di{display:grid;grid-template-columns:16px 1fr auto auto;align-items:center;gap:5px;padding:3px 9px;font-size:9px;border-bottom:1px solid rgba(238,0,0,.07)}
+.di:hover{background:rgba(238,0,0,.05)}
+.dlbl{color:var(--t1);letter-spacing:1px;font-weight:bold}
+.dconf{color:var(--grn);font-size:8px}
+.ddist{color:var(--org);font-size:8px}
+.al{font-size:8px;letter-spacing:1px;padding:2px 9px;border-bottom:1px solid rgba(238,0,0,.05)}
+.al-i{color:var(--tdim);font-style:italic}
+.al-o{color:#00AA33}.al-w{color:#CC5500}.al-c{color:#FF2222}
+
+/* ── THREAT BLOCKS ── */
+.tblocks{display:flex;gap:3px;padding:7px 9px}
+.tblock{flex:1;height:18px;background:rgba(238,0,0,.08);border:1px solid rgba(238,0,0,.18);transition:all .4s}
+.tblock.on{background:rgba(238,0,0,.5);box-shadow:0 0 6px rgba(238,0,0,.6)}
+.tblock.on.hi{background:#FF0000;box-shadow:0 0 10px #FF0000}
+
+/* ── HUMAN ANALYSIS ── */
+.hpanel{padding:8px}
+.hrow{display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid rgba(238,0,0,.08);font-size:9px}
+.hkey{color:var(--tdim);letter-spacing:2px;text-transform:uppercase}
+.hval{color:var(--t1);letter-spacing:1px;font-weight:bold}
+.hval.live{color:var(--grn);text-shadow:0 0 8px var(--grn)}
+.hval.warn{color:var(--org)}
+
+/* ── EMOTION BADGE ── */
+.emo-badge{display:inline-block;padding:1px 6px;border-radius:2px;font-size:8px;letter-spacing:1px}
+.emo-happy{background:rgba(0,255,65,.15);color:var(--grn);border:1px solid rgba(0,255,65,.3)}
+.emo-angry{background:rgba(238,0,0,.2);color:#FF4444;border:1px solid rgba(238,0,0,.4)}
+.emo-neutral{background:rgba(255,165,0,.1);color:var(--org);border:1px solid rgba(255,165,0,.3)}
+.emo-sad{background:rgba(0,191,255,.1);color:var(--blu);border:1px solid rgba(0,191,255,.3)}
+.emo-unknown{background:rgba(102,51,51,.3);color:var(--tdim);border:1px solid rgba(102,51,51,.4)}
+
+/* ── METRICS BARS ── */
+.mrow{display:flex;justify-content:space-between;align-items:center;padding:3px 9px;font-size:8px;letter-spacing:1px}
+.mval{font-weight:bold}
+.mv-g{color:var(--grn)}.mv-b{color:var(--blu)}.mv-o{color:var(--org)}
+.pbw{padding:3px 9px}
+.plbl{display:flex;justify-content:space-between;font-size:7px;color:var(--tdim);letter-spacing:1px;margin-bottom:2px}
+.ptr{height:5px;background:rgba(255,255,255,.05);border:1px solid rgba(238,0,0,.15)}
+.pfill{height:100%;transition:width .5s ease}
+.pf-r{background:linear-gradient(90deg,#8B0000,#EE0000)}
+.pf-g{background:linear-gradient(90deg,#005500,#00FF41)}
+.pf-b{background:linear-gradient(90deg,#003366,#00BFFF)}
+.pf-o{background:linear-gradient(90deg,#663300,#FF4500)}
+
+/* ── SERVO / OPTICAL ── */
+.cgrid{display:grid;grid-template-columns:1fr 1fr;gap:2px;padding:6px}
+.cc{font-size:7px;padding:3px 5px;text-align:center;border:1px solid rgba(238,0,0,.12);letter-spacing:1px}
+.cc span{display:block;font-size:9px;font-weight:bold}
+.cc-cool{color:#00BFFF}.cc-warm{color:var(--org)}.cc-hot{color:#FF2222}
+.afeed{padding:4px 0;max-height:100%;overflow-y:auto}
+
+/* ── SYSTEM TAB ── */
+#sys{flex-wrap:wrap;align-content:flex-start}
+.spnl{flex:0 0 calc(50% - 4px);max-height:calc(50% - 4px);display:flex;flex-direction:column}
+.bchrt{flex:1;padding:6px;min-height:0}
+.bchrt canvas{width:100%;height:100%}
+
+/* ── PRESENTATION TAB ── */
+.playout{display:flex;flex:1;gap:8px;min-height:0}
+.pmain{flex:1;display:flex;flex-direction:column;gap:8px;min-width:0}
+.pdf-wrap{flex:1;display:flex;align-items:center;justify-content:center;background:#000;position:relative;cursor:pointer}
+.pdf-wrap.dragov{border-color:var(--grn)!important;box-shadow:0 0 20px var(--grn)}
+#pdf-canvas{max-width:100%;max-height:100%;display:block}
+.pdf-ph{display:flex;flex-direction:column;align-items:center;gap:10px;color:var(--tdim);font-size:11px;letter-spacing:2px;text-align:center}
+.pdf-ph .big{font-size:40px}
+.upbtn{background:rgba(238,0,0,.15);border:1px solid var(--red);color:var(--red);padding:6px 18px;font-family:'Orbitron',monospace;font-size:8px;letter-spacing:2px;cursor:pointer;transition:all .2s}
+.upbtn:hover{background:rgba(238,0,0,.3)}
+#pdfin{display:none}
+.pctrl{display:flex;align-items:center;gap:8px;padding:4px 0;flex-shrink:0}
+.cbtn{background:rgba(238,0,0,.12);border:1px solid rgba(238,0,0,.35);color:var(--t2);padding:5px 13px;font-family:'Share Tech Mono',monospace;font-size:9px;letter-spacing:2px;cursor:pointer;transition:all .2s}
+.cbtn:hover:not(:disabled){background:rgba(238,0,0,.25);color:var(--red)}
+.cbtn:disabled{opacity:.3;cursor:not-allowed}
+.pgind{color:var(--tdim);font-size:9px;letter-spacing:2px;margin:0 4px}
+.psidebar{width:220px;display:flex;flex-direction:column;gap:8px}
+.rspeakpnl{flex:0 0 auto}
+.vwave{display:flex;align-items:center;gap:2px;height:20px;padding:0 8px}
+.vwb{width:4px;height:4px;background:var(--red);border-radius:1px;animation:vwb .6s ease-in-out infinite alternate}
+.vwb:nth-child(2){animation-delay:.1s}.vwb:nth-child(3){animation-delay:.2s}.vwb:nth-child(4){animation-delay:.3s}
+.vwb:nth-child(5){animation-delay:.2s}.vwb:nth-child(6){animation-delay:.1s}.vwb:nth-child(7){animation-delay:.15s}.vwb:nth-child(8){animation-delay:.25s}
+@keyframes vwb{from{height:4px}to{height:16px}}
+.rcomm{padding:6px 9px;font-size:9px;color:#FF9999;line-height:1.7;letter-spacing:1px}
+.rsp{color:var(--red);font-family:'Orbitron',monospace;font-size:7px}
+.tstrip{flex:1;overflow-y:auto;padding:5px}
+.titem{display:flex;flex-direction:column;align-items:center;padding:5px;border:1px solid rgba(238,0,0,.2);cursor:pointer;transition:all .2s;margin-bottom:4px}
+.titem:hover{border-color:var(--red)}.titem.on{border-color:var(--red);background:rgba(238,0,0,.1)}
+.tn{font-size:7px;color:var(--tdim);letter-spacing:1px;margin-bottom:3px}
+.tcanv{width:100%;display:block}
+
+/* ── TAG PANEL ── */
+.tag-ring{display:flex;align-items:center;justify-content:center;padding:10px}
+.tag-circle{width:70px;height:70px;border-radius:50%;border:2px solid rgba(238,0,0,.3);display:flex;flex-direction:column;align-items:center;justify-content:center;position:relative;transition:all .5s}
+.tag-circle.active{border-color:var(--org);box-shadow:0 0 18px rgba(255,69,0,.6)}
+.tag-id{font-family:'Orbitron',monospace;font-size:18px;font-weight:900;color:var(--t1)}
+.tag-dist{font-size:8px;color:var(--tdim);letter-spacing:1px}
+
+/* ── LIVE COUNT BADGE ── */
+.live-badge{display:flex;align-items:center;justify-content:space-around;padding:8px}
+.badge-item{text-align:center}
+.badge-num{font-family:'Orbitron',monospace;font-size:24px;font-weight:900;line-height:1}
+.badge-num.humans{color:var(--red);text-shadow:var(--gred)}
+.badge-num.objects{color:var(--org);text-shadow:var(--gorg)}
+.badge-lbl{font-size:7px;color:var(--tdim);letter-spacing:2px;margin-top:2px}
+.badge-sep{width:1px;background:linear-gradient(transparent,var(--red),transparent);height:40px}
+</style>
+</head>
+<body>
+<div class="gridbg"></div>
+
+<!-- BOOT -->
+<div id="boot">
+  <div class="boot-grid"></div>
+  <canvas id="boot-canvas"></canvas>
+  <div class="boot-r">
+    <div class="boot-title">ARCos</div>
+    <div class="boot-sub">Autonomous Robot Control OS · G1 Humanoid Platform</div>
+    <div class="boot-id">UNIT: G1-HUMANOID // SN: ARC-2026-001 // KERNEL 6.10.0-ARCos</div>
+    <div class="boot-speech">
+      <span id="bst"></span><span class="boot-cursor"></span>
+    </div>
+    <div class="boot-wave" id="bwave"></div>
+    <div class="boot-prog-sec">
+      <div class="boot-prog-lbl"><span id="bplbl">LOADING KERNEL...</span><span id="bppct">0%</span></div>
+      <div class="boot-prog-track"><div class="boot-prog-fill" id="bpfill"></div></div>
+    </div>
+    <div class="boot-log" id="blog"></div>
+    <div class="boot-skip" onclick="skipBoot()">[ SKIP BOOT → ]</div>
+  </div>
+</div>
+
+<!-- HEADER -->
+<header class="hdr">
+  <div class="hdr-logo">
+    <svg viewBox="0 0 34 34" fill="none">
+      <ellipse cx="17" cy="24" rx="13" ry="5" fill="#8B0000" opacity=".6"/>
+      <path d="M4 20 Q9 13 17 13 Q25 13 30 20 Q23 17 17 17 Q11 17 4 20Z" fill="#CC0000"/>
+      <path d="M8 20 Q12 15 17 15 Q22 15 26 20 Q22 18 17 18 Q12 18 8 20Z" fill="#EE0000"/>
+      <ellipse cx="17" cy="13" rx="5" ry="2.5" fill="#EE0000"/>
+      <path d="M12 13 Q17 8 22 13" stroke="#CC0000" stroke-width="1.5" fill="none"/>
+      <text x="17" y="28" text-anchor="middle" font-family="monospace" font-size="4.5" font-weight="bold" fill="#FF6666">G1</text>
+    </svg>
+    <div>
+      <div class="hdr-nm">ARCos</div>
+      <div class="hdr-sb">AUTONOMOUS ROBOT CONTROL OS · G1 PLATFORM</div>
+    </div>
+  </div>
+  <div class="hdr-div"></div>
+  <div class="hdr-title">VISION &amp; CONTROL SYSTEM</div>
+  <div class="hdr-stat">
+    <span class="sdot sg"></span><span id="conn-status">OFFLINE</span>
+    <span class="sdot so"></span>SENSOR
+    <span class="sdot sr"></span>ARMED
+    <span class="stime" id="stime">00:00:00</span>
+  </div>
+  <button class="conn-btn" id="conn-btn" onclick="connectServer()">◆ CONNECT</button>
+</header>
+
+<!-- TABS -->
+<nav class="tabs">
+  <div class="tab on" id="tab-vs" onclick="sw('vs')"><span class="tnum">[01]</span>VISION SYSTEM</div>
+  <div class="tab" id="tab-sys" onclick="sw('sys')"><span class="tnum">[02]</span>SYSTEM MONITOR</div>
+  <div class="tab" id="tab-prs" onclick="sw('prs')"><span class="tnum">[03]</span>PRESENTATION MODE</div>
+</nav>
+
+<!-- MAIN -->
+<main class="main">
+
+<!-- VISION -->
+<div class="screen on" id="vs">
+  <div class="vleft">
+    <!-- Object Detection List -->
+    <div class="pnl" style="flex:0 0 auto">
+      <div class="ph"><span class="pt">OBJECT DATABASE</span><span class="pb" id="detcnt">0 TGT</span></div>
+      <div class="detlist" id="detlist"><div class="al al-i">-- AWAITING TARGETS --</div></div>
+    </div>
+    <!-- Threat -->
+    <div class="pnl" style="flex:0 0 auto">
+      <div class="ph"><span class="pt">THREAT LEVEL</span></div>
+      <div style="padding:5px 9px 2px;display:flex;justify-content:space-between;font-size:7px;color:var(--tdim);letter-spacing:2px"><span>MINIMAL</span><span>CRITICAL</span></div>
+      <div class="tblocks" id="tblocks">
+        <div class="tblock"></div><div class="tblock"></div><div class="tblock"></div><div class="tblock"></div><div class="tblock"></div>
+        <div class="tblock"></div><div class="tblock"></div><div class="tblock"></div><div class="tblock"></div><div class="tblock"></div>
+      </div>
+    </div>
+    <!-- Live Count -->
+    <div class="pnl" style="flex:0 0 auto">
+      <div class="ph"><span class="pt">LIVE COUNTS</span><span class="pb">REAL-TIME</span></div>
+      <div class="live-badge">
+        <div class="badge-item">
+          <div class="badge-num humans" id="lv-humans">0</div>
+          <div class="badge-lbl">HUMANS</div>
+        </div>
+        <div class="badge-sep"></div>
+        <div class="badge-item">
+          <div class="badge-num objects" id="lv-objects">0</div>
+          <div class="badge-lbl">OBJECTS</div>
+        </div>
+      </div>
+    </div>
+    <!-- System Log -->
+    <div class="pnl" style="flex:1">
+      <div class="ph"><span class="pt">SYSTEM LOG</span><span class="pb">LIVE</span></div>
+      <div class="afeed" id="afeed"></div>
+    </div>
+  </div>
+
+  <div class="vcenter">
+    <!-- Video Feed -->
+    <div class="pnl vid-wrap" style="flex:1">
+      <div class="ph" style="flex-shrink:0"><span class="pt">PRIMARY OPTIC FEED — /video_feed</span><span class="pb" id="feed-badge">STANDBY</span></div>
+      <div class="vid-inner">
+        <!-- MJPEG stream from server -->
+        <img id="vfeed" src="" alt="VIDEO FEED">
+        <canvas id="vcanvas"></canvas>
+        <div class="vhud">
+          <div class="hc tl"></div><div class="hc tr"></div><div class="hc bl"></div><div class="hc br"></div>
+          <div class="scanh"></div><div class="scanv"></div>
+          <div class="hret">+</div>
+          <div class="hudtop">◆ ARCos VISION v4.2.1 ◆ YOLO DETECT ACTIVE ◆</div>
+          <div class="hudfps" id="hudfps">-- FPS</div>
+          <div class="hudmode">▶ ANALYZE MODE</div>
+        </div>
+      </div>
+      <div class="vid-status">
+        <span><span class="vs-dot" id="feed-dot"></span><span id="feed-label">STREAM DISCONNECTED</span></span>
+        <span id="feed-res">-- × --</span>
+        <span id="feed-latency">-- ms</span>
+      </div>
+    </div>
+    <!-- Metrics row -->
+    <div class="vmetrow">
+      <div class="pnl" style="flex:1">
+        <div class="ph"><span class="pt">BATTERY</span></div>
+        <div class="pbw"><div class="plbl"><span>CHARGE</span><span id="ba">--%</span></div><div class="ptr"><div class="pfill pf-g" id="bab" style="width:0%"></div></div></div>
+        <div class="pbw"><div class="plbl"><span>VOLTAGE</span><span id="volt">--V</span></div><div class="ptr"><div class="pfill pf-o" id="voltb" style="width:0%"></div></div></div>
+      </div>
+      <div class="pnl" style="flex:1">
+        <div class="ph"><span class="pt">THERMAL</span></div>
+        <div class="mrow">CPU TEMP<span class="mval mv-o" id="tempv">--°C</span></div>
+        <div class="pbw"><div class="plbl"><span>HEAT</span><span id="tempvp">--%</span></div><div class="ptr"><div class="pfill pf-r" id="tempb" style="width:0%"></div></div></div>
+      </div>
+      <div class="pnl" style="flex:1">
+        <div class="ph"><span class="pt">OPTICAL METRICS</span></div>
+        <div class="mrow">TARGETS<span class="mval" id="tgtcnt">0</span></div>
+        <div class="mrow">LATENCY<span class="mval" id="latv">--ms</span></div>
+      </div>
+      <div class="pnl" style="flex:1">
+        <div class="ph"><span class="pt">TRAJECTORY</span></div>
+        <div style="padding:4px;height:calc(100% - 24px)"><canvas id="traj" style="width:100%;height:100%"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="vright">
+    <!-- Human Analysis -->
+    <div class="pnl" style="flex:0 0 auto">
+      <div class="ph"><span class="pt">HUMAN ANALYSIS</span><span class="pb" id="human-badge">NO TARGET</span></div>
+      <div class="hpanel">
+        <div class="hrow"><span class="hkey">AGE</span><span class="hval" id="h-age">--</span></div>
+        <div class="hrow"><span class="hkey">GENDER</span><span class="hval" id="h-gender">--</span></div>
+        <div class="hrow"><span class="hkey">EMOTION</span><span class="hval" id="h-emotion">--</span></div>
+        <div class="hrow"><span class="hkey">POSITION</span><span class="hval" id="h-pos">--</span></div>
+        <div class="hrow"><span class="hkey">DEPTH</span><span class="hval" id="h-depth">--m</span></div>
+      </div>
+    </div>
+    <!-- AR Tag -->
+    <div class="pnl" style="flex:0 0 auto">
+      <div class="ph"><span class="pt">AR TAG TRACKER</span></div>
+      <div class="tag-ring">
+        <div class="tag-circle" id="tag-circle">
+          <div class="tag-id" id="tag-id">--</div>
+          <div class="tag-dist" id="tag-dist">-- m</div>
+        </div>
+      </div>
+    </div>
+    <!-- Servo -->
+    <div class="pnl" style="flex:0 0 auto">
+      <div class="ph"><span class="pt">SERVO STATUS</span></div>
+      <div class="pbw" style="padding-top:6px"><div class="plbl"><span>HEAD YAW</span><span id="s1">0°</span></div><div class="ptr"><div class="pfill pf-b" id="s1b" style="width:50%"></div></div></div>
+      <div class="pbw"><div class="plbl"><span>HEAD PITCH</span><span id="s2">0°</span></div><div class="ptr"><div class="pfill pf-g" id="s2b" style="width:50%"></div></div></div>
+      <div class="pbw"><div class="plbl"><span>TORSO ROT</span><span id="s3">0°</span></div><div class="ptr"><div class="pfill pf-r" id="s3b" style="width:50%"></div></div></div>
+    </div>
+    <!-- Core Temps -->
+    <div class="pnl" style="flex:0 0 auto">
+      <div class="ph"><span class="pt">CORE TEMPS</span></div>
+      <div class="cgrid" id="cgrid"></div>
+    </div>
+  </div>
+</div>
+
+<!-- SYSTEM -->
+<div class="screen" id="sys">
+  <div class="pnl spnl"><div class="ph"><span class="pt">BATTERY CHARGE</span><span class="pb">REAL-TIME</span></div><div class="bchrt"><canvas id="batchart"></canvas></div><div class="mrow">CHARGE<span class="mval mv-g" id="sys-charge">--%</span></div><div class="mrow">VOLTAGE<span class="mval mv-o" id="sys-volt">--V</span></div></div>
+  <div class="pnl spnl"><div class="ph"><span class="pt">CPU TEMPERATURE</span></div><div class="bchrt"><canvas id="tempchart"></canvas></div><div class="mrow">CURRENT<span class="mval mv-o" id="sys-temp">--°C</span></div><div class="mrow">STATUS<span class="mval mv-g" id="sys-tempst">NOMINAL</span></div></div>
+  <div class="pnl spnl"><div class="ph"><span class="pt">DETECTION TIMELINE</span></div><div class="bchrt"><canvas id="detchart"></canvas></div><div class="mrow">HUMANS LIVE<span class="mval mv-g" id="sys-humans">0</span></div><div class="mrow">OBJECTS LIVE<span class="mval mv-o" id="sys-objects">0</span></div></div>
+  <div class="pnl spnl"><div class="ph"><span class="pt">HUMAN PROFILE HISTORY</span></div><div class="bchrt" style="overflow-y:auto"><div id="profile-log" style="font-size:8px;letter-spacing:1px;padding:4px"></div></div></div>
+</div>
+
+<!-- PRESENTATION -->
+<div class="screen" id="prs">
+  <div class="playout">
+    <div class="pmain">
+      <div class="pdf-wrap pnl" id="pdfdrop">
+        <canvas id="pdf-canvas"></canvas>
+        <div class="pdf-ph" id="pdfph">
+          <div class="big">📄</div>
+          <p>G1 PRESENTATION MODE<br>DRAG &amp; DROP PDF HERE<br>OR CLICK TO UPLOAD</p>
+          <button class="upbtn" onclick="document.getElementById('pdfin').click()">◆ LOAD PRESENTATION ◆</button>
+          <input type="file" id="pdfin" accept=".pdf">
+        </div>
+      </div>
+      <div class="pctrl">
+        <button class="cbtn" id="prevb" onclick="chgPage(-1)" disabled>◀ PREV</button>
+        <button class="cbtn" id="nextb" onclick="chgPage(1)" disabled>NEXT ▶</button>
+        <div class="pgind" id="pgind">-- / --</div>
+        <button class="cbtn" id="autob" onclick="toggleAuto()" disabled>▶ AUTO PLAY</button>
+        <button class="cbtn" onclick="document.getElementById('pdfin').click()">↑ LOAD</button>
+      </div>
+    </div>
+    <div class="psidebar">
+      <div class="rspeakpnl pnl">
+        <div class="ph"><span class="pt">G1 NARRATION</span><span class="pb">ACTIVE</span></div>
+        <div class="vwave"><div class="vwb"></div><div class="vwb"></div><div class="vwb"></div><div class="vwb"></div><div class="vwb"></div><div class="vwb"></div><div class="vwb"></div><div class="vwb"></div></div>
+        <div class="rcomm"><span class="rsp">G1▶</span> <span id="robottxt">SYSTEM READY. LOAD PRESENTATION FILE TO BEGIN.</span></div>
+      </div>
+      <div class="pnl" style="flex:1;overflow:hidden;display:flex;flex-direction:column">
+        <div class="ph"><span class="pt">SLIDE NAVIGATOR</span></div>
+        <div class="tstrip" id="tstrip"><div class="al al-i" style="text-align:center;padding:14px 0">NO SLIDES LOADED</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</main>
+<!-- Three.js r128 -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<!-- PDF.js -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+
+<script>
+// ═══════════════════════════════════════════
+//  BOOT — LOW-POLY WIREFRAME FACE + TTS
+// ═══════════════════════════════════════════
+(function(){
+'use strict';
+
+var bootEl=document.getElementById('boot');
+var bc=document.getElementById('boot-canvas');
+var renderer,scene,camera;
+var faceWire,faceSolid,scanRing,pulseRings=[],dataSparks=[];
+var kL,eL,fillL;
+var bT=0,jawVerts=null,jawBaseY=null;
+var aLv=0;
+var actx=null,anl=null,aData=null,aSrc=null;
+
+function makeFaceGeometry(){
+  var V=[
+    [-0.0,1.55,0.0],[-0.55,1.40,0.30],[0.55,1.40,0.30],[-0.85,1.10,0.50],[0.85,1.10,0.50],
+    [-1.05,0.70,0.45],[1.05,0.70,0.45],[0.0,1.55,-0.55],
+    [-0.50,1.20,0.90],[0.50,1.20,0.90],[-0.20,1.10,1.05],[0.20,1.10,1.05],
+    [-0.70,0.72,1.00],[-0.38,0.78,1.15],[0.38,0.78,1.15],[0.70,0.72,1.00],
+    [-0.62,0.50,1.08],[-0.45,0.56,1.20],[-0.28,0.50,1.22],[0.28,0.50,1.22],[0.45,0.56,1.20],[0.62,0.50,1.08],
+    [-0.45,0.38,1.20],[0.45,0.38,1.20],
+    [0.00,0.60,1.22],[-0.12,0.38,1.28],[0.12,0.38,1.28],[0.00,0.20,1.30],
+    [-0.22,0.18,1.20],[0.22,0.18,1.20],
+    [-1.00,0.20,0.80],[1.00,0.20,0.80],[-0.72,0.28,1.10],[0.72,0.28,1.10],
+    [-0.42,0.00,1.25],[-0.18,0.06,1.32],[0.00,0.08,1.33],[0.18,0.06,1.32],[0.42,0.00,1.25],
+    [0.00,-0.06,1.32],
+    [-0.32,-0.10,1.28],[0.32,-0.10,1.28],[-0.18,-0.25,1.22],[0.18,-0.25,1.22],[0.00,-0.38,1.15],
+    [-0.55,-0.10,1.00],[0.55,-0.10,1.00],[-0.72,-0.30,0.75],[0.72,-0.30,0.75],
+    [-0.58,-0.58,0.55],[0.58,-0.58,0.55],
+    [-1.10,-0.05,0.40],[1.10,-0.05,0.40],[-1.08,-0.40,0.30],[1.08,-0.40,0.30],
+    [-0.90,-0.75,0.20],[0.90,-0.75,0.20],
+    [-0.45,-1.00,0.30],[0.45,-1.00,0.30],[-0.35,-1.30,0.10],[0.35,-1.30,0.10],[0.00,-1.45,0.05],
+    [-0.90,0.40,-0.70],[0.90,0.40,-0.70],[-0.70,-0.20,-0.80],[0.70,-0.20,-0.80],
+    [0.00,0.80,-0.90],[0.00,-0.60,-0.65],
+    [-1.20,0.30,0.00],[1.20,0.30,0.00],[-1.18,-0.20,-0.05],[1.18,-0.20,-0.05]
+  ];
+  var F=[
+    [0,1,8],[0,2,9],[0,1,7],[0,2,7],[1,3,8],[2,4,9],[1,2,0],
+    [7,62,66],[7,63,66],
+    [8,10,3],[9,11,4],[10,11,8],[8,11,9],[3,5,8],[4,6,9],
+    [10,13,8],[11,14,9],[10,11,24],[13,14,10],[13,14,11],
+    [12,13,3],[14,15,4],[5,12,3],[6,15,4],
+    [12,16,13],[15,21,14],[13,17,14],[17,20,14],
+    [16,17,12],[17,18,22],[16,22,12],[12,22,32],
+    [21,20,15],[20,19,23],[21,23,15],[15,23,33],
+    [17,18,24],[20,19,24],[24,25,18],[24,26,19],
+    [25,27,18],[26,27,19],[27,28,25],[27,29,26],
+    [28,27,35],[29,27,37],[28,29,27],
+    [16,30,32],[21,31,33],[30,32,45],[31,33,46],
+    [22,32,28],[23,33,29],[32,33,18],[32,33,19],
+    [18,22,28],[19,23,29],
+    [32,28,35],[33,29,37],[30,45,51],[31,46,52],
+    [34,35,40],[37,38,41],[35,36,37],[36,39,35],[36,39,37],
+    [34,40,45],[38,41,46],
+    [39,40,42],[39,41,43],[40,42,47],[41,43,48],
+    [42,43,44],[44,49,42],[44,50,43],[44,49,50],
+    [40,45,47],[41,46,48],[47,49,55],[48,50,56],
+    [45,51,53],[46,52,54],[53,55,49],[54,56,50],
+    [49,55,57],[50,56,58],[55,57,59],[56,58,60],
+    [57,59,61],[58,60,61],[59,60,61],
+    [5,51,12],[6,52,15],[5,62,51],[6,63,52],
+    [51,53,62],[52,54,63],[53,55,64],[54,56,65],
+    [62,64,66],[63,65,66],[64,67,66],[65,67,66],
+    [64,67,59],[65,67,60],
+    [68,5,51],[68,51,53],[68,53,70],[69,6,52],[69,52,54],[69,54,71],
+    [70,53,64],[71,54,65]
+  ];
+  var geo=new THREE.BufferGeometry();
+  var pos=[];
+  F.forEach(function(tri){for(var j=0;j<3;j++){var v=V[tri[j]];pos.push(v[0],v[1],v[2]);}});
+  geo.setAttribute('position',new THREE.BufferAttribute(new Float32Array(pos),3));
+  geo.computeVertexNormals();
+  var jawSet=new Set([39,40,41,42,43,44,45,46,47,48,49,50]);
+  var jawIdx=[];
+  F.forEach(function(tri,fi){for(var j=0;j<3;j++){if(jawSet.has(tri[j]))jawIdx.push(fi*9+j*3+1);}});
+  return {geo:geo,jawIdx:jawIdx,baseY:pos.slice()};
+}
+
+function initThree(){
+  var w=bc.clientWidth||Math.round(window.innerWidth*.56);
+  var h=bc.clientHeight||window.innerHeight;
+  renderer=new THREE.WebGLRenderer({canvas:bc,antialias:true,alpha:false});
+  renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+  renderer.setSize(w,h);
+  renderer.setClearColor(0x000000,1);
+  scene=new THREE.Scene();
+  scene.fog=new THREE.FogExp2(0x020000,.095);
+  camera=new THREE.PerspectiveCamera(38,w/h,.1,100);
+  camera.position.set(0,.15,5.8);
+  camera.lookAt(0,.05,0);
+  window.addEventListener('resize',function(){
+    var nw=bc.clientWidth||Math.round(window.innerWidth*.56);
+    var nh=bc.clientHeight||window.innerHeight;
+    renderer.setSize(nw,nh);
+    camera.aspect=nw/nh;
+    camera.updateProjectionMatrix();
+  });
+  var fd=makeFaceGeometry();
+  var solidMat=new THREE.MeshPhongMaterial({color:0x050000,emissive:0x110000,transparent:true,opacity:.55,side:THREE.FrontSide,depthWrite:false});
+  faceSolid=new THREE.Mesh(fd.geo,solidMat);
+  scene.add(faceSolid);
+  var wireMat=new THREE.MeshBasicMaterial({color:0xFF1800,wireframe:true});
+  faceWire=new THREE.Mesh(fd.geo.clone(),wireMat);
+  faceWire.scale.set(1.001,1.001,1.001);
+  scene.add(faceWire);
+  jawVerts=fd.jawIdx;
+  jawBaseY=jawVerts.map(function(i){return fd.baseY[i];});
+
+  var srGeo=new THREE.TorusGeometry(1.6,.008,4,80);
+  scanRing=new THREE.Mesh(srGeo,new THREE.MeshBasicMaterial({color:0xFF2200,transparent:true,opacity:.6}));
+  scanRing.rotation.x=Math.PI/2;
+  scene.add(scanRing);
+  for(var pr=0;pr<3;pr++){
+    var prM=new THREE.Mesh(new THREE.TorusGeometry(.1,.005,4,48),new THREE.MeshBasicMaterial({color:0xFF0800,transparent:true,opacity:0}));
+    prM.rotation.x=Math.PI/2;prM._phase=pr*(Math.PI*2/3);
+    scene.add(prM);pulseRings.push(prM);
+  }
+  var lBufGeo=new THREE.BufferGeometry();
+  var lPos=new Float32Array(40*2*3);
+  lBufGeo.setAttribute('position',new THREE.BufferAttribute(lPos,3));
+  var lineMesh=new THREE.LineSegments(lBufGeo,new THREE.LineBasicMaterial({color:0xFF4400,transparent:true,opacity:.4}));
+  scene.add(lineMesh);
+  var vSrc=[
+    [-.5,.7,1.1],[.5,.7,1.1],[-.65,.5,1.05],[.65,.5,1.05],[0,.2,1.3],
+    [-.4,0,1.25],[.4,0,1.25],[0,-.35,1.15],[-.9,.3,.8],[.9,.3,.8],
+    [0,1.1,1.05],[-.6,-.1,1.0],[.6,-.1,1.0],[-.3,.4,1.2],[.3,.4,1.2],
+    [0,.55,1.2],[-.2,-.1,1.28],[.2,-.1,1.28],[-.8,-.3,.6],[.8,-.3,.6],
+    [-.4,.9,.9],[.4,.9,.9],[-1,.1,.4],[1,.1,.4],[-.5,-.6,.5],[.5,-.6,.5],
+    [-.2,.15,1.3],[.2,.15,1.3],[0,.9,.5],[0,-.7,.2],[-.7,.7,.5],[.7,.7,.5],
+    [-.3,-.4,1.1],[.3,-.4,1.1],[-.6,.6,.9],[.6,.6,.9],
+    [-.1,-.25,1.28],[.1,-.25,1.28],[-.55,.1,.95],[.55,.1,.95]
+  ];
+  dataSparks={obj:lineMesh,buf:lPos,t:new Float32Array(40),sp:vSrc};
+  for(var si=0;si<40;si++) dataSparks.t[si]=Math.random();
+  var pBuf=new Float32Array(800*3);
+  for(var pi=0;pi<800;pi++){
+    var ang=Math.random()*Math.PI*2,rad=1.8+Math.random()*5,ht=(Math.random()-.5)*5;
+    pBuf[pi*3]=rad*Math.cos(ang);pBuf[pi*3+1]=ht;pBuf[pi*3+2]=rad*Math.sin(ang)*.7-.5;
+  }
+  var pGeo=new THREE.BufferGeometry();
+  pGeo.setAttribute('position',new THREE.BufferAttribute(pBuf,3));
+  dataSparks.pts=new THREE.Points(pGeo,new THREE.PointsMaterial({color:0xFF0000,size:.018,transparent:true,opacity:.45}));
+  scene.add(dataSparks.pts);
+  scene.add(new THREE.AmbientLight(0x110000,1.0));
+  kL=new THREE.DirectionalLight(0xFF2200,1.4);kL.position.set(2,3,5);scene.add(kL);
+  fillL=new THREE.PointLight(0xFF0000,2.2,12);fillL.position.set(-3,.5,3);scene.add(fillL);
+  var rimL=new THREE.PointLight(0xFF4400,1.8,10);rimL.position.set(3,0,-1);scene.add(rimL);
+  eL=new THREE.PointLight(0xFF1100,2.8,6);eL.position.set(0,.4,3);scene.add(eL);
+}
+
+var hs={x:0,y:0,vx:0,vy:0};
+function animBoot(){
+  requestAnimationFrame(animBoot);
+  bT+=.016;
+  if(!renderer)return;
+  hs.vx+=(Math.sin(bT*.35)*.12-hs.x)*.035;
+  hs.vy+=(Math.sin(bT*.24)*.05-hs.y)*.035;
+  hs.vx*=.90;hs.vy*=.90;hs.x+=hs.vx;hs.y+=hs.vy;
+  var swayY=Math.sin(bT*.48)*.04;
+  [faceSolid,faceWire].forEach(function(m){m.rotation.y=hs.x;m.rotation.x=hs.y;m.position.y=swayY;});
+  aLv=aLv*.60+getALv()*.40;
+  var jawDrop=aLv*.28;
+  if(jawVerts&&faceWire){
+    var pa=faceWire.geometry.attributes.position.array;
+    var pa2=faceSolid.geometry.attributes.position.array;
+    for(var ji=0;ji<jawVerts.length;ji++){var idx=jawVerts[ji];var ny=jawBaseY[ji]-jawDrop;pa[idx]=ny;pa2[idx]=ny;}
+    faceWire.geometry.attributes.position.needsUpdate=true;
+    faceSolid.geometry.attributes.position.needsUpdate=true;
+  }
+  var pulse=.5+Math.sin(bT*1.8)*.3+aLv*.5;
+  faceWire.material.color.setHSL(.02,1,.2+pulse*.35);
+  scanRing.rotation.z=bT*.6;
+  scanRing.position.y=swayY+Math.sin(bT*.9)*1.2;
+  scanRing.rotation.y=hs.x;
+  scanRing.material.opacity=.3+Math.abs(Math.sin(bT*.9))*.45;
+  pulseRings.forEach(function(ring){
+    var ph=(bT*.7+ring._phase)%(Math.PI*2);
+    var t=ph/(Math.PI*2);
+    var r=.2+t*3.5;
+    ring.scale.set(r,r,r);ring.material.opacity=Math.max(0,(1-t)*.5);
+    ring.position.y=swayY;ring.rotation.y=hs.x;
+  });
+  var lBuf=dataSparks.buf;
+  for(var si=0;si<40;si++){
+    dataSparks.t[si]+=.018+Math.random()*.008;
+    if(dataSparks.t[si]>1)dataSparks.t[si]=0;
+    var t2=dataSparks.t[si];
+    var sp=dataSparks.sp[si%dataSparks.sp.length];
+    var dir=[sp[0]*.3+(Math.random()-.5)*.1,sp[1]*.2+(Math.random()-.5)*.05,sp[2]*.15];
+    var base=si*6;
+    lBuf[base]=sp[0]+dir[0]*t2*.4;lBuf[base+1]=sp[1]+dir[1]*t2*.4+swayY;lBuf[base+2]=sp[2]+dir[2]*t2*.2;
+    lBuf[base+3]=sp[0]+dir[0]*(t2+.15);lBuf[base+4]=sp[1]+dir[1]*(t2+.15)+swayY;lBuf[base+5]=sp[2]+dir[2]*(t2+.05);
+  }
+  dataSparks.obj.geometry.attributes.position.needsUpdate=true;
+  dataSparks.obj.material.opacity=.3+aLv*.5;
+  dataSparks.pts.rotation.y+=.0008;
+  eL.intensity=2.0+aLv*4.0;eL.color.setHSL(.02,1,.25+aLv*.4);
+  kL.intensity=1.4+Math.sin(bT*8)*.15;fillL.intensity=2.2+Math.sin(bT*1.3)*.4;
+  renderer.render(scene,camera);
+}
+
+function initAudio(){
+  try{actx=new(window.AudioContext||window.webkitAudioContext)();anl=actx.createAnalyser();anl.fftSize=512;aData=new Uint8Array(anl.frequencyBinCount);anl.connect(actx.destination);}catch(e){}
+}
+function getALv(){
+  if(!anl||!aData)return 0;
+  anl.getByteFrequencyData(aData);var s=0;for(var i=2;i<28;i++)s+=aData[i];return s/(26*255);
+}
+function playTTS(txt){
+  return new Promise(function(resolve){
+    if(!actx)initAudio();
+    if(!actx){setTimeout(resolve,2200);return;}
+    fetch('http://oe-sapi.circul.us/v1/tts?text='+encodeURIComponent(txt))
+      .then(function(r){return r.arrayBuffer();})
+      .then(function(b){return actx.decodeAudioData(b);})
+      .then(function(dec){
+        if(aSrc){try{aSrc.stop();}catch(e){}}
+        aSrc=actx.createBufferSource();aSrc.buffer=dec;aSrc.connect(anl);aSrc.onended=resolve;aSrc.start();
+      }).catch(function(){setTimeout(resolve,2000);});
+  });
+}
+
+var bwaveEl=document.getElementById('bwave');
+var wBars=[];
+for(var wb=0;wb<20;wb++){var b=document.createElement('div');b.className='wbar';b.style.height='3px';bwaveEl.appendChild(b);wBars.push(b);}
+setInterval(function(){
+  var lv=getALv();
+  wBars.forEach(function(bar,i){var h=lv>.01?Math.abs(Math.sin(Date.now()/55+i*.65))*lv*65+3:3;bar.style.height=Math.min(26,h)+'px';});
+},35);
+
+var LINES=[
+  '안녕하세요. ARCos 기반 G1 휴머노이드 유닛이 온라인 상태입니다.',
+  '자율 로봇 제어 운영체제가 정상 로드되었습니다. 모든 서브시스템이 활성화됩니다.',
+  '비전 서브시스템 초기화 중입니다. 객체 및 인물 감지 모듈이 활성화되었습니다.',
+  '센서 배열 캘리브레이션 완료. AR태그 추적 준비됨. 미션 모드로 진입합니다.',
+];
+var LOGS=[
+  {t:300, c:'ok',  m:'[ OK ] ARCos kernel 6.10.0 loaded'},
+  {t:800, c:'ok',  m:'[ OK ] Neural core initialized'},
+  {t:1500,c:'info',m:'[INFO] Loading vision modules...'},
+  {t:2200,c:'ok',  m:'[ OK ] YOLO detection engine ready'},
+  {t:2900,c:'info',m:'[INFO] Calibrating IMU 6-axis...'},
+  {t:3600,c:'ok',  m:'[ OK ] IMU calibrated'},
+  {t:4300,c:'info',m:'[INFO] Connecting /video_feed...'},
+  {t:5000,c:'ok',  m:'[ OK ] AR tag tracker initialized'},
+  {t:5700,c:'ok',  m:'[ OK ] Human analysis AI: ACTIVE'},
+  {t:6300,c:'ok',  m:'[ OK ] Battery monitor: ONLINE'},
+  {t:6900,c:'ok',  m:'[ OK ] All systems nominal'},
+  {t:7500,c:'ok',  m:'[ OK ] BOOT COMPLETE > MISSION MODE'},
+];
+var PLBLS=['LOADING KERNEL...','NEURAL CORE INIT...','VISION MODULES...','SENSOR CALIBRATE...','AR TAG TRACKER...','HUMAN ANALYSIS AI...','SYSTEMS CHECK...','BOOT COMPLETE'];
+var BOOT_DUR=10000,bStart=Date.now();
+var blogEl=document.getElementById('blog');
+LOGS.forEach(function(l){setTimeout(function(){var d=document.createElement('div');d.className='blog '+l.c;d.textContent=l.m;blogEl.appendChild(d);blogEl.scrollTop=blogEl.scrollHeight;},l.t);});
+(function tickP(){
+  var pct=Math.min(100,(Date.now()-bStart)/BOOT_DUR*100);
+  document.getElementById('bpfill').style.width=pct+'%';
+  document.getElementById('bppct').textContent=pct.toFixed(0)+'%';
+  document.getElementById('bplbl').textContent=PLBLS[Math.min(PLBLS.length-1,Math.floor(pct/100*(PLBLS.length-1)))];
+  if(pct<100)requestAnimationFrame(tickP);
+})();
+function runSpeech(){
+  var idx=0;
+  function next(){
+    if(idx>=LINES.length)return;
+    var line=LINES[idx++];
+    var bstEl=document.getElementById('bst');
+    bstEl.textContent='';
+    var ci=0,spd=Math.min(55,1800/line.length);
+    var ti=setInterval(function(){if(ci<line.length)bstEl.textContent=line.slice(0,++ci);else clearInterval(ti);},spd);
+    playTTS(line).then(function(){clearInterval(ti);bstEl.textContent=line;setTimeout(next,400);});
+  }
+  setTimeout(next,500);
+}
+var bDone=false;
+function endBoot(){if(bDone)return;bDone=true;bootEl.classList.add('out');setTimeout(function(){bootEl.style.display='none';},900);}
+setTimeout(endBoot,BOOT_DUR+600);
+window.skipBoot=endBoot;
+setTimeout(function(){initThree();animBoot();runSpeech();},120);
+})();
+</script>
+
+<script>
+// ═══════════════════════════════════════════
+//  MAIN DASHBOARD — ARCos
+// ═══════════════════════════════════════════
+function rnd(a,b){return Math.random()*(b-a)+a;}
+function ri(a,b){return Math.floor(rnd(a,b));}
+
+// ── Clock ──
+setInterval(function(){document.getElementById('stime').textContent=new Date().toTimeString().slice(0,8);},1000);
+
+// ── Tab switch ──
+function sw(id){
+  document.querySelectorAll('.screen').forEach(function(s){s.classList.remove('on');});
+  document.querySelectorAll('.tab').forEach(function(t){t.classList.remove('on');});
+  document.getElementById(id).classList.add('on');
+  document.getElementById('tab-'+id).classList.add('on');
+}
+
+// ── Video feed (/video_feed MJPEG stream) ──
+var vfeedImg = document.getElementById('vfeed');
+var vc = document.getElementById('vcanvas');
+var vctx = vc.getContext('2d');
+var feedConnected = false;
+var feedFrameCount = 0;
+var feedLastTime = Date.now();
+var feedFPS = 0;
+
+function startVideoFeed(){
+  vfeedImg.src = '/video_feed?' + Date.now();
+  document.getElementById('feed-badge').textContent = 'LIVE';
+  document.getElementById('feed-dot').classList.add('active');
+  document.getElementById('feed-label').textContent = '/video_feed CONNECTED';
+  document.getElementById('feed-res').textContent = '1920 × 1080';
+  feedConnected = true;
+  addLog('o', 'VIDEO FEED CONNECTED :: /video_feed');
+}
+
+vfeedImg.addEventListener('load', function(){
+  feedFrameCount++;
+  var now = Date.now();
+  if(now - feedLastTime > 1000){
+    feedFPS = Math.round(feedFrameCount / ((now - feedLastTime) / 1000));
+    feedFrameCount = 0;
+    feedLastTime = now;
+    document.getElementById('hudfps').textContent = feedFPS + ' FPS';
+  }
+});
+
+vfeedImg.addEventListener('error', function(){
+  if(feedConnected){
+    document.getElementById('feed-badge').textContent = 'ERR';
+    document.getElementById('feed-dot').classList.remove('active');
+    document.getElementById('feed-label').textContent = 'STREAM ERROR — RETRYING...';
+    feedConnected = false;
+    addLog('w', 'VIDEO FEED ERROR :: RETRYING...');
+    setTimeout(function(){
+      if(!feedConnected) vfeedImg.src = '/video_feed?' + Date.now();
+    }, 2000);
+  }
+});
+
+// Resize canvas overlay to match video container
+function resVC(){
+  var inner = document.querySelector('.vid-inner');
+  if(!inner) return;
+  vc.width = inner.offsetWidth || 640;
+  vc.height = inner.offsetHeight || 360;
+}
+window.addEventListener('resize', resVC);
+setTimeout(resVC, 300);
+
+// ── Server connection & heartbeat ──
+var serverConnected = false;
+var heartbeatInterval = null;
+var serverState = {
+  charge: 0, temp: 0, voltage: 0,
+  cnt_live: 0, cnt_object: 0, boxes: [],
+  human: {age:'', gender:'', emotion:'', position:''},
+  tag: {id: null, dist: 0}
+};
+
+function connectServer(){
+  var btn = document.getElementById('conn-btn');
+  btn.textContent = '◆ CONNECTING...';
+  btn.disabled = true;
+
+  // Start video feed
+  startVideoFeed();
+
+  // Try to connect to robot server
+  fetch('/connect2')
+    .then(function(r){
+      if(!r.ok) throw new Error('connect2 failed');
+      return r.json();
+    })
+    .then(function(data){
+      addLog('o', 'ROBOT SERVER CONNECTED');
+      serverConnected = true;
+      btn.textContent = '◆ CONNECTED';
+      btn.classList.add('connected');
+      btn.disabled = false;
+      document.getElementById('conn-status').textContent = 'ONLINE';
+
+      // Start collection
+      fetch('/start_collection').catch(function(){});
+
+      // Start heartbeat polling
+      startHeartbeat();
+    })
+    .catch(function(e){
+      addLog('w', 'SERVER OFFLINE — DEMO MODE');
+      serverConnected = false;
+      btn.textContent = '◆ RETRY';
+      btn.disabled = false;
+      document.getElementById('conn-status').textContent = 'DEMO';
+      // Run demo simulation anyway
+      startDemoMode();
+    });
+}
+
+function startHeartbeat(){
+  if(heartbeatInterval) clearInterval(heartbeatInterval);
+  heartbeatInterval = setInterval(function(){
+    fetch('http://127.0.0.1:59531/heartbeat')
+      .then(function(r){return r.json();})
+      .then(function(resp){
+        var data = resp.data;
+        serverState.charge    = data.charge   || 0;
+        serverState.temp      = data.temp     || 0;
+        serverState.voltage   = data.voltage  || 0;
+        serverState.cnt_live  = data.cnt_live || 0;
+        serverState.cnt_object= data.cnt_object||0;
+        serverState.boxes     = data.boxes    || [];
+        serverState.human     = data.human    || {age:'',gender:'',emotion:'',position:''};
+        serverState.tag       = data.tag      || {id:null,dist:0};
+        updateFromServer(data);
+      })
+      .catch(function(){
+        // silent fail - keep last known state
+      });
+  }, 1000);
+}
+
+function startDemoMode(){
+  // Simulate server data for demo
+  setInterval(function(){
+    serverState.charge    = rnd(60,90);
+    serverState.temp      = rnd(38,72);
+    serverState.voltage   = rnd(44,52);
+    serverState.cnt_live  = ri(0,3);
+    serverState.cnt_object= ri(2,12);
+    serverState.boxes     = genDemoBoxes();
+    if(serverState.cnt_live > 0){
+      var ages=['20s','30s','40s','50s'];
+      var gens=['Male','Female'];
+      var emos=['happy','neutral','angry','sad'];
+      var poss=['TL','TR','BL','BR','TC','BC'];
+      serverState.human = {
+        age: ages[ri(0,ages.length)],
+        gender: gens[ri(0,gens.length)],
+        emotion: emos[ri(0,emos.length)],
+        position: poss[ri(0,poss.length)]
+      };
+    } else {
+      serverState.human = {age:'',gender:'',emotion:'',position:''};
+    }
+    serverState.tag = Math.random()>.7?{id:ri(0,5),dist:rnd(.5,5).toFixed(1)}:{id:null,dist:0};
+    updateFromServer(serverState);
+  }, 1000);
+}
+
+function genDemoBoxes(){
+  var lbls=['person','car','dog','laptop','phone','chair','bottle','bag'];
+  var boxes=[];
+  var n=ri(0,6);
+  for(var i=0;i<n;i++){
+    boxes.push({
+      label: lbls[ri(0,lbls.length)],
+      conf: rnd(.65,.99),
+      x: rnd(.05,.7), y: rnd(.05,.6), w: rnd(.08,.25), h: rnd(.1,.3),
+      dist: rnd(.5,12).toFixed(1)
+    });
+  }
+  return boxes;
+}
+
+// ── Update UI from server data ──
+var batH=Array(40).fill(80),tempH=Array(40).fill(45),humH=Array(40).fill(0),objH=Array(40).fill(0);
+
+function updateFromServer(data){
+  // Battery
+  var charge = parseFloat(data.charge)||0;
+  var voltage = parseFloat(data.voltage)||0;
+  var tempV = parseFloat(data.temp)||0;
+  var cntLive = parseInt(data.cnt_live)||0;
+  var cntObj = parseInt(data.cnt_object)||0;
+  var human = data.human || {};
+  var tag = data.tag || {id:null,dist:0};
+
+  // Battery & voltage
+  document.getElementById('ba').textContent = charge.toFixed(0)+'%';
+  document.getElementById('bab').style.width = Math.min(100,charge)+'%';
+  var voltPct = Math.min(100, Math.max(0, (voltage-40)/20*100));
+  document.getElementById('volt').textContent = voltage.toFixed(1)+'V';
+  document.getElementById('voltb').style.width = voltPct+'%';
+
+  // Temperature
+  var tempPct = Math.min(100, Math.max(0, (tempV-20)/80*100));
+  document.getElementById('tempv').textContent = tempV.toFixed(0)+'°C';
+  document.getElementById('tempvp').textContent = tempPct.toFixed(0)+'%';
+  document.getElementById('tempb').style.width = tempPct+'%';
+
+  // Live counts
+  document.getElementById('lv-humans').textContent = cntLive;
+  document.getElementById('lv-objects').textContent = cntObj;
+  document.getElementById('tgtcnt').textContent = cntObj;
+  document.getElementById('latv').textContent = ri(5,20)+'ms';
+
+  // System tab
+  document.getElementById('sys-charge').textContent = charge.toFixed(0)+'%';
+  document.getElementById('sys-volt').textContent = voltage.toFixed(1)+'V';
+  document.getElementById('sys-temp').textContent = tempV.toFixed(0)+'°C';
+  document.getElementById('sys-tempst').textContent = tempV>70?'CRITICAL':tempV>55?'WARM':'NOMINAL';
+  document.getElementById('sys-humans').textContent = cntLive;
+  document.getElementById('sys-objects').textContent = cntObj;
+
+  // History charts
+  batH.push(charge);batH.shift();
+  tempH.push(tempV);tempH.shift();
+  humH.push(cntLive*20);humH.shift();
+  objH.push(Math.min(100,cntObj*8));objH.shift();
+  drawLine('batchart',batH,'#00FF41','#003300');
+  drawLine('tempchart',tempH,'#FF4500','#330000');
+  drawLine('detchart',humH,'#EE0000','#8B0000');
+
+  // Human analysis panel
+  updateHumanPanel(human, cntLive);
+
+  // AR Tag
+  updateTagPanel(tag);
+
+  // Detection boxes on canvas
+  updateDetections(data.boxes||[]);
+
+  // Threat level from live count + boxes
+  updateThreat(cntLive, cntObj);
+
+  // Servo simulation
+  updateServos();
+
+  // Core temps
+  var coreTemps = Array(8).fill(0).map(function(){return Math.max(40,Math.min(85,tempV+rnd(-8,8)));});
+  updateCores('cgrid', coreTemps);
+  updateCores('cgrid2', coreTemps);
+}
+
+function updateHumanPanel(human, cntLive){
+  var badge = document.getElementById('human-badge');
+  var hAge = document.getElementById('h-age');
+  var hGender = document.getElementById('h-gender');
+  var hEmo = document.getElementById('h-emotion');
+  var hPos = document.getElementById('h-pos');
+  var hDepth = document.getElementById('h-depth');
+
+  if(cntLive > 0 && (human.age || human.gender || human.emotion)){
+    badge.textContent = 'TARGET LOCKED';
+    badge.style.color = '#FF2222';
+    hAge.textContent = human.age || '--';
+    hAge.className = 'hval live';
+    hGender.textContent = human.gender || '--';
+    hGender.className = 'hval live';
+    hPos.textContent = human.position || '--';
+    hPos.className = 'hval warn';
+    hDepth.textContent = serverState.tag.dist > 0 ? serverState.tag.dist + 'm' : '--m';
+
+    // Emotion badge
+    var emo = (human.emotion||'').toLowerCase();
+    var eClass = 'emo-unknown';
+    if(emo.includes('happy')||emo.includes('기쁨')) eClass='emo-happy';
+    else if(emo.includes('angry')||emo.includes('분노')) eClass='emo-angry';
+    else if(emo.includes('sad')||emo.includes('슬픔')) eClass='emo-sad';
+    else if(emo.includes('neutral')||emo.includes('중립')) eClass='emo-neutral';
+    hEmo.className = 'hval';
+    hEmo.innerHTML = '<span class="emo-badge '+eClass+'">'+(human.emotion||'--')+'</span>';
+
+    // Profile log
+    var plog = document.getElementById('profile-log');
+    var t = new Date().toTimeString().slice(0,8);
+    var entry = document.createElement('div');
+    entry.style.cssText = 'border-bottom:1px solid rgba(238,0,0,.1);padding:3px 0;color:#FF9999';
+    entry.textContent = '['+t+'] '+( human.gender||'?')+' / '+(human.age||'?')+' / '+(human.emotion||'?')+' / POS:'+(human.position||'?');
+    plog.insertBefore(entry, plog.firstChild);
+    if(plog.children.length > 20) plog.lastChild.remove();
+
+  } else {
+    badge.textContent = 'NO TARGET';
+    badge.style.color = '';
+    hAge.textContent = '--'; hAge.className = 'hval';
+    hGender.textContent = '--'; hGender.className = 'hval';
+    hEmo.textContent = '--'; hEmo.className = 'hval';
+    hPos.textContent = '--'; hPos.className = 'hval';
+    hDepth.textContent = '--m';
+  }
+}
+
+function updateTagPanel(tag){
+  var circle = document.getElementById('tag-circle');
+  var tagId = document.getElementById('tag-id');
+  var tagDist = document.getElementById('tag-dist');
+  if(tag && tag.id !== null && tag.id !== undefined){
+    circle.classList.add('active');
+    tagId.textContent = '#'+tag.id;
+    tagDist.textContent = parseFloat(tag.dist).toFixed(1)+' m';
+  } else {
+    circle.classList.remove('active');
+    tagId.textContent = '--';
+    tagDist.textContent = '-- m';
+  }
+}
+
+// ── Detection boxes overlay ──
+var detBoxes = [];
+function updateDetections(boxes){
+  detBoxes = boxes || [];
+  updateDetUI();
+  drawDetections();
+  document.getElementById('detcnt').textContent = detBoxes.length + ' TGT';
+}
+
+function drawDetections(){
+  var W = vc.width, H = vc.height;
+  if(!W || !H) return;
+  vctx.clearRect(0,0,W,H);
+
+  // HUD rings
+  vctx.strokeStyle='rgba(238,0,0,.05)';vctx.lineWidth=.5;
+  [.15,.3,.45].forEach(function(r){vctx.beginPath();vctx.arc(W/2,H/2,Math.min(W,H)*r,0,Math.PI*2);vctx.stroke();});
+
+  var t = Date.now()/1000;
+  detBoxes.forEach(function(d){
+    var x = d.x*W, y = d.y*H, w = d.w*W, h = d.h*H;
+    var conf = parseFloat(d.conf)||.8;
+    var cl = 14;
+
+    // Box
+    vctx.strokeStyle='rgba(238,0,0,.85)';vctx.lineWidth=1.5;vctx.setLineDash([]);
+    vctx.strokeRect(x,y,w,h);
+
+    // Corners
+    vctx.strokeStyle='rgba(255,100,0,.95)';vctx.lineWidth=2.5;
+    vctx.beginPath();vctx.moveTo(x,y+cl);vctx.lineTo(x,y);vctx.lineTo(x+cl,y);vctx.stroke();
+    vctx.beginPath();vctx.moveTo(x+w-cl,y);vctx.lineTo(x+w,y);vctx.lineTo(x+w,y+cl);vctx.stroke();
+    vctx.beginPath();vctx.moveTo(x,y+h-cl);vctx.lineTo(x,y+h);vctx.lineTo(x+cl,y+h);vctx.stroke();
+    vctx.beginPath();vctx.moveTo(x+w-cl,y+h);vctx.lineTo(x+w,y+h);vctx.lineTo(x+w,y+h-cl);vctx.stroke();
+
+    // Scan line
+    var sy = y + ((t*60)%h+h)%h;
+    var sg=vctx.createLinearGradient(x,sy,x+w,sy);
+    sg.addColorStop(0,'transparent');sg.addColorStop(.5,'rgba(238,0,0,.3)');sg.addColorStop(1,'transparent');
+    vctx.fillStyle=sg;vctx.fillRect(x,sy,w,2);
+
+    // Label
+    vctx.fillStyle='rgba(139,0,0,.82)';vctx.fillRect(x,y-17,w,17);
+    vctx.fillStyle='rgba(255,200,200,.95)';vctx.font='bold 9px monospace';
+    var label = '◆ '+(d.label||d.cls||'OBJ').toUpperCase()+' ['+(conf*100).toFixed(0)+'%]'+(d.dist?' '+d.dist+'m':'');
+    vctx.fillText(label, x+4, y-5);
+
+    // Crosshair lines
+    vctx.strokeStyle='rgba(238,0,0,.12)';vctx.lineWidth=.5;vctx.setLineDash([4,8]);
+    vctx.beginPath();vctx.moveTo(0,y+h/2);vctx.lineTo(W,y+h/2);vctx.stroke();
+    vctx.beginPath();vctx.moveTo(x+w/2,0);vctx.lineTo(x+w/2,H);vctx.stroke();
+    vctx.setLineDash([]);
+  });
+}
+
+// Redraw detections on animation frame (for scan line animation)
+(function loopDraw(){requestAnimationFrame(loopDraw);drawDetections();})();
+
+function updateDetUI(){
+  var el = document.getElementById('detlist');
+  if(detBoxes.length === 0){
+    el.innerHTML='<div class="al al-i">-- NO TARGETS --</div>';
+    return;
+  }
+  el.innerHTML = detBoxes.map(function(d){
+    var lbl = (d.label||d.cls||'OBJ').toUpperCase();
+    var conf = parseFloat(d.conf)||.8;
+    var icon = lbl==='PERSON'||lbl==='HUMAN'?'🔴':lbl==='CAR'||lbl==='VEHICLE'?'🟡':'⬜';
+    return '<div class="di"><span>'+icon+'</span><span class="dlbl">'+lbl+'</span><span class="dconf">'+(conf*100).toFixed(0)+'%</span><span class="ddist">'+(d.dist||'--')+'m</span></div>';
+  }).join('');
+}
+
+function updateThreat(cntLive, cntObj){
+  var level = Math.min(10, cntLive*4 + Math.floor(cntObj/3));
+  document.querySelectorAll('.tblock').forEach(function(b,i){
+    b.className = 'tblock'+(i<level?' on'+(i>=7?' hi':''):'');
+  });
+}
+
+// ── Servos (simulated - no real data from server) ──
+function updateServos(){
+  var sv1=ri(-60,60),sv2=ri(-25,25),sv3=ri(-40,40);
+  document.getElementById('s1').textContent=sv1+'°';
+  document.getElementById('s1b').style.width=((sv1+90)/180*100)+'%';
+  document.getElementById('s2').textContent=sv2+'°';
+  document.getElementById('s2b').style.width=((sv2+30)/60*100)+'%';
+  document.getElementById('s3').textContent=sv3+'°';
+  document.getElementById('s3b').style.width=((sv3+45)/90*100)+'%';
+}
+
+// ── Alert Log ──
+var AUTO_LOGS=[
+  ['o','ARCos kernel 6.10.0-robot x86_64'],
+  ['o','VISION SUBSYSTEM INITIALIZED'],
+  ['o','NEURAL INFERENCE ENGINE: ACTIVE'],
+  ['o','IMU SENSOR: 6-AXIS CALIBRATED'],
+  ['o','LIDAR ARRAY: 360 OPERATIONAL'],
+  ['w','JOINT TEMP ELEVATED: RIGHT ELBOW'],
+  ['o','GPS MODULE: LOCKED 3D FIX'],
+  ['o','OBJECT DETECTION MODEL LOADED'],
+  ['o','ARCos SECURITY POLICY: ENFORCING'],
+  ['w','BATTERY CELL B: DISCHARGE RATE +12%'],
+];
+var logIdx=0;
+function addLog(type,msg){
+  var el=document.getElementById('afeed');
+  var t=new Date().toTimeString().slice(3,8);
+  var d=document.createElement('div');
+  d.className='al al-'+type.slice(0,1);
+  d.textContent='['+t+'] '+msg;
+  el.insertBefore(d,el.firstChild);
+  if(el.children.length>28)el.lastChild.remove();
+}
+setInterval(function(){var l=AUTO_LOGS[logIdx%AUTO_LOGS.length];addLog(l[0],l[1]);logIdx++;},4000);
+
+// ── Chart helpers ──
+function drawLine(id,data,stroke,fill){
+  var c=document.getElementById(id);if(!c)return;
+  var ctx=c.getContext('2d');
+  var W=c.offsetWidth||200,H=c.offsetHeight||80;
+  c.width=W;c.height=H;ctx.clearRect(0,0,W,H);
+  ctx.strokeStyle='rgba(238,0,0,.07)';ctx.lineWidth=.5;
+  for(var gi=0;gi<=4;gi++){ctx.beginPath();ctx.moveTo(0,H/4*gi);ctx.lineTo(W,H/4*gi);ctx.stroke();}
+  if(!data.length)return;
+  var step=W/(data.length-1);
+  var g=ctx.createLinearGradient(0,0,0,H);g.addColorStop(0,stroke+'44');g.addColorStop(1,fill+'00');
+  ctx.beginPath();
+  data.forEach(function(v,i){var x=i*step,y=H-(v/100)*H;i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);});
+  ctx.lineTo(W,H);ctx.lineTo(0,H);ctx.closePath();ctx.fillStyle=g;ctx.fill();
+  ctx.beginPath();ctx.strokeStyle=stroke;ctx.lineWidth=1.5;ctx.shadowColor=stroke;ctx.shadowBlur=5;
+  data.forEach(function(v,i){var x=i*step,y=H-(v/100)*H;i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);});
+  ctx.stroke();ctx.shadowBlur=0;
+  var lv=data[data.length-1],lx=(data.length-1)*step,ly=H-(lv/100)*H;
+  ctx.beginPath();ctx.arc(lx,ly,3,0,Math.PI*2);ctx.fillStyle=stroke;ctx.fill();
+}
+
+function updateCores(id,temps){
+  var el=document.getElementById(id);if(!el)return;
+  el.innerHTML=temps.map(function(v,i){
+    var c=v>75?'hot':v>65?'warm':'cool';
+    return '<div class="cc cc-'+c+'">C'+i+'<span>'+v.toFixed(0)+'°</span></div>';
+  }).join('');
+}
+
+function drawTraj(){
+  var c=document.getElementById('traj');if(!c)return;
+  var ctx=c.getContext('2d');
+  var W=c.offsetWidth||150,H=c.offsetHeight||100;
+  c.width=W;c.height=H;var t=Date.now()/1000;
+  ctx.clearRect(0,0,W,H);
+  ctx.strokeStyle='rgba(238,0,0,.1)';ctx.lineWidth=.5;
+  for(var ti=0;ti<5;ti++){ctx.beginPath();ctx.moveTo(ti*W/4,0);ctx.lineTo(ti*W/4,H);ctx.stroke();ctx.beginPath();ctx.moveTo(0,ti*H/4);ctx.lineTo(W,ti*H/4);ctx.stroke();}
+  var rx=W/2+Math.sin(t*.5)*W*.2,ry=H/2+Math.cos(t*.3)*H*.2;
+  ctx.beginPath();ctx.strokeStyle='rgba(238,0,0,.4)';ctx.lineWidth=1;
+  for(var tj=0;tj<30;tj++){var pt=t-tj*.05,px=W/2+Math.sin(pt*.5)*W*.2,py=H/2+Math.cos(pt*.3)*H*.2;tj===0?ctx.moveTo(px,py):ctx.lineTo(px,py);}
+  ctx.stroke();
+  ctx.beginPath();ctx.arc(rx,ry,5,0,Math.PI*2);ctx.fillStyle='#EE0000';ctx.shadowColor='#EE0000';ctx.shadowBlur=10;ctx.fill();ctx.shadowBlur=0;
+  detBoxes.slice(0,3).forEach(function(d){
+    var tx=d.x*W,ty=d.y*H;
+    ctx.beginPath();ctx.arc(tx,ty,3,0,Math.PI*2);ctx.fillStyle='#FF4500';ctx.fill();
+    ctx.strokeStyle='#FF4500';ctx.lineWidth=.5;ctx.setLineDash([2,4]);
+    ctx.beginPath();ctx.moveTo(rx,ry);ctx.lineTo(tx,ty);ctx.stroke();ctx.setLineDash([]);
+  });
+}
+setInterval(drawTraj,50);
+
+// ── PDF Viewer ──
+if(typeof pdfjsLib!=='undefined') pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+var pdfDoc=null,curPage=1,totPages=0,autoInt=null,isAuto=false;
+document.getElementById('pdfin').addEventListener('change',function(e){
+  var f=e.target.files[0];if(!f)return;
+  var fr=new FileReader();fr.onload=function(ev){loadPDF(ev.target.result,f.name);};fr.readAsArrayBuffer(f);
+});
+var drop=document.getElementById('pdfdrop');
+drop.addEventListener('dragover',function(e){e.preventDefault();drop.classList.add('dragov');});
+drop.addEventListener('dragleave',function(){drop.classList.remove('dragov');});
+drop.addEventListener('drop',function(e){
+  e.preventDefault();drop.classList.remove('dragov');
+  var f=e.dataTransfer.files[0];if(!f||!f.name.endsWith('.pdf')){addLog('w','INVALID FILE');return;}
+  var fr=new FileReader();fr.onload=function(ev){loadPDF(ev.target.result,f.name);};fr.readAsArrayBuffer(f);
+});
+function loadPDF(buf,name){
+  if(!pdfjsLib){addLog('w','PDF ENGINE NOT READY');return;}
+  pdfjsLib.getDocument({data:buf}).promise.then(function(doc){
+    pdfDoc=doc;totPages=doc.numPages;curPage=1;
+    document.getElementById('pdfph').style.display='none';
+    ['prevb','nextb','autob'].forEach(function(id){document.getElementById(id).disabled=false;});
+    addLog('o','PRESENTATION LOADED :: '+name+' ['+totPages+' SLIDES]');
+    document.getElementById('robottxt').textContent='PRESENTATION LOADED. '+totPages+' SLIDES DETECTED.';
+    renderPDF(1);genThumbs();
+  }).catch(function(e){addLog('w','PDF ERROR :: '+e.message);});
+}
+function renderPDF(n){
+  if(!pdfDoc)return;
+  pdfDoc.getPage(n).then(function(page){
+    var c=document.getElementById('pdf-canvas');
+    var cont=c.parentElement;
+    var vp=page.getViewport({scale:1});
+    var scale=Math.min((cont.offsetWidth-4)/vp.width,(cont.offsetHeight-4)/vp.height)*.95;
+    var sv=page.getViewport({scale:scale});
+    c.width=sv.width;c.height=sv.height;
+    var cx=c.getContext('2d');cx.fillStyle='#080808';cx.fillRect(0,0,c.width,c.height);
+    page.render({canvasContext:cx,viewport:sv}).promise.then(function(){
+      cx.fillStyle='rgba(238,0,0,.025)';cx.fillRect(0,0,c.width,c.height);
+    });
+    document.getElementById('pgind').textContent='SLIDE '+n+' / '+totPages;
+    document.querySelectorAll('.titem').forEach(function(el,i){el.classList.toggle('on',i+1===n);});
+    var msgs=['슬라이드 분석 중입니다.','콘텐츠 스캔 완료.','데이터 교차 참조됨.','세그먼트 로드 완료.','분석 완료.'];
+    document.getElementById('robottxt').textContent='[슬라이드 '+n+'/'+totPages+'] '+msgs[(n-1)%msgs.length];
+  });
+}
+function genThumbs(){
+  var s=document.getElementById('tstrip');s.innerHTML='';
+  for(var i=1;i<=Math.min(totPages,18);i++){
+    (function(pg){
+      var item=document.createElement('div');item.className='titem'+(pg===1?' on':'');
+      item.innerHTML='<span class="tn">'+pg+'</span>';
+      var tc=document.createElement('canvas');tc.className='tcanv';item.appendChild(tc);
+      item.addEventListener('click',function(){curPage=pg;renderPDF(pg);});
+      s.appendChild(item);
+      pdfDoc.getPage(pg).then(function(page){
+        var vp=page.getViewport({scale:.3});tc.width=vp.width;tc.height=vp.height;
+        var cx=tc.getContext('2d');cx.fillStyle='#080808';cx.fillRect(0,0,tc.width,tc.height);
+        page.render({canvasContext:cx,viewport:vp});
+      });
+    })(i);
+  }
+}
+function chgPage(d){if(!pdfDoc)return;curPage=Math.max(1,Math.min(totPages,curPage+d));renderPDF(curPage);}
+function toggleAuto(){
+  if(!pdfDoc)return;isAuto=!isAuto;
+  document.getElementById('autob').textContent=isAuto?'⏸ PAUSE':'▶ AUTO PLAY';
+  if(isAuto){autoInt=setInterval(function(){if(curPage<totPages){curPage++;renderPDF(curPage);}else toggleAuto();},5000);}
+  else clearInterval(autoInt);
+}
+
+// Init log
+addLog('o','ARCos DASHBOARD INITIALIZED');
+addLog('o','PRESS [CONNECT] TO START SERVER LINK');
+</script>
+</body>
+</html>
