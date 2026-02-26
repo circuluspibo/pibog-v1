@@ -909,7 +909,7 @@ let magicPollInterval = null;
 function enterMagic() {
   showScreen('screen-magic');
   // Signal command
-  fetch('http://10.42.0.1:8000/command?cmd=MAGIC').catch(() => {});
+  fetch('http://127.0.0.1:8000/command?cmd=MAGIC').catch(() => {});
   startMagicPolling();
 }
 
@@ -917,7 +917,7 @@ function startMagicPolling() {
   if (magicPollInterval) clearInterval(magicPollInterval);
   magicPollInterval = setInterval(async () => {
     try {
-      const res = await fetch('http://10.42.0.1:8000/command');
+      const res = await fetch('http://127.0.0.1:8000/command');
       const json = await res.json();
       if (json.data === 'FINISH') {
         clearInterval(magicPollInterval);
@@ -929,8 +929,9 @@ function startMagicPolling() {
 }
 
 // ── TALK MODE ──
-let mediaRecorder = null;
-let audioChunks = [];
+const REC_START = 'http://10.42.0.1:80001/rec/start';
+const REC_STOP  = 'http://10.42.0.1:80001/rec/stop';
+
 let isRecording = false;
 let visInterval = null;
 
@@ -961,8 +962,8 @@ function resetTalkUI() {
 }
 
 function stopMicIfActive() {
-  if (mediaRecorder && isRecording) {
-    mediaRecorder.stop();
+  if (isRecording) {
+    fetch(REC_STOP).catch(() => {});
     isRecording = false;
   }
   stopVizAnim();
@@ -970,29 +971,35 @@ function stopMicIfActive() {
 
 async function toggleMic() {
   if (isRecording) {
-    // stop
-    mediaRecorder.stop();
+    // 녹음 종료 → stop 호출 후 결과 수신
     isRecording = false;
-  } else {
+    setMicState('processing');
+    stopVizAnim();
+    vizEl.classList.remove('active');
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      audioChunks = [];
-      mediaRecorder = new MediaRecorder(stream);
-      mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
-      mediaRecorder.onstop = async () => {
-        stream.getTracks().forEach(t => t.stop());
-        stopVizAnim();
-        vizEl.classList.remove('active');
-        const blob = new Blob(audioChunks, { type: 'audio/wav' });
-        setMicState('processing');
-        await stt(blob);
-      };
-      mediaRecorder.start();
+      const res = await fetch(REC_STOP);
+      const result = await res.json();
+      const prompt = result.data;
+      document.getElementById('talkTranscript').textContent = prompt || '(인식된 텍스트 없음)';
+      if (prompt && prompt.length > 0) {
+        document.getElementById('micStatus').className = 'mic-status success';
+        document.getElementById('micStatus').textContent = '✓ 인식 완료 · 응답 생성 중';
+        document.getElementById('talkResponse').textContent = '';
+        await generate(prompt);
+      }
+    } catch(e) {
+      document.getElementById('micStatus').textContent = '오류: 서버 연결 실패';
+    }
+    setMicState('idle');
+  } else {
+    // 녹음 시작
+    try {
+      await fetch(REC_START);
       isRecording = true;
       setMicState('recording');
       startVizAnim();
     } catch(e) {
-      document.getElementById('micStatus').textContent = '마이크 접근 오류';
+      document.getElementById('micStatus').textContent = '오류: 녹음 서버 연결 실패';
     }
   }
 }
@@ -1032,29 +1039,8 @@ function stopVizAnim() {
   vizEl.querySelectorAll('.vis-bar').forEach(b => b.style.height = '3px');
 }
 
-async function stt(blob) {
-  const fd = new FormData();
-  fd.append('file', blob, 'voice.wav');
-  try {
-    const res = await fetch('http://10.42.0.1:59532/v1/stt', { method: 'POST', body: fd });
-    const result = await res.json();
-    const prompt = result.data;
-    document.getElementById('talkTranscript').textContent = prompt || '(인식된 텍스트 없음)';
-    if (prompt && prompt.length > 0) {
-      document.getElementById('micStatus').className = 'mic-status success';
-      document.getElementById('micStatus').textContent = '✓ 인식 완료 · 응답 생성 중';
-      document.getElementById('talkResponse').textContent = '';
-      await generate(prompt);
-    }
-    setMicState('idle');
-  } catch(e) {
-    document.getElementById('micStatus').textContent = '오류: 서버 연결 실패';
-    setMicState('idle');
-  }
-}
-
 async function generate(prompt) {
-  const url = `http://10.42.0.1:59532/v1/rag/txt2chat?prompt=${encodeURIComponent(prompt)}&lang=ko&isPlay=1`;
+  const url = `http://127.0.0.1:59532/v1/rag/txt2chat?prompt=${encodeURIComponent(prompt)}&lang=ko&isPlay=1`;
   try {
     const response = await fetch(url, { method: 'GET', headers: { 'Accept': 'application/json' } });
     if (!response.ok) return;
@@ -1088,20 +1074,20 @@ function startAutoMode() {
   if (autoInterval) clearInterval(autoInterval);
   autoInterval = setInterval(async () => {
     try {
-      const resp = await fetch('http://10.42.0.1:59531/heartbeat');
+      const resp = await fetch('http://127.0.0.1:59531/heartbeat');
       const data = (await resp.json()).data;
       updateAutoStats(data);
-      console.log('hb',data)
+
       if (Date.now() - lastAutoTime > 30000 && data.cnt_live > 0) {
         lastAutoTime = Date.now();
         addAutoLog(`Human detected at ${data.human?.position || '?'} · Initiating greeting`);
-        fetch('http://10.42.0.1:59532/v1/rag/img2chat?isPlay=1&lang=ko&prompt=' + encodeURIComponent('"이런 상황에 어울리는 짧은 인사말을 해줘!"')).catch(e=>{
-          console.log('rag err',e)
-        })
-        
+        fetch('http://127.0.0.1:59532/v1/rag/img2chat?isPlay=1&lang=ko&prompt=' + encodeURIComponent('"이런 상황에 어울리는 짧은 인사말을 해줘!"'));
+        if (data.cnt_live === 0 || (data.human?.depth > 2)) {
+          fetch('http://127.0.0.1:8000/arm?cmd=lowWave').catch(()=>{});
+          addAutoLog('Wave gesture triggered');
+        }
       }
     } catch(e) {
-      console.log('he',e)
       addAutoLog('Heartbeat connection lost · Retrying...');
     }
   }, 1000);
@@ -1115,7 +1101,7 @@ function updateAutoStats(data) {
   const live = data.cnt_live || 0;
   document.getElementById('stat-detection').textContent = live > 0 ? 'FOUND' : 'SCAN';
   document.getElementById('stat-detection').style.color = live > 0 ? 'var(--neon-green)' : 'rgba(0,255,136,0.4)';
-  document.getElementById('stat-depth').textContent = data.human?.depth != null ? data.human.depth : '—';
+  document.getElementById('stat-depth').textContent = data.human?.depth != null ? data.human.depth.toFixed(1) : '—';
   document.getElementById('stat-pos').textContent = data.human?.position || '—';
   document.getElementById('stat-live').textContent = live;
 }
