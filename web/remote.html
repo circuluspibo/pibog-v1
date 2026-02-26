@@ -179,7 +179,7 @@
   }
   #screen-home .logo-area h1 {
     font-family: 'Courier New', 'Lucida Console', monospace;
-    font-size: clamp(28px, 6vw, 56px);
+    font-size: clamp(36px, 7vw, 72px);
     font-weight: 900;
     letter-spacing: 8px;
     color: #fff;
@@ -190,10 +190,10 @@
     color: var(--neon-cyan);
   }
   #screen-home .logo-area .subtitle {
-    font-size: 11px;
+    font-size: 13px;
     letter-spacing: 5px;
-    color: rgba(0,255,255,0.75);
-    margin-top: 10px;
+    color: rgba(0,255,255,0.85);
+    margin-top: 12px;
     text-transform: uppercase;
   }
   #screen-home .logo-area .collab {
@@ -228,26 +228,26 @@
   /* Mode buttons */
   .mode-buttons {
     display: flex;
-    gap: 28px;
-    flex-wrap: wrap;
+    gap: clamp(20px, 4vw, 48px);
+    flex-wrap: nowrap;
     justify-content: center;
-    padding: 0 20px;
+    padding: 0 24px;
   }
 
   .mode-btn {
     position: relative;
-    width: 170px;
-    height: 200px;
-    background: rgba(0, 10, 25, 0.8);
-    border: 1px solid rgba(0,255,255,0.4);
+    width: clamp(200px, 26vw, 300px);
+    height: clamp(240px, 32vw, 360px);
+    background: rgba(0, 10, 25, 0.85);
+    border: 1.5px solid rgba(0,255,255,0.4);
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 16px;
+    gap: clamp(14px, 2.5vw, 28px);
     cursor: pointer;
     transition: all 0.3s;
-    clip-path: polygon(0 0, calc(100% - 16px) 0, 100% 16px, 100% 100%, 16px 100%, 0 calc(100% - 16px));
+    clip-path: polygon(0 0, calc(100% - 20px) 0, 100% 20px, 100% 100%, 20px 100%, 0 calc(100% - 20px));
     overflow: hidden;
   }
 
@@ -271,8 +271,9 @@
   .mode-btn:active { transform: scale(0.96); }
 
   .mode-btn .btn-icon {
-    font-size: 40px;
-    filter: drop-shadow(0 0 8px currentColor);
+    font-size: clamp(52px, 7vw, 80px);
+    filter: drop-shadow(0 0 12px currentColor);
+    line-height: 1;
   }
   .mode-btn.magic .btn-icon { color: var(--neon-blue); }
   .mode-btn.talk .btn-icon { color: var(--neon-cyan); }
@@ -280,31 +281,32 @@
 
   .mode-btn .btn-label {
     font-family: 'Courier New', 'Lucida Console', monospace;
-    font-size: 14px;
+    font-size: clamp(20px, 3vw, 32px);
     font-weight: 700;
-    letter-spacing: 4px;
+    letter-spacing: 6px;
   }
   .mode-btn.magic .btn-label { color: var(--neon-blue); text-shadow: var(--glow-blue); }
   .mode-btn.talk .btn-label { color: var(--neon-cyan); text-shadow: var(--glow-cyan); }
   .mode-btn.auto .btn-label { color: var(--neon-green); text-shadow: var(--glow-green); }
 
   .mode-btn .btn-desc {
-    font-size: 9px;
+    font-size: clamp(11px, 1.4vw, 15px);
     letter-spacing: 2px;
-    color: rgba(255,255,255,0.3);
+    color: rgba(255,255,255,0.6);
     text-align: center;
-    padding: 0 12px;
+    padding: 0 16px;
     text-transform: uppercase;
+    line-height: 1.6;
   }
 
   /* Corner accents on buttons */
   .mode-btn .corner-accent {
     position: absolute;
-    width: 12px; height: 12px;
+    width: 18px; height: 18px;
     pointer-events: none;
   }
-  .mode-btn .ca-tl { top: 6px; left: 6px; border-top: 1px solid; border-left: 1px solid; }
-  .mode-btn .ca-br { bottom: 6px; right: 6px; border-bottom: 1px solid; border-right: 1px solid; }
+  .mode-btn .ca-tl { top: 8px; left: 8px; border-top: 1.5px solid; border-left: 1.5px solid; }
+  .mode-btn .ca-br { bottom: 8px; right: 8px; border-bottom: 1.5px solid; border-right: 1.5px solid; }
   .mode-btn.magic .corner-accent { border-color: var(--neon-blue); }
   .mode-btn.talk .corner-accent { border-color: var(--neon-cyan); filter: brightness(1.2); }
   .mode-btn.auto .corner-accent { border-color: var(--neon-green); }
