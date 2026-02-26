@@ -82,7 +82,7 @@ from datetime import datetime
 from scipy.io.wavfile import write
 
 @app.get("/v1/tts", response_class=FileResponse, summary="입력한 문장으로 부터 음성을 생성합니다.")
-def tts(text="", voice=31, lang='ko', static=0, isPlay=0):
+def tts1(text="", voice=31, lang='ko', static=0, isPlay=0):
     start = t.time()
     print(text, static)
     filename = getHash(text)
@@ -154,7 +154,7 @@ def tts(text="", voice=31, lang='ko', static=0, isPlay=0):
     
     # 31 korean
 @app.get("/v2/tts", response_class=FileResponse, summary="음성 생성 후 로봇에서 재생")
-def tts(text = "", voice=6, lang='ko', static=0, isPlay=0):
+def tts2(text = "", voice=6, lang='ko', static=0, isPlay=0):
     #org_text = parse.quote(text, safe='', encoding="cp949")
     start = t.time()
     print(text, static)
@@ -179,8 +179,12 @@ def tts(text = "", voice=6, lang='ko', static=0, isPlay=0):
 
     print(t.time() - start)
     write(data=audio, rate=conf_tts.data.sampling_rate, filename=f"output/{filename}.wav")
-
+  
+    if int(isPlay) > 0:
+        playsound(f"output/{filename}.wav")
+      
     return f"output/{filename}.wav"
+  
 
 
 print("Loading Complete","CPU")
