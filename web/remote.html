@@ -909,7 +909,7 @@ let magicPollInterval = null;
 function enterMagic() {
   showScreen('screen-magic');
   // Signal command
-  fetch('http://127.0.0.1:8000/command?cmd=MAGIC').catch(() => {});
+  fetch('http://10.42.0.1:8000/command?cmd=MAGIC').catch(() => {});
   startMagicPolling();
 }
 
@@ -917,7 +917,7 @@ function startMagicPolling() {
   if (magicPollInterval) clearInterval(magicPollInterval);
   magicPollInterval = setInterval(async () => {
     try {
-      const res = await fetch('http://127.0.0.1:8000/command');
+      const res = await fetch('http://10.42.0.1:8000/command');
       const json = await res.json();
       if (json.data === 'FINISH') {
         clearInterval(magicPollInterval);
@@ -1040,7 +1040,7 @@ function stopVizAnim() {
 }
 
 async function generate(prompt) {
-  const url = `http://127.0.0.1:59532/v1/rag/txt2chat?prompt=${encodeURIComponent(prompt)}&lang=ko&isPlay=1`;
+  const url = `http://10.42.0.1:59532/v1/rag/txt2chat?prompt=${encodeURIComponent(prompt)}&lang=ko&isPlay=1`;
   try {
     const response = await fetch(url, { method: 'GET', headers: { 'Accept': 'application/json' } });
     if (!response.ok) return;
@@ -1074,16 +1074,16 @@ function startAutoMode() {
   if (autoInterval) clearInterval(autoInterval);
   autoInterval = setInterval(async () => {
     try {
-      const resp = await fetch('http://127.0.0.1:59531/heartbeat');
+      const resp = await fetch('http://10.42.0.1:59531/heartbeat');
       const data = (await resp.json()).data;
       updateAutoStats(data);
 
       if (Date.now() - lastAutoTime > 30000 && data.cnt_live > 0) {
         lastAutoTime = Date.now();
         addAutoLog(`Human detected at ${data.human?.position || '?'} · Initiating greeting`);
-        fetch('http://127.0.0.1:59532/v1/rag/img2chat?isPlay=1&lang=ko&prompt=' + encodeURIComponent('"이런 상황에 어울리는 짧은 인사말을 해줘!"'));
+        fetch('http://10.42.0.1:59532/v1/rag/img2chat?isPlay=1&lang=ko&prompt=' + encodeURIComponent('"이런 상황에 어울리는 짧은 인사말을 해줘!"'));
         if (data.cnt_live === 0 || (data.human?.depth > 2)) {
-          fetch('http://127.0.0.1:8000/arm?cmd=lowWave').catch(()=>{});
+          fetch('http://10.42.0.1:8000/arm?cmd=lowWave').catch(()=>{});
           addAutoLog('Wave gesture triggered');
         }
       }
