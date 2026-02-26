@@ -187,8 +187,8 @@ def process_stt(filepath: str):
             try:
                 result_json = response.json()
 
-                if 'text' in result_json and result_json['text'].strip():
-                    recognized_text = result_json['text'].strip()
+                if 'data' in result_json and result_json['data'].strip():
+                    recognized_text = result_json['data'].strip()
 
                     print("==================================================")
                     print(f"🗣️ STT Result: {recognized_text}")
@@ -198,7 +198,7 @@ def process_stt(filepath: str):
                     call_rag_api(recognized_text)
 
                 else:
-                    print(f"[STT] ⚠️ No 'text' field found in response: {result_json}")
+                    print(f"[STT] ⚠️ No 'data' field found in response: {result_json}")
 
             except requests.exceptions.JSONDecodeError:
                 print(f"[STT] ⚠️ Failed to decode JSON. Raw: {response.text}")
