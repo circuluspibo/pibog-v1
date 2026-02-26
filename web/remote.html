@@ -919,7 +919,7 @@ function startMagicPolling() {
     try {
       const res = await fetch('http://10.42.0.1:8000/command');
       const json = await res.json();
-      if (json.data === 'FINISH') {
+      if (json.data === 'FINISH' || json.data === 'END') {
         clearInterval(magicPollInterval);
         magicPollInterval = null;
         setTimeout(() => goHome(), 800);
