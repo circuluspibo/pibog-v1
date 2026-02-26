@@ -3,22 +3,29 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<!-- PWA: 홈 화면 추가 후 전체화면 실행 -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-fullscreen">
+<meta name="apple-mobile-web-app-title" content="MCR-1A">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#040f1e">
+<link rel="manifest" href="data:application/json;charset=utf-8,%7B%22name%22%3A%22MCR-1A%20Control%20System%22%2C%22short_name%22%3A%22MCR-1A%22%2C%22display%22%3A%22fullscreen%22%2C%22start_url%22%3A%22.%22%2C%22background_color%22%3A%22%23040f1e%22%2C%22theme_color%22%3A%22%2300ffff%22%2C%22orientation%22%3A%22landscape%22%7D">
 <title>MCR-1A CONTROL SYSTEM</title>
 <style>
   @font-face { font-family: 'SysOrbitron'; src: local('Courier New'), local('Courier'); }
 </style>
 <style>
   :root {
-    --neon-cyan: #00f5ff;
-    --neon-blue: #0080ff;
+    --neon-cyan: #00ffff;
+    --neon-blue: #1a9fff;
     --neon-red: #ff003c;
-    --neon-green: #00ff88;
-    --dark-bg: #020810;
+    --neon-green: #00ffaa;
+    --dark-bg: #040f1e;
     --panel-bg: rgba(0, 20, 40, 0.85);
-    --glow-cyan: 0 0 20px rgba(0, 245, 255, 0.6), 0 0 60px rgba(0, 245, 255, 0.2);
-    --glow-blue: 0 0 20px rgba(0, 128, 255, 0.6), 0 0 60px rgba(0, 128, 255, 0.2);
+    --glow-cyan: 0 0 24px rgba(0, 255, 255, 0.9), 0 0 60px rgba(0, 245, 255, 0.2);
+    --glow-blue: 0 0 24px rgba(26, 159, 255, 0.9), 0 0 60px rgba(0, 128, 255, 0.2);
     --glow-red: 0 0 20px rgba(255, 0, 60, 0.6);
-    --glow-green: 0 0 20px rgba(0, 255, 136, 0.5);
+    --glow-green: 0 0 24px rgba(0, 255, 170, 0.8);
   }
 
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -58,8 +65,8 @@
     position: fixed;
     inset: 0;
     background-image:
-      linear-gradient(rgba(0,245,255,0.03) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(0,245,255,0.03) 1px, transparent 1px);
+      linear-gradient(rgba(0,255,255,0.06) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,255,255,0.06) 1px, transparent 1px);
     background-size: 50px 50px;
     z-index: 0;
     animation: grid-drift 30s linear infinite;
@@ -108,12 +115,12 @@
     align-items: center;
     justify-content: space-between;
     padding: 0 24px;
-    background: rgba(0,245,255,0.03);
-    border-bottom: 1px solid rgba(0,245,255,0.15);
+    background: rgba(0,255,255,0.06);
+    border-bottom: 1px solid rgba(0,255,255,0.3);
     z-index: 100;
     font-size: 10px;
     letter-spacing: 2px;
-    color: rgba(0,245,255,0.6);
+    color: rgba(0,255,255,0.85);
     font-family: 'Courier New', 'Lucida Console', monospace;
   }
   .status-dot {
@@ -139,11 +146,11 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    border-top: 1px solid rgba(0,245,255,0.1);
+    border-top: 1px solid rgba(0,255,255,0.2);
     z-index: 100;
     font-size: 9px;
     letter-spacing: 3px;
-    color: rgba(0,245,255,0.3);
+    color: rgba(0,255,255,0.55);
     font-family: 'Courier New', 'Lucida Console', monospace;
   }
 
@@ -185,17 +192,17 @@
   #screen-home .logo-area .subtitle {
     font-size: 11px;
     letter-spacing: 5px;
-    color: rgba(0,245,255,0.5);
+    color: rgba(0,255,255,0.75);
     margin-top: 10px;
     text-transform: uppercase;
   }
   #screen-home .logo-area .collab {
     font-size: 10px;
     letter-spacing: 3px;
-    color: rgba(0,245,255,0.3);
+    color: rgba(0,255,255,0.55);
     margin-top: 8px;
     text-transform: uppercase;
-    border-top: 1px solid rgba(0,245,255,0.1);
+    border-top: 1px solid rgba(0,255,255,0.2);
     padding-top: 8px;
   }
 
@@ -211,11 +218,11 @@
   .ring {
     position: absolute;
     border-radius: 50%;
-    border: 1px solid rgba(0,245,255,0.1);
+    border: 1px solid rgba(0,255,255,0.25);
   }
-  .ring-1 { inset: 0; animation: spin 20s linear infinite; border-top-color: rgba(0,245,255,0.4); }
+  .ring-1 { inset: 0; animation: spin 20s linear infinite; border-top-color: rgba(0,255,255,0.65); }
   .ring-2 { inset: 30px; animation: spin 15s linear infinite reverse; border-right-color: rgba(0,128,255,0.4); }
-  .ring-3 { inset: 70px; animation: spin 25s linear infinite; border-bottom-color: rgba(0,245,255,0.2); }
+  .ring-3 { inset: 70px; animation: spin 25s linear infinite; border-bottom-color: rgba(0,255,255,0.4); }
   @keyframes spin { to { transform: rotate(360deg); } }
 
   /* Mode buttons */
@@ -232,7 +239,7 @@
     width: 170px;
     height: 200px;
     background: rgba(0, 10, 25, 0.8);
-    border: 1px solid rgba(0,245,255,0.2);
+    border: 1px solid rgba(0,255,255,0.4);
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -258,7 +265,7 @@
   .mode-btn:hover::before { opacity: 1; }
   .mode-btn:hover {
     transform: translateY(-6px);
-    border-color: var(--neon-cyan);
+    border-color: var(--neon-cyan); filter: brightness(1.2);
     box-shadow: var(--glow-cyan), inset 0 0 30px rgba(0,245,255,0.05);
   }
   .mode-btn:active { transform: scale(0.96); }
@@ -299,7 +306,7 @@
   .mode-btn .ca-tl { top: 6px; left: 6px; border-top: 1px solid; border-left: 1px solid; }
   .mode-btn .ca-br { bottom: 6px; right: 6px; border-bottom: 1px solid; border-right: 1px solid; }
   .mode-btn.magic .corner-accent { border-color: var(--neon-blue); }
-  .mode-btn.talk .corner-accent { border-color: var(--neon-cyan); }
+  .mode-btn.talk .corner-accent { border-color: var(--neon-cyan); filter: brightness(1.2); }
   .mode-btn.auto .corner-accent { border-color: var(--neon-green); }
 
   /* ── MAGIC SCREEN ── */
@@ -328,7 +335,7 @@
     border: 1px solid rgba(0,128,255,0.5);
   }
   .magic-orb .orb-ring:nth-child(2) { inset: 10px; animation: spin 4s linear infinite; border-top-color: var(--neon-blue); }
-  .magic-orb .orb-ring:nth-child(3) { inset: 0; animation: spin 6s linear infinite reverse; border-right-color: rgba(0,245,255,0.6); }
+  .magic-orb .orb-ring:nth-child(3) { inset: 0; animation: spin 6s linear infinite reverse; border-right-color: rgba(0,255,255,0.85); }
 
   .magic-title {
     font-family: 'Courier New', 'Lucida Console', monospace;
@@ -408,7 +415,7 @@
     position: absolute;
     inset: -8px;
     border-radius: 50%;
-    border: 1px solid rgba(0,245,255,0.15);
+    border: 1px solid rgba(0,255,255,0.3);
     animation: mic-ring 2s ease-in-out infinite;
   }
   @keyframes mic-ring {
@@ -417,7 +424,7 @@
   }
   .mic-btn:hover {
     background: rgba(0,245,255,0.1);
-    border-color: var(--neon-cyan);
+    border-color: var(--neon-cyan); filter: brightness(1.2);
     box-shadow: var(--glow-cyan);
     transform: scale(1.05);
   }
@@ -442,7 +449,7 @@
   .mic-status {
     font-size: 12px;
     letter-spacing: 3px;
-    color: rgba(0,245,255,0.5);
+    color: rgba(0,255,255,0.75);
     text-transform: uppercase;
     min-height: 20px;
     text-align: center;
@@ -454,8 +461,8 @@
   .talk-transcript {
     width: min(500px, 90vw);
     min-height: 80px;
-    background: rgba(0,245,255,0.03);
-    border: 1px solid rgba(0,245,255,0.1);
+    background: rgba(0,255,255,0.06);
+    border: 1px solid rgba(0,255,255,0.25);
     padding: 16px 20px;
     font-size: 14px;
     line-height: 1.6;
@@ -469,7 +476,7 @@
     top: -8px; left: 16px;
     font-size: 8px;
     letter-spacing: 3px;
-    color: rgba(0,245,255,0.4);
+    color: rgba(0,255,255,0.65);
     background: var(--dark-bg);
     padding: 0 6px;
     font-family: 'Courier New', 'Lucida Console', monospace;
@@ -643,6 +650,22 @@
     transform: scale(1.04);
   }
 
+  /* Fullscreen button */
+  .fs-btn {
+    background: transparent;
+    border: 1px solid rgba(0,255,255,0.35);
+    color: rgba(0,255,255,0.75);
+    font-size: 16px;
+    cursor: pointer;
+    padding: 2px 8px;
+    line-height: 22px;
+    transition: all 0.2s;
+    border-radius: 2px;
+    font-family: inherit;
+  }
+  .fs-btn:hover { color: #00ffff; border-color: #00ffff; box-shadow: 0 0 12px rgba(0,255,255,0.5); }
+  .fs-btn.fs-active { color: var(--neon-green); border-color: var(--neon-green); }
+
   /* Transition flash */
   .flash {
     position: fixed;
@@ -672,8 +695,11 @@
 <!-- Status Bar -->
 <div class="status-bar">
   <div><span class="status-dot"></span>SYSTEM ONLINE</div>
-  <div style="font-weight:700;font-size:12px;color:rgba(0,245,255,0.8)">MCR-1A CONTROL</div>
-  <div class="status-time" id="status-time">00:00:00</div>
+  <div style="font-weight:700;font-size:12px;color:rgba(0,255,255,0.95);text-shadow:0 0 12px rgba(0,255,255,0.7)">MCR-1A CONTROL</div>
+  <div style="display:flex;align-items:center;gap:14px;">
+    <div class="status-time" id="status-time">00:00:00</div>
+    <button class="fs-btn" id="fsBtn" onclick="toggleFullscreen()" title="전체화면">⛶</button>
+  </div>
 </div>
 
 <!-- HOME SCREEN -->
@@ -790,6 +816,58 @@
 </div>
 
 <script>
+// ── Auto Fullscreen ──
+(function() {
+  function tryFullscreen() {
+    const el = document.documentElement;
+    if (el.requestFullscreen) el.requestFullscreen();
+    else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+    else if (el.mozRequestFullScreen) el.mozRequestFullScreen();
+  }
+
+  // 이미 standalone(홈 화면 앱)으로 실행 중이면 바로 시도
+  const isStandalone =
+    window.navigator.standalone === true ||
+    window.matchMedia('(display-mode: fullscreen)').matches ||
+    window.matchMedia('(display-mode: standalone)').matches;
+
+  if (isStandalone) {
+    // standalone에서는 첫 터치/클릭 시 fullscreen 요청 (브라우저 정책)
+    document.addEventListener('click', function handler() {
+      tryFullscreen();
+      document.removeEventListener('click', handler);
+    }, { once: true });
+  }
+
+  // 일반 브라우저에서도 첫 터치 시 자동 전체화면 시도
+  document.addEventListener('touchstart', function handler() {
+    tryFullscreen();
+    document.removeEventListener('touchstart', handler);
+  }, { once: true });
+})();
+
+// ── Fullscreen ──
+function toggleFullscreen() {
+  const btn = document.getElementById('fsBtn');
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen().then(() => {
+      btn.textContent = '⛶';
+      btn.classList.add('fs-active');
+      btn.title = '전체화면 종료';
+    }).catch(() => {});
+  } else {
+    document.exitFullscreen().then(() => {
+      btn.textContent = '⛶';
+      btn.classList.remove('fs-active');
+      btn.title = '전체화면';
+    }).catch(() => {});
+  }
+}
+document.addEventListener('fullscreenchange', () => {
+  const btn = document.getElementById('fsBtn');
+  if (!document.fullscreenElement) btn.classList.remove('fs-active');
+});
+
 // ── Cursor ──
 const cursor = document.getElementById('cursor');
 document.addEventListener('mousemove', e => {
