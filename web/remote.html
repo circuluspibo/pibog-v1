@@ -1113,7 +1113,7 @@ function updateAutoStats(data) {
   const live = data.cnt_live || 0;
   document.getElementById('stat-detection').textContent = live > 0 ? 'FOUND' : 'SCAN';
   document.getElementById('stat-detection').style.color = live > 0 ? 'var(--neon-green)' : 'rgba(0,255,136,0.4)';
-  document.getElementById('stat-depth').textContent = data.human?.depth != null ? data.human.depth.toFixed(1) : '—';
+  document.getElementById('stat-depth').textContent = data.human?.depth != null ? data.human.depth //.toFixed(1) : '—';
   document.getElementById('stat-pos').textContent = data.human?.position || '—';
   document.getElementById('stat-live').textContent = live;
 }
