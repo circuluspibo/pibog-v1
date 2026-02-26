@@ -68,6 +68,41 @@ app.add_middleware(
 def queue_to_list(queue: Queue):
     return [queue.get() for _ in range(queue.qsize())]
 
+@app.post("/rec/start")
+async def manual_record_start():
+    global is_recording
+    
+    if is_recording:
+        return JSONResponse({
+            "result": False,
+            "message": "Already recording"
+        })
+
+    set_recording_active()
+
+    return {
+        "result": True,
+        "message": "Recording started manually"
+    }
+
+
+@app.post("/rec/stop")
+async def manual_record_stop():
+    global is_recording
+    
+    if not is_recording:
+        return JSONResponse({
+            "result": False,
+            "message": "Not currently recording"
+        })
+
+    stop_recording_and_save()
+
+    return {
+        "result": True,
+        "message": "Recording stopped and saved"
+    }
+
 @app.get("/sound")
 async def sound():
     return { "result" : True, "data" : queue_to_list(processed_queue) } 
@@ -196,7 +231,7 @@ def stop_recording_and_save():
     
     # WAV 파일로 저장
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = f"wakeword_recording_{timestamp}.wav"
+    filename = "recorded.wav" #f"wakeword_recording_{timestamp}.wav"
     filepath = os.path.join(RECORDING_OUTPUT_DIR, filename)
     write_wav(filepath, RATE, recording_data)
 
@@ -206,7 +241,7 @@ def stop_recording_and_save():
     
     # --- STT 처리 추가 ---
     # 녹음된 파일을 STT API로 전송
-    process_stt(filepath) # <--- STT 함수 호출
+    #process_stt(filepath) # <--- STT 함수 호출
 
 # --- 4. 메인 루프 ---
 # (run_mic_loop 함수는 변경 없음)
