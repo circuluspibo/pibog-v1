@@ -523,11 +523,16 @@ app.get("/speak", async (request, reply) => {
   });
 });
 
-app.get("/command", async (request, reply) => {
-  const text = request.query.text || "안녕하세요";
-  const encodedText = encodeURIComponent(`"${text}"`);
+let command = ""
 
-  return { result : true , data : "START" };
+app.get("/command", async (request, reply) => {
+
+  const cmd = request.query.cmd || command;
+
+  if(cmd != command)
+    command = cmd
+
+  return { result : true , data : cmd };
 });
 
 // 시퀀스 실행
