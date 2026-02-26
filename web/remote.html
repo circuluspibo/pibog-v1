@@ -1070,6 +1070,23 @@ function enterAuto() {
   startAutoMode();
 }
 
+function motion(){
+  
+        switch (Date.now() % 4){
+            case 0:
+                fetch(`http://127.0.0.1:8000/motion`)
+                break;
+            case 1:
+                fetch(`http://127.0.0.1:8000/motion?name=test1`)
+                break;
+            case 2:
+                fetch(`http://127.0.0.1:8000/motion?name=test2`)
+                break;
+            case 3:
+                fetch(`http://127.0.0.1:8000/motion?name=test3`)
+                break;                        
+                  addAutoLog('Wave gesture triggered');
+
 function startAutoMode() {
   if (autoInterval) clearInterval(autoInterval);
   autoInterval = setInterval(async () => {
@@ -1082,10 +1099,8 @@ function startAutoMode() {
         lastAutoTime = Date.now();
         addAutoLog(`Human detected at ${data.human?.position || '?'} · Initiating greeting`);
         fetch('http://10.42.0.1:59532/v1/rag/img2chat?isPlay=1&lang=ko&prompt=' + encodeURIComponent('"이런 상황에 어울리는 짧은 인사말을 해줘!"'));
-        if (data.cnt_live === 0 || (data.human?.depth > 2)) {
-          fetch('http://10.42.0.1:8000/arm?cmd=lowWave').catch(()=>{});
-          addAutoLog('Wave gesture triggered');
-        }
+
+        motion()
       }
     } catch(e) {
       addAutoLog('Heartbeat connection lost · Retrying...');
