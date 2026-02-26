@@ -51,7 +51,7 @@ recorded_frames = []
 last_sound_time = time.time()
 recording_start_time = time.time()
 model_input_length = None       # ACLNet 모델의 입력 길이에 따라 동적으로 설정
-
+mic_thread = None
 # 디렉토리 생성
 os.makedirs(RECORDING_OUTPUT_DIR, exist_ok=True)
 
@@ -393,6 +393,17 @@ def run_mic_loop():
             print("[REC] ⚠️ Force stopping and saving ongoing recording.")
             stop_recording_and_save()
 
+
+@app.on_event("startup")
+async def startup_event():
+    global mic_thread
+
+    if mic_thread is None or not mic_thread.is_alive():
+        print("[SYSTEM] 🎤 Starting mic listener...")
+
+        mic_thread = threading.Thread(target=run_mic_loop)
+        mic_thread.daemon = True
+        mic_thread.start()
 
 # --- 5. 프로그램 실행 ---
 
