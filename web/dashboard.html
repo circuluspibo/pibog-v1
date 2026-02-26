@@ -92,12 +92,12 @@ body::after{content:'';position:fixed;inset:0;background:radial-gradient(ellipse
 /* ── VISION SCREEN ── */
 #vs{flex-direction:row}
 .vleft,.vright{display:flex;flex-direction:column;gap:8px;flex:0 0 186px}
-.vcenter{flex:1;display:flex;flex-direction:column;gap:8px;min-width:0}
+.vcenter{flex:1;display:flex;flex-direction:column;gap:8px;min-width:0;min-height:0}
 
 /* Video feed: uses <img> tag for MJPEG stream */
-.vid-wrap{flex:1;position:relative;overflow:hidden;background:#000;display:flex;flex-direction:column}
-.vid-inner{flex:1;position:relative;overflow:hidden}
-#vfeed{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.vid-wrap{flex:1;min-height:0;position:relative;overflow:hidden;background:#000;display:flex;flex-direction:column}
+.vid-inner{flex:1;min-height:0;position:relative;overflow:hidden}
+#vfeed{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
 #vcanvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
 .vhud{position:absolute;inset:0;pointer-events:none}
 .hc{position:absolute;width:26px;height:26px;border-color:var(--red);border-style:solid}
@@ -116,10 +116,10 @@ body::after{content:'';position:fixed;inset:0;background:radial-gradient(ellipse
 .vid-status{height:24px;display:flex;align-items:center;justify-content:space-between;padding:0 8px;background:rgba(0,0,0,.6);font-size:8px;letter-spacing:2px;flex-shrink:0}
 .vid-status .vs-dot{width:5px;height:5px;border-radius:50%;background:#666;margin-right:5px;display:inline-block}
 .vid-status .vs-dot.active{background:var(--red);box-shadow:0 0 5px var(--red);animation:pd 1s ease-in-out infinite}
-.vmetrow{display:flex;gap:8px;flex:0 0 78px}
+.vmetrow{display:flex;gap:8px;flex:0 0 88px;min-height:88px;max-height:88px}
 
 /* ── DETECTION LIST ── */
-.detlist{padding:4px 0;max-height:160px;overflow-y:auto}
+.detlist{padding:4px 0;max-height:160px;overflow-y:auto;scrollbar-gutter:stable}
 .di{display:grid;grid-template-columns:16px 1fr auto auto;align-items:center;gap:5px;padding:3px 9px;font-size:9px;border-bottom:1px solid rgba(238,0,0,.07)}
 .di:hover{background:rgba(238,0,0,.05)}
 .dlbl{color:var(--t1);letter-spacing:1px;font-weight:bold}
@@ -170,6 +170,14 @@ body::after{content:'';position:fixed;inset:0;background:radial-gradient(ellipse
 .cc span{display:block;font-size:9px;font-weight:bold}
 .cc-cool{color:#00BFFF}.cc-warm{color:var(--org)}.cc-hot{color:#FF2222}
 .afeed{padding:4px 0;max-height:100%;overflow-y:auto}
+/* ── CUSTOM SCROLLBARS (red theme) ── */
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-track{background:rgba(238,0,0,.04);border-left:1px solid rgba(238,0,0,.08)}
+::-webkit-scrollbar-thumb{background:rgba(238,0,0,.35);border-radius:0}
+::-webkit-scrollbar-thumb:hover{background:rgba(238,0,0,.6)}
+::-webkit-scrollbar-corner{background:transparent}
+/* Firefox */
+* {scrollbar-width:thin;scrollbar-color:rgba(238,0,0,.35) rgba(238,0,0,.04)}
 
 /* ── SYSTEM TAB ── */
 #sys{flex-wrap:wrap;align-content:flex-start}
@@ -202,7 +210,7 @@ body::after{content:'';position:fixed;inset:0;background:radial-gradient(ellipse
 @keyframes vwb{from{height:4px}to{height:16px}}
 .rcomm{padding:6px 9px;font-size:9px;color:#FF9999;line-height:1.7;letter-spacing:1px}
 .rsp{color:var(--red);font-family:'Orbitron',monospace;font-size:7px}
-.tstrip{flex:1;overflow-y:auto;padding:5px}
+.tstrip{flex:1;overflow-y:auto;padding:5px;scrollbar-gutter:stable}
 .titem{display:flex;flex-direction:column;align-items:center;padding:5px;border:1px solid rgba(238,0,0,.2);cursor:pointer;transition:all .2s;margin-bottom:4px}
 .titem:hover{border-color:var(--red)}.titem.on{border-color:var(--red);background:rgba(238,0,0,.1)}
 .tn{font-size:7px;color:var(--tdim);letter-spacing:1px;margin-bottom:3px}
