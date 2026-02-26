@@ -1091,17 +1091,15 @@ function startAutoMode() {
       const resp = await fetch('http://10.42.0.1:59531/heartbeat');
       const data = (await resp.json()).data;
       updateAutoStats(data);
-
+      console.log('hb',data)
       if (Date.now() - lastAutoTime > 30000 && data.cnt_live > 0) {
         lastAutoTime = Date.now();
         addAutoLog(`Human detected at ${data.human?.position || '?'} · Initiating greeting`);
         fetch('http://10.42.0.1:59532/v1/rag/img2chat?isPlay=1&lang=ko&prompt=' + encodeURIComponent('"이런 상황에 어울리는 짧은 인사말을 해줘!"'));
-        if (data.cnt_live === 0 || (data.human?.depth > 2)) {
-          fetch('http://10.42.0.1:8000/arm?cmd=lowWave').catch(()=>{});
-          addAutoLog('Wave gesture triggered');
-        }
+        
       }
     } catch(e) {
+      console.log('he',e)
       addAutoLog('Heartbeat connection lost · Retrying...');
     }
   }, 1000);
