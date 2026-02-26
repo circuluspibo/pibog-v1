@@ -991,6 +991,9 @@ async function toggleMic() {
       document.getElementById('micStatus').textContent = '오류: 서버 연결 실패';
     }
     setMicState('idle');
+
+    motion()
+    
   } else {
     // 녹음 시작
     try {
@@ -1071,22 +1074,23 @@ function enterAuto() {
 }
 
 function motion(){
+  switch (Date.now() % 4){
+      case 0:
+          fetch(`http://10.42.0.1:8000/motion`)
+          break;
+      case 1:
+          fetch(`http://10.42.0.1:8000/motion?name=test1`)
+          break;
+      case 2:
+          fetch(`http://10.42.0.1:8000/motion?name=test2`)
+          break;
+      case 3:
+          fetch(`http://10.42.0.1:8000/motion?name=test3`)
+          break;  
+    }
+    addAutoLog('Wave gesture triggered');
+}
   
-        switch (Date.now() % 4){
-            case 0:
-                fetch(`http://127.0.0.1:8000/motion`)
-                break;
-            case 1:
-                fetch(`http://127.0.0.1:8000/motion?name=test1`)
-                break;
-            case 2:
-                fetch(`http://127.0.0.1:8000/motion?name=test2`)
-                break;
-            case 3:
-                fetch(`http://127.0.0.1:8000/motion?name=test3`)
-                break;                        
-                  addAutoLog('Wave gesture triggered');
-
 function startAutoMode() {
   if (autoInterval) clearInterval(autoInterval);
   autoInterval = setInterval(async () => {
