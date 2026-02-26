@@ -1095,7 +1095,9 @@ function startAutoMode() {
       if (Date.now() - lastAutoTime > 30000 && data.cnt_live > 0) {
         lastAutoTime = Date.now();
         addAutoLog(`Human detected at ${data.human?.position || '?'} · Initiating greeting`);
-        fetch('http://10.42.0.1:59532/v1/rag/img2chat?isPlay=1&lang=ko&prompt=' + encodeURIComponent('"이런 상황에 어울리는 짧은 인사말을 해줘!"'));
+        fetch('http://10.42.0.1:59532/v1/rag/img2chat?isPlay=1&lang=ko&prompt=' + encodeURIComponent('"이런 상황에 어울리는 짧은 인사말을 해줘!"')).catch(e=>{
+          console.log('rag err',e)
+        })
         
       }
     } catch(e) {
