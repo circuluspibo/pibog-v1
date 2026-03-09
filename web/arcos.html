@@ -1,0 +1,1592 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>ARCos — Powered by Intel</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@700;900&family=Rajdhani:wght@500;600&display=swap" rel="stylesheet">
+<style>
+/* ══ VARIABLES ══ */
+:root {
+  --c0:#000810; --c1:#00d4ff; --c2:#0affb4; --c3:#ff3a5c; --c4:#ffaa00;
+  --intel:#0071C5;
+  --border: rgba(0,212,255,.28);
+  --dim:    rgba(0,212,255,.14);
+  --fhud:'Orbitron',monospace;
+  --fbody:'Rajdhani',sans-serif;
+  --fmono:'Share Tech Mono',monospace;
+  --touch: 56px;   /* minimum touch target height */
+}
+
+/* ══ RESET ══ */
+*, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+html, body {
+  width:100%; height:100%;
+  background:var(--c0); color:var(--c1);
+  font-family:var(--fbody);
+  overflow:hidden; user-select:none;
+  -webkit-tap-highlight-color:transparent;
+}
+/* scanline overlay */
+body::before {
+  content:''; position:fixed; inset:0; pointer-events:none; z-index:9000;
+  background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.07) 2px,rgba(0,0,0,.07) 3px);
+}
+
+/* ══ ROOT GRID  topbar / [face | panel] / bottombar ══ */
+#app {
+  display:grid;
+  grid-template-rows: 44px 1fr 60px;
+  width:100vw; height:100vh;
+}
+
+/* ══ TOPBAR ══ */
+#topbar {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:0 16px;
+  border-bottom:1px solid var(--border);
+  background:rgba(0,6,14,.98);
+  position:relative; z-index:100;
+}
+#topbar::after {
+  content:''; position:absolute; bottom:-2px; left:0; right:0; height:2px;
+  background:linear-gradient(90deg,transparent,var(--intel) 20%,var(--c1) 50%,var(--intel) 80%,transparent);
+}
+.logo      { font-family:var(--fhud); font-size:18px; font-weight:900; letter-spacing:5px;
+             color:var(--c1); text-shadow:0 0 20px var(--c1),0 0 40px rgba(0,212,255,.4); }
+.logo-line { display:flex; align-items:baseline; gap:10px; }
+.logo-sub  { font-family:var(--fmono); font-size:9px; letter-spacing:2px; color:rgba(0,212,255,.45);
+             display:flex; align-items:center; gap:6px; }
+.ibadge    { background:var(--intel); color:#fff; padding:1px 7px; font-size:8px;
+             font-family:var(--fhud); letter-spacing:1px; border-radius:1px; }
+.status-dots { display:flex; gap:16px; }
+.sdot { display:flex; align-items:center; gap:5px; font-family:var(--fmono); font-size:8px;
+        letter-spacing:1px; color:rgba(0,212,255,.5); }
+.dot  { width:6px; height:6px; border-radius:50%; background:var(--c1);
+        box-shadow:0 0 6px var(--c1); animation:dp 2s ease-in-out infinite; }
+.dot.y { background:var(--c4); box-shadow:0 0 6px var(--c4); animation-delay:.6s; }
+.dot.r { background:var(--c3); box-shadow:0 0 6px var(--c3); animation-delay:1.2s; }
+@keyframes dp { 0%,100%{opacity:1} 50%{opacity:.22} }
+#clk { font-family:var(--fmono); font-size:10px; color:rgba(0,212,255,.32); }
+
+/* ══ MIDDLE ══ */
+#mid {
+  display:grid;
+  grid-template-columns: 1fr 292px;
+  overflow:hidden;
+}
+
+/* ══ FACE AREA ══ */
+#faceArea {
+  position:relative; overflow:hidden;
+  background:radial-gradient(ellipse at 50% 46%,rgba(0,40,100,.12) 0%,transparent 68%);
+}
+#faceArea::before {
+  content:''; position:absolute; inset:0; pointer-events:none; z-index:0;
+  background-image:
+    linear-gradient(rgba(0,212,255,.025) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(0,212,255,.025) 1px,transparent 1px);
+  background-size:48px 48px;
+}
+#threeCanvas { width:100%; height:100%; display:block; position:relative; z-index:1; }
+
+/* HUD corners */
+.hc   { position:absolute; pointer-events:none; z-index:5; }
+.htl  { top:10px; left:12px; }
+.htr  { top:10px; right:12px; text-align:right; }
+.hbl  { bottom:10px; left:12px; }
+.htxt { font-family:var(--fmono); font-size:8px; letter-spacing:1.2px;
+        color:rgba(0,212,255,.32); line-height:2.1; }
+.hv   { color:var(--c1); }
+
+/* face detect box */
+#faceBox {
+  position:absolute; display:none;
+  border:1.5px solid var(--c2);
+  box-shadow:0 0 10px rgba(0,255,180,.25);
+  pointer-events:none; z-index:6;
+  transition:all .12s;
+}
+#faceBox::before,#faceBox::after {
+  content:''; position:absolute; width:9px; height:9px;
+  border-color:var(--c1); border-style:solid;
+}
+#faceBox::before { top:-1px; left:-1px; border-width:2px 0 0 2px; }
+#faceBox::after  { bottom:-1px; right:-1px; border-width:0 2px 2px 0; }
+
+/* emotion chips */
+#emotBar {
+  position:absolute; bottom:10px; left:50%; transform:translateX(-50%);
+  display:flex; gap:5px; z-index:8;
+}
+.ec {
+  padding:5px 11px;
+  border:1px solid rgba(0,212,255,.18);
+  font-family:var(--fmono); font-size:8px; letter-spacing:1px;
+  color:rgba(0,212,255,.3); cursor:pointer; touch-action:manipulation;
+  transition:all .2s;
+  clip-path:polygon(4px 0,100% 0,100% calc(100% - 4px),calc(100% - 4px) 100%,0 100%,0 4px);
+}
+.ec.active {
+  background:rgba(0,212,255,.1); color:var(--c1);
+  border-color:var(--c1); box-shadow:0 0 9px rgba(0,212,255,.22);
+}
+
+/* ── OVERLAYS (cam / webcam) ── */
+.overlay {
+  display:none; position:absolute; inset:0; z-index:20;
+  background:rgba(0,6,14,.92);
+  flex-direction:column; align-items:center; justify-content:center;
+}
+.overlay.open { display:flex; }
+.ov-lbl  { position:absolute; top:10px; left:12px; font-family:var(--fmono);
+           font-size:8px; letter-spacing:2px; color:rgba(0,212,255,.45); }
+.ov-close {
+  position:absolute; top:9px; right:9px;
+  width:44px; height:44px;
+  border:1px solid rgba(255,58,92,.5); background:rgba(255,58,92,.1); color:var(--c3);
+  font-size:18px; cursor:pointer; touch-action:manipulation;
+  display:flex; align-items:center; justify-content:center;
+  clip-path:polygon(6px 0,100% 0,100% calc(100% - 6px),calc(100% - 6px) 100%,0 100%,0 6px);
+}
+.cam-sel { position:absolute; bottom:12px; left:50%; transform:translateX(-50%); display:flex; gap:8px; }
+.csb {
+  padding:8px 16px;
+  border:1px solid rgba(0,212,255,.28); background:rgba(0,6,14,.9);
+  color:rgba(0,212,255,.5); font-family:var(--fmono); font-size:9px; letter-spacing:1px;
+  cursor:pointer; touch-action:manipulation; transition:all .15s;
+  clip-path:polygon(4px 0,100% 0,100% calc(100% - 4px),calc(100% - 4px) 100%,0 100%,0 4px);
+}
+.csb.active,.csb:active { background:rgba(0,212,255,.1); color:var(--c1); border-color:var(--c1); }
+#camImg  { max-width:100%; max-height:90%; object-fit:contain; }
+#wcVid   { width:90%; max-height:88%; object-fit:cover; border:1px solid rgba(0,212,255,.2); }
+
+/* ══ SIDE PANEL ══ */
+#panel {
+  display:flex; flex-direction:column;
+  border-left:1px solid var(--border);
+  background:rgba(0,4,10,.97);
+  overflow:hidden; position:relative;
+}
+#panel::before {
+  content:''; position:absolute; top:0; left:0; width:1px; height:100%;
+  background:linear-gradient(180deg,transparent,var(--c1) 30%,var(--c1) 70%,transparent);
+  opacity:.2; animation:sp 4s ease-in-out infinite;
+}
+@keyframes sp { 0%,100%{opacity:.12} 50%{opacity:.32} }
+
+.psec  { border-bottom:1px solid var(--dim); padding:10px 13px; flex-shrink:0; }
+.pttl  {
+  font-family:var(--fhud); font-size:7px; font-weight:700; letter-spacing:2.5px;
+  color:rgba(0,212,255,.36); margin-bottom:8px;
+  display:flex; align-items:center; gap:6px;
+}
+.pttl::before { content:''; width:14px; height:1px; background:rgba(0,212,255,.26); }
+
+/* ── D-PAD ── big touch targets */
+.dpad { display:grid; grid-template-columns:repeat(3,1fr); gap:5px; }
+.db {
+  height:var(--touch);
+  border:1px solid rgba(0,212,255,.26); background:rgba(0,212,255,.04);
+  color:var(--c1); cursor:pointer; font-size:20px;
+  display:flex; align-items:center; justify-content:center;
+  touch-action:manipulation; transition:background .1s, transform .1s;
+  clip-path:polygon(6px 0,100% 0,100% calc(100% - 6px),calc(100% - 6px) 100%,0 100%,0 6px);
+  -webkit-user-select:none;
+}
+.db:active, .db.on {
+  background:rgba(0,212,255,.18); transform:scale(.93);
+  box-shadow:0 0 14px rgba(0,212,255,.32);
+}
+.db.emp { background:transparent; border:none; pointer-events:none; }
+.db.ctr { font-family:var(--fmono); font-size:8px; letter-spacing:1px; }
+.angles { display:flex; gap:5px; margin-top:7px; }
+.adsp {
+  flex:1; background:rgba(0,212,255,.03); border:1px solid rgba(0,212,255,.13);
+  padding:5px 8px; font-family:var(--fmono); font-size:11px; color:var(--c1);
+  display:flex; justify-content:space-between; align-items:center;
+}
+.albl { font-size:8px; color:rgba(0,212,255,.36); letter-spacing:1px; }
+
+/* ── VOICE ── */
+.va { display:flex; flex-direction:column; gap:5px; }
+#micBtn {
+  width:100%; height:var(--touch);
+  border:1.5px solid rgba(0,212,255,.34); background:rgba(0,212,255,.05);
+  color:var(--c1); font-family:var(--fmono); font-size:10px; letter-spacing:2px;
+  cursor:pointer; touch-action:manipulation; transition:all .18s;
+  clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);
+  display:flex; align-items:center; justify-content:center; gap:8px;
+}
+#micBtn.rec  { border-color:var(--c3); color:var(--c3); background:rgba(255,58,92,.1);
+               animation:rp .85s ease-in-out infinite; }
+#micBtn.proc { border-color:var(--c4); color:var(--c4); background:rgba(255,153,0,.07); }
+@keyframes rp { 0%,100%{box-shadow:0 0 8px rgba(255,58,92,.3)} 50%{box-shadow:0 0 24px rgba(255,58,92,.6)} }
+#waveC  { width:100%; height:28px; border:1px solid rgba(0,212,255,.08); background:rgba(0,212,255,.015); }
+#xscript {
+  font-family:var(--fbody); font-size:11px; line-height:1.45;
+  color:rgba(0,212,255,.56); min-height:28px; padding:4px 8px;
+  border:1px solid rgba(0,212,255,.07); background:rgba(0,212,255,.015);
+}
+
+/* ── CHAT ── */
+#chatLog {
+  flex:1; overflow-y:auto; padding:7px 12px;
+  display:flex; flex-direction:column; gap:5px;
+  scrollbar-width:thin; scrollbar-color:rgba(0,212,255,.14) transparent;
+}
+.cm { padding:6px 10px; font-family:var(--fbody); font-size:11px; line-height:1.55; animation:mi .2s ease-out; }
+@keyframes mi { from{opacity:0;transform:translateX(5px)} to{opacity:1;transform:none} }
+.cm.user { background:rgba(0,212,255,.05); border-left:2px solid var(--c1);
+           color:rgba(0,212,255,.78); clip-path:polygon(4px 0,100% 0,100% 100%,0 100%,0 4px); }
+.cm.ai   { background:rgba(68,136,255,.04); border-left:2px solid #4488ff;
+           color:rgba(165,200,255,.8); clip-path:polygon(4px 0,100% 0,100% 100%,0 100%,0 4px); }
+.cm .ml  { font-family:var(--fmono); font-size:7px; letter-spacing:2px; opacity:.34; margin-bottom:2px; }
+
+.ci-row {
+  display:flex; gap:5px; padding:8px 12px; border-top:1px solid var(--dim); flex-shrink:0;
+}
+#chatIn {
+  flex:1; background:rgba(0,212,255,.04); border:1px solid rgba(0,212,255,.16);
+  color:var(--c1); font-family:var(--fbody); font-size:12px; padding:8px 10px; outline:none;
+  clip-path:polygon(5px 0,100% 0,100% calc(100% - 5px),calc(100% - 5px) 100%,0 100%,0 5px);
+}
+#chatIn::placeholder { color:rgba(0,212,255,.18); }
+#chatIn:focus { border-color:rgba(0,212,255,.38); background:rgba(0,212,255,.06); }
+#sendBtn {
+  width:var(--touch); height:var(--touch);
+  border:1px solid rgba(0,212,255,.34); background:rgba(0,212,255,.07);
+  color:var(--c1); font-size:18px; cursor:pointer; touch-action:manipulation;
+  clip-path:polygon(5px 0,100% 0,100% calc(100% - 5px),calc(100% - 5px) 100%,0 100%,0 5px);
+  display:flex; align-items:center; justify-content:center;
+}
+#sendBtn:active { background:rgba(0,212,255,.18); }
+
+/* ══ BOTTOMBAR — large touch buttons ══ */
+#bot {
+  display:flex; align-items:center;
+  padding:0 10px; gap:6px;
+  border-top:1px solid var(--border);
+  background:rgba(0,4,10,.98);
+  overflow-x:auto; overflow-y:hidden;
+}
+#bot::-webkit-scrollbar { display:none; }
+
+/* touch button base */
+.tb {
+  flex-shrink:0;
+  height:var(--touch); padding:0 14px;
+  border:1px solid rgba(0,212,255,.24); background:rgba(0,212,255,.05);
+  color:rgba(0,212,255,.62); font-family:var(--fmono); font-size:9px; letter-spacing:1.2px;
+  cursor:pointer; white-space:nowrap; touch-action:manipulation;
+  transition:background .12s, box-shadow .12s; text-transform:uppercase;
+  clip-path:polygon(6px 0,100% 0,100% calc(100% - 6px),calc(100% - 6px) 100%,0 100%,0 6px);
+  display:flex; align-items:center; justify-content:center; gap:5px;
+  -webkit-user-select:none;
+}
+.tb:active, .tb.on {
+  background:rgba(0,212,255,.15); color:var(--c1);
+  border-color:var(--c1); box-shadow:0 0 12px rgba(0,212,255,.24);
+}
+.tb.danger        { border-color:rgba(255,58,92,.26); color:rgba(255,58,92,.62); }
+.tb.danger:active { background:rgba(255,58,92,.12); color:var(--c3); border-color:var(--c3); }
+.tb.hidden-dev    { border-style:dashed; opacity:.4; }
+.tb.hidden-dev:active { opacity:1; }
+
+/* divider in bottom bar */
+.bdiv { flex-shrink:0; width:1px; height:32px; background:rgba(0,212,255,.15); }
+
+/* metrics strip */
+#bmet { font-family:var(--fmono); font-size:8px; color:rgba(0,212,255,.28); letter-spacing:1px;
+        display:flex; gap:12px; flex-shrink:0; }
+#bmet .mv { color:var(--c1); }
+
+#langSel {
+  flex-shrink:0; height:var(--touch); padding:0 8px;
+  background:rgba(0,4,10,.9); border:1px solid rgba(0,212,255,.22); color:var(--c1);
+  font-family:var(--fmono); font-size:9px; cursor:pointer; outline:none;
+}
+
+/* ══ SOUND MONITOR ══ */
+#soundPanel {
+  border-bottom:1px solid var(--dim); padding:10px 13px; flex-shrink:0;
+}
+.vu-wrap { display:flex; align-items:center; gap:7px; margin-bottom:6px; }
+.vu-lbl  { font-family:var(--fmono); font-size:8px; letter-spacing:1.2px; color:rgba(0,212,255,.38); width:28px; }
+#vuBar   { flex:1; height:10px; background:rgba(0,212,255,.06);
+           border:1px solid rgba(0,212,255,.14); position:relative; overflow:hidden;
+           clip-path:polygon(3px 0,100% 0,100% calc(100%-3px),calc(100%-3px) 100%,0 100%,0 3px); }
+#vuFill  { height:100%; width:0%; background:linear-gradient(90deg,var(--c2),var(--c1),var(--c4));
+           transition:width .05s; }
+#vuVal   { font-family:var(--fmono); font-size:9px; color:rgba(0,212,255,.5); width:30px; text-align:right; }
+.snd-evt { height:36px; overflow:hidden; }
+#sndEvtLog { font-family:var(--fmono); font-size:8px; letter-spacing:1px;
+             color:rgba(0,212,255,.4); line-height:1.9; }
+#sndEvtLog .ev-hi { color:var(--c4); }
+#sndEvtLog .ev-ok { color:var(--c2); }
+
+/* ══ VISION / OBJECT PANEL ══ */
+#visionPanel {
+  border-bottom:1px solid var(--dim); padding:10px 13px; flex-shrink:0;
+}
+.vp-row { display:flex; justify-content:space-between; align-items:center;
+          font-family:var(--fmono); font-size:9px; line-height:1.9; }
+.vp-key { color:rgba(0,212,255,.36); letter-spacing:1px; }
+.vp-val { color:var(--c1); letter-spacing:.5px; }
+.vp-val.hi { color:var(--c4); }
+.vp-val.ok { color:var(--c2); }
+#objList { margin-top:5px; display:flex; flex-direction:column; gap:3px; max-height:88px; overflow-y:auto;
+           scrollbar-width:thin; scrollbar-color:rgba(0,212,255,.1) transparent; }
+.obj-row { display:flex; justify-content:space-between; align-items:center;
+           padding:2px 7px; background:rgba(0,212,255,.03); border-left:2px solid rgba(0,212,255,.2);
+           font-family:var(--fmono); font-size:8px; animation:mi .18s ease-out; }
+.obj-nm  { color:rgba(0,212,255,.7); letter-spacing:.5px; }
+.obj-conf{ color:var(--c4); }
+.obj-box { color:rgba(0,212,255,.3); font-size:7px; }
+
+</style>
+</head>
+<body>
+<div id="app">
+
+<!-- ══ TOPBAR ══ -->
+<header id="topbar">
+  <div class="logo-line">
+    <div class="logo">ARCos</div>
+    <div class="logo-sub">POWERED BY <span class="ibadge">Intel</span>
+      <span style="opacity:.28">| NEURAL OS v2.4</span></div>
+  </div>
+  <div class="status-dots">
+    <div class="sdot"><div class="dot"></div>MOTOR</div>
+    <div class="sdot"><div class="dot y"></div>VISION</div>
+    <div class="sdot"><div class="dot r"></div>AUDIO</div>
+    <div class="sdot"><div class="dot"></div>NEURAL</div>
+  </div>
+  <div id="clk">--:--:--</div>
+</header>
+
+<!-- ══ MIDDLE ══ -->
+<div id="mid">
+
+  <!-- FACE CANVAS -->
+  <div id="faceArea">
+    <canvas id="threeCanvas"></canvas>
+
+    <!-- HUD overlays -->
+    <div class="hc htl htxt">
+      <div>FPS  ▸ <span class="hv" id="hFps">--</span></div>
+      <div>PAN  ▸ <span class="hv" id="hPan">0°</span></div>
+      <div>TILT ▸ <span class="hv" id="hTilt">0°</span></div>
+    </div>
+    <div class="hc htr htxt">
+      <div>EMOT  ▸ <span class="hv" id="hEmot">NEUTRAL</span></div>
+      <div>TRACK ▸ <span class="hv" id="hTrack">OFF</span></div>
+    </div>
+
+    <div id="faceBox"></div>
+
+    <!-- Emotion chips -->
+    <div id="emotBar">
+      <div class="ec active" data-e="neutral">NEUTRAL</div>
+      <div class="ec" data-e="happy">HAPPY</div>
+      <div class="ec" data-e="alert">ALERT</div>
+      <div class="ec" data-e="curious">CURIOUS</div>
+      <div class="ec" data-e="sleepy">SLEEPY</div>
+    </div>
+
+    <!-- Robot cam overlay -->
+    <div id="camOv" class="overlay">
+      <div class="ov-lbl">⬡ ROBOT VISION</div>
+      <button class="ov-close" id="camClose">✕</button>
+      <img id="camImg" src="" alt="">
+      <div class="cam-sel">
+        <button class="csb active" id="csBtnRaw">RAW</button>
+        <button class="csb" id="csBtnSeg">YOLO SEG</button>
+      </div>
+    </div>
+
+    <!-- Local webcam overlay (hidden dev option) -->
+    <div id="wcOv" class="overlay" style="z-index:21">
+      <div class="ov-lbl">⬡ LOCAL WEBCAM</div>
+      <button class="ov-close" id="wcClose">✕</button>
+      <video id="wcVid" autoplay playsinline muted></video>
+    </div>
+  </div>
+
+  <!-- ══ SIDE PANEL ══ -->
+  <aside id="panel">
+
+    <!-- Motor D-pad -->
+    <div class="psec">
+      <div class="pttl">PAN / TILT</div>
+      <div class="dpad">
+        <div class="db emp"></div>
+        <button class="db" id="bU">▲</button>
+        <div class="db emp"></div>
+        <button class="db" id="bL">◀</button>
+        <button class="db ctr" id="bR0">RST</button>
+        <button class="db" id="bRt">▶</button>
+        <div class="db emp"></div>
+        <button class="db" id="bD">▼</button>
+        <div class="db emp"></div>
+      </div>
+      <div class="angles">
+        <div class="adsp"><span class="albl">PAN</span><span id="panV">0°</span></div>
+        <div class="adsp"><span class="albl">TILT</span><span id="tiltV">0°</span></div>
+      </div>
+    </div>
+
+
+    <!-- Sound Monitor -->
+    <div class="psec" id="soundPanel">
+      <div class="pttl">SOUND MONITOR</div>
+      <div class="vu-wrap">
+        <span class="vu-lbl">ENV</span>
+        <div id="vuBar"><div id="vuFill"></div></div>
+        <span id="vuVal">0dB</span>
+      </div>
+      <div class="snd-evt">
+        <div id="sndEvtLog">— monitoring —</div>
+      </div>
+    </div>
+
+    <!-- Vision / Object Detection -->
+    <div class="psec" id="visionPanel">
+      <div class="pttl">VISION / DETECTION</div>
+      <div class="vp-row"><span class="vp-key">PERSON</span><span class="vp-val" id="vpPerson">--</span></div>
+      <div class="vp-row"><span class="vp-key">POS</span><span class="vp-val" id="vpPos">--</span></div>
+      <div class="vp-row"><span class="vp-key">GENDER</span><span class="vp-val" id="vpGender">--</span></div>
+      <div class="vp-row"><span class="vp-key">AGE</span><span class="vp-val" id="vpAge">--</span></div>
+      <div class="vp-row"><span class="vp-key">EMOTION</span><span class="vp-val" id="vpEmot">--</span></div>
+      <div class="vp-row"><span class="vp-key">OBJECTS</span><span class="vp-val" id="vpObjCount">0</span></div>
+      <div id="objList"></div>
+    </div>
+    <!-- Voice input -->
+    <div class="psec">
+      <div class="pttl">VOICE INPUT</div>
+      <div class="va">
+        <button id="micBtn">
+          <span id="micIco">🎤</span><span id="micLbl">HOLD TO SPEAK</span>
+        </button>
+        <canvas id="waveC"></canvas>
+        <div id="xscript">— awaiting input —</div>
+      </div>
+    </div>
+
+    <!-- Chat log (fills remaining space) -->
+    <div id="chatLog"></div>
+
+    <!-- Chat input row -->
+    <div class="ci-row">
+      <input id="chatIn" placeholder="TYPE MESSAGE...">
+      <button id="sendBtn">➤</button>
+    </div>
+  </aside>
+</div><!-- #mid -->
+
+<!-- ══ BOTTOMBAR ══ -->
+<footer id="bot">
+  <!-- Motion buttons -->
+  <button class="tb" id="btnStop">⬛ STOP</button>
+  <button class="tb" id="btnHello">🙋 HELLO</button>
+  <button class="tb" id="btnClap">👏 CLAP</button>
+  <button class="tb" id="btnBye">👋 BYE</button>
+  <button class="tb" id="btnIntro">🎬 INTRO</button>
+  <button class="tb" id="btnHands">👐 HANDS</button>
+
+  <div class="bdiv"></div>
+
+  <button class="tb" id="camBtn">📷 CAM</button>
+  <button class="tb" id="trkBtn">🎯 TRACK</button>
+  <button class="tb hidden-dev" id="wcBtn">🔬 WEBCAM</button>
+
+  <div class="bdiv"></div>
+
+  <div id="bmet">
+    <span>PAN <span class="mv" id="mPan">0°</span></span>
+    <span>TILT <span class="mv" id="mTilt">0°</span></span>
+    <span>FPS <span class="mv" id="mFps">--</span></span>
+  </div>
+
+  <div style="flex:1"></div>
+
+  <select id="langSel">
+    <option value="ko" selected>🇰🇷 KO</option>
+    <option value="en">🇺🇸 EN</option>
+    <option value="ja">🇯🇵 JA</option>
+    <option value="zh">🇨🇳 ZH</option>
+    <option value="de">🇩🇪 DE</option>
+    <option value="fr">🇫🇷 FR</option>
+  </select>
+  <button class="tb danger" id="btnRst">⟲ RST</button>
+</footer>
+
+</div><!-- #app -->
+
+<!-- ══ THREE.JS ══ -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+'use strict';
+// ════════════════════════════════════════════════════════
+//  ENDPOINTS
+// ════════════════════════════════════════════════════════
+const API    = 'http://127.0.0.1:8001';
+const LLM    = 'http://127.0.0.1:59532/v1';
+const TTS_   = 'http://127.0.0.1:59530/v2';
+const HB     = 'http://127.0.0.1:59531';
+const MOTION = 'http://127.0.0.1:8000';
+const STEP   = 3;
+
+const LANG_SYS = {
+  ko:'너는 만서로 이라는 15살 휴머노이드야. 서큘러스가 두뇌, 만드로가 상반신, 로보웍스가 하반신. 소년의 대화체로 짧게 응답해.',
+  en:'You are Manseo, a 15-year-old humanoid robot. Brain: Circulus. Upper body: Mandro. Lower body: Roboworks. Short boyish responses only.',
+  ja:'あなたはマンソ、15歳のヒューマノイド。少年のような短い口調で答えて。',
+  zh:'你是Manseo，15岁人形机器人。用男孩简短口语回答。',
+  de:'Du bist Manseo, 15-jähriger Roboter. Kurze Jungs-Antworten.',
+  fr:'Tu es Manseo, robot 15 ans. Réponses courtes style garçon.',
+};
+const LANG_VOICE = {ko:34,en:8,ja:29,zh:66,de:6,fr:19};
+
+// ════════════════════════════════════════════════════════
+//  APP STATE
+// ════════════════════════════════════════════════════════
+let panAngle=0, tiltAngle=0, lang='ko';
+let tracking=false, camOpen=false, camMode='raw';
+let wcOpen=false, wcStream=null;
+let isRec=false, isProc=false, mediaRec=null, gumStream=null;
+let ttsQ=[], ttsPlaying=false, audioCtx=null, analyser=null, waveAF=null;
+let emotion='neutral', fpsCount=0, lastFpsT=Date.now(), motorTimer=null;
+let faceYaw=0, facePitch=0, curYaw=0, curPitch=0;
+let isTalking=false, talkPhase=0;
+let ttsRms=0, ttsAnalyser=null, ttsAudioCtx2=null;
+
+// ════════════════════════════════════════════════════════
+//  THREE.JS SETUP
+// ════════════════════════════════════════════════════════
+const canvas3  = document.getElementById('threeCanvas');
+const renderer = new THREE.WebGLRenderer({canvas:canvas3, antialias:true, alpha:true});
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setClearColor(0x000810, 0);
+
+const scene  = new THREE.Scene();
+scene.fog    = new THREE.FogExp2(0x000c18, 0.011);
+
+const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 100);
+camera.position.set(0, 0.06, 6.2);
+
+function resize3() {
+  const el = document.getElementById('faceArea');
+  renderer.setSize(el.clientWidth, el.clientHeight);
+  camera.aspect = el.clientWidth / el.clientHeight;
+  camera.updateProjectionMatrix();
+}
+resize3();
+window.addEventListener('resize', resize3);
+
+// ── LIGHTS ──────────────────────────────────────────────
+scene.add(new THREE.AmbientLight(0x001a28, 0.9));
+const kL = new THREE.DirectionalLight(0x00d4ff, 1.6); kL.position.set(2,3,5);   scene.add(kL);
+const rL = new THREE.DirectionalLight(0x0071C5, 1.1); rL.position.set(-3,1,-2); scene.add(rL);
+const fL = new THREE.PointLight(0x00ff88, 0.65, 10);  fL.position.set(0,-2,4);  scene.add(fL);
+const tL = new THREE.PointLight(0x00d4ff, 0.45,  7);  tL.position.set(0,5,2);   scene.add(tL);
+
+// ── SHARED MATERIALS ────────────────────────────────────
+const headMat = new THREE.MeshStandardMaterial({
+  color:0x001828, emissive:0x001e2e, emissiveIntensity:0.3,
+  metalness:0.9, roughness:0.14, transparent:true, opacity:0.96,
+});
+const wireMat = new THREE.MeshBasicMaterial({
+  color:0x00d4ff, wireframe:true, transparent:true, opacity:0.055,
+});
+const visorMat = new THREE.MeshStandardMaterial({
+  color:0x00d4ff, emissive:0x003650, emissiveIntensity:0.65,
+  metalness:0.9, roughness:0.1, transparent:true, opacity:0.72,
+});
+
+// ════════════════════════════════════════════════════════
+//  HEAD MESH
+// ════════════════════════════════════════════════════════
+const headGroup = new THREE.Group();
+scene.add(headGroup);
+
+// Sculpted sphere head
+const headGeo = new THREE.SphereGeometry(1.2, 44, 34);
+(function sculpt(){
+  const pos = headGeo.attributes.position;
+  for (let i=0; i<pos.count; i++) {
+    let x=pos.getX(i), y=pos.getY(i), z=pos.getZ(i);
+    if (z < 0) z *= 0.66;                                           // flatten back
+    if (y > -0.12 && y < 0.58) x *= 1.07;                         // widen cheeks
+    if (y > 0.68)  x *= (1-(y-0.68)*0.3);                         // narrow crown
+    if (y < -0.58) { x*=0.64; z*=0.72; }                          // taper chin
+    if (y > 0.26 && z > 0) z += 0.06;                             // push forehead
+    if (Math.abs(x)<0.65 && y<0.28 && y>-0.52 && z>0) z += 0.04*(1-Math.abs(x)/0.65); // face bulge
+    pos.setXYZ(i, x, y, z);
+  }
+  headGeo.computeVertexNormals();
+})();
+
+headGroup.add(new THREE.Mesh(headGeo, headMat));
+const headWire = new THREE.Mesh(headGeo, wireMat);
+headWire.scale.setScalar(1.003);
+headGroup.add(headWire);
+
+// Forehead visor strip
+const visorMesh = new THREE.Mesh(
+  new THREE.BoxGeometry(1.1, 0.072, 0.054), visorMat
+);
+visorMesh.position.set(0, 0.85, 0.73);
+headGroup.add(visorMesh);
+
+// Temple plates + LED strips
+[-1.02, 1.02].forEach(sx => {
+  const tp = new THREE.Mesh(new THREE.BoxGeometry(0.05,0.70,0.50),
+    new THREE.MeshStandardMaterial({color:0x001220,metalness:0.85,roughness:0.22}));
+  tp.position.set(sx, 0.1, 0.52); headGroup.add(tp);
+  const led = new THREE.Mesh(new THREE.BoxGeometry(0.007,0.50,0.007),
+    new THREE.MeshBasicMaterial({color:0x0071C5}));
+  led.position.set(sx*0.96, 0.1, 0.8); headGroup.add(led);
+});
+
+// Helper: quick mesh
+function qm(geo, mat, px, py, pz) {
+  const m = new THREE.Mesh(geo, mat);
+  m.position.set(px, py, pz);
+  headGroup.add(m);
+  return m;
+}
+
+// Nose
+qm(new THREE.BoxGeometry(0.05,0.19,0.068),
+   new THREE.MeshStandardMaterial({color:0x001e30,metalness:0.8,roughness:0.3}),
+   0,-0.01,1.0);
+
+// Grille bars
+const grillMat = new THREE.MeshStandardMaterial({color:0x000e1c,metalness:0.88,roughness:0.22});
+for (let i=-2; i<=2; i++) qm(new THREE.BoxGeometry(0.52,0.018,0.03), grillMat, 0,-0.48+i*0.048,0.96);
+
+// ── MOUTH (animated) ────────────────────────────────────
+// Two flat LED bars that separate when talking
+const mouthMat = new THREE.MeshBasicMaterial({color:0x00d4ff});
+const mTop = qm(new THREE.BoxGeometry(0.38,0.015,0.015), mouthMat, 0,-0.435,0.985);
+const mBot = qm(new THREE.BoxGeometry(0.38,0.015,0.015), mouthMat, 0,-0.505,0.985);
+// Corner dots
+[-0.19,0.19].forEach(cx => qm(
+  new THREE.SphereGeometry(0.014,6,6), mouthMat, cx,-0.47,0.986
+));
+
+// Chin
+qm(new THREE.BoxGeometry(0.58,0.10,0.05),
+   new THREE.MeshStandardMaterial({color:0x001422,metalness:0.82,roughness:0.2}),
+   0,-0.76,0.87);
+
+// Neck
+qm(new THREE.CylinderGeometry(0.25,0.30,0.36,18),
+   new THREE.MeshStandardMaterial({color:0x000d16,metalness:0.84,roughness:0.26}),
+   0,-1.44,0);
+
+// Circuit line details
+(function circuits(){
+  const mat = new THREE.LineBasicMaterial({color:0x00d4ff, transparent:true, opacity:0.12});
+  [
+    [[-0.65,0.1,0.88],[-0.53,-0.06,0.9],[-0.50,-0.27,0.88]],
+    [[ 0.65,0.1,0.88],[ 0.53,-0.06,0.9],[ 0.50,-0.27,0.88]],
+    [[-0.40,0.70,0.82],[0,0.76,0.85],[0.40,0.70,0.82]],
+    [[-0.20,-0.65,0.88],[0,-0.59,0.9],[0.20,-0.65,0.88]],
+    [[-0.25,0.44,0.87],[-0.50,0.38,0.82]],
+    [[ 0.25,0.44,0.87],[ 0.50,0.38,0.82]],
+  ].forEach(pts => {
+    const g = new THREE.BufferGeometry().setFromPoints(pts.map(p=>new THREE.Vector3(...p)));
+    headGroup.add(new THREE.Line(g, mat));
+  });
+})();
+
+// ════════════════════════════════════════════════════════
+//  BIG EXPRESSIVE EYES
+//  Eye radius ~0.34 units — very prominent
+// ════════════════════════════════════════════════════════
+const EYE_R     = 0.34;   // outer socket radius
+const IRIS_R    = 0.20;   // iris disc radius
+const EYE_Y     = 0.22;   // vertical position on head
+const EYE_Z     = 0.83;   // forward position on head
+const EYE_XOFF  = 0.40;   // left/right offset
+
+function makeEye(xPos) {
+  const root = new THREE.Group();
+  root.position.set(xPos, EYE_Y, EYE_Z);
+  headGroup.add(root);
+
+  // ── OUTER DECORATIVE RINGS (counter-rotating) ──
+  // Ring A – thick outer glow
+  const rA_geo = new THREE.TorusGeometry(EYE_R+0.04, 0.018, 8, 64);
+  const rA_mat = new THREE.MeshBasicMaterial({color:0x00d4ff, transparent:true, opacity:0.50});
+  const rA = new THREE.Mesh(rA_geo, rA_mat);
+  rA.rotation.x = Math.PI/2; root.add(rA);
+
+  // Ring B – dashed outer (hex segments)
+  const rB_geo = new THREE.TorusGeometry(EYE_R+0.07, 0.009, 6, 48);
+  const rB_mat = new THREE.MeshBasicMaterial({color:0x00d4ff, transparent:true, opacity:0.28});
+  const rB = new THREE.Mesh(rB_geo, rB_mat);
+  rB.rotation.x = Math.PI/2; root.add(rB);
+
+  // ── EYE SOCKET (dark ring recess) ──
+  const sockGeo = new THREE.CylinderGeometry(EYE_R, EYE_R-0.02, 0.055, 38);
+  sockGeo.rotateX(Math.PI/2);
+  root.add(new THREE.Mesh(sockGeo,
+    new THREE.MeshStandardMaterial({color:0x000508, metalness:0.9, roughness:0.18})));
+
+  // ── SCLERA (dark inner sphere) ──
+  const scleraMesh = new THREE.Mesh(
+    new THREE.SphereGeometry(EYE_R-0.01, 32, 26),
+    new THREE.MeshStandardMaterial({color:0x000610, emissive:0x000810, metalness:0.5, roughness:0.28})
+  );
+  root.add(scleraMesh);
+
+  // ── IRIS GROUP (translates for gaze) ──
+  const irisG = new THREE.Group();
+  root.add(irisG);
+
+  // Iris disc
+  const irisGeo = new THREE.CylinderGeometry(IRIS_R, IRIS_R, 0.020, 42);
+  irisGeo.rotateX(Math.PI/2);
+  const irisMat = new THREE.MeshStandardMaterial({
+    color:0x00d4ff, emissive:0x005577, emissiveIntensity:1.5,
+    metalness:0.8, roughness:0.08,
+  });
+  const iris = new THREE.Mesh(irisGeo, irisMat);
+  iris.position.z = 0.20; irisG.add(iris);
+
+  // Spinning hex ring  (fast, clockwise when viewed from front)
+  const hR_geo = new THREE.TorusGeometry(IRIS_R*0.82, 0.013, 6, 42);
+  const hR_mat = new THREE.MeshBasicMaterial({color:0x00d4ff, transparent:true, opacity:0.78});
+  const hexRing = new THREE.Mesh(hR_geo, hR_mat);
+  hexRing.position.z = 0.215; hexRing.rotation.x = Math.PI/2; irisG.add(hexRing);
+
+  // Inner spinning ring (slower, counter-clockwise)
+  const iR_geo = new THREE.TorusGeometry(IRIS_R*0.52, 0.008, 6, 28);
+  const iR_mat = new THREE.MeshBasicMaterial({color:0x00d4ff, transparent:true, opacity:0.50});
+  const innerRing = new THREE.Mesh(iR_geo, iR_mat);
+  innerRing.position.z = 0.215; innerRing.rotation.x = Math.PI/2; irisG.add(innerRing);
+
+  // Mid ring (medium speed)
+  const mR_geo = new THREE.TorusGeometry(IRIS_R*0.67, 0.006, 6, 34);
+  const mR_mat = new THREE.MeshBasicMaterial({color:0x00d4ff, transparent:true, opacity:0.38});
+  const midRing = new THREE.Mesh(mR_geo, mR_mat);
+  midRing.position.z = 0.215; midRing.rotation.x = Math.PI/2; irisG.add(midRing);
+
+  // Pupil (black disc)
+  const pupilGeo = new THREE.CylinderGeometry(IRIS_R*0.38, IRIS_R*0.38, 0.024, 28);
+  pupilGeo.rotateX(Math.PI/2);
+  const pupil = new THREE.Mesh(pupilGeo, new THREE.MeshBasicMaterial({color:0x000000}));
+  pupil.position.z = 0.225; irisG.add(pupil);
+
+  // Pupil glow ring
+  const pR_geo = new THREE.TorusGeometry(IRIS_R*0.36, 0.007, 6, 24);
+  const pR_mat = new THREE.MeshBasicMaterial({color:0x00d4ff, transparent:true, opacity:0.65});
+  const pupilRing = new THREE.Mesh(pR_geo, pR_mat);
+  pupilRing.position.z = 0.228; pupilRing.rotation.x = Math.PI/2; irisG.add(pupilRing);
+
+  // Main glint
+  const glint = new THREE.Mesh(
+    new THREE.SphereGeometry(0.026, 9, 9),
+    new THREE.MeshBasicMaterial({color:0xffffff, transparent:true, opacity:0.92})
+  );
+  glint.position.set(-IRIS_R*0.4, IRIS_R*0.42, 0.25); irisG.add(glint);
+
+  // Small secondary glint
+  const glint2 = new THREE.Mesh(
+    new THREE.SphereGeometry(0.012, 7, 7),
+    new THREE.MeshBasicMaterial({color:0xffffff, transparent:true, opacity:0.52})
+  );
+  glint2.position.set(IRIS_R*0.3, -IRIS_R*0.3, 0.25); irisG.add(glint2);
+
+  // ── EYELIDS ─────────────────────────────────────────────
+  // Upper lid arc
+  const lidTopMat = new THREE.MeshStandardMaterial({
+    color:0x00d4ff, emissive:0x002c40, emissiveIntensity:0.65,
+    metalness:0.8, roughness:0.16,
+  });
+  const lidTop = new THREE.Mesh(
+    new THREE.TorusGeometry(EYE_R+0.005, 0.024, 8, 34, Math.PI),
+    lidTopMat
+  );
+  lidTop.position.z = 0.006; root.add(lidTop);
+
+  // Lower lid arc (thinner, semi-transparent)
+  const lidBot = new THREE.Mesh(
+    new THREE.TorusGeometry(EYE_R+0.005, 0.016, 8, 34, Math.PI),
+    new THREE.MeshStandardMaterial({
+      color:0x00d4ff, emissive:0x002c40, emissiveIntensity:0.42,
+      metalness:0.8, roughness:0.2, transparent:true, opacity:0.50,
+    })
+  );
+  lidBot.rotation.z = Math.PI; lidBot.position.z = 0.006; root.add(lidBot);
+
+  // ── BLINK COVER ──────────────────────────────────────────
+  // A solid disc that scales from 0→1 on Y to simulate lid closing
+  const blinkGeo = new THREE.CylinderGeometry(EYE_R+0.012, EYE_R+0.012, 0.012, 36);
+  blinkGeo.rotateX(Math.PI/2);
+  const blinkMesh = new THREE.Mesh(blinkGeo,
+    new THREE.MeshBasicMaterial({color:0x000810})
+  );
+  blinkMesh.position.z = 0.240;
+  blinkMesh.scale.y = 0;   // starts open
+  root.add(blinkMesh);
+
+  return { root, irisG, irisMat, hexRing, innerRing, midRing, rA, rB, pupilRing, blinkMesh, lidTop, lidBot };
+}
+
+const LEye = makeEye(-EYE_XOFF);
+const REye = makeEye( EYE_XOFF);
+
+// ── AMBIENT PARTICLES ────────────────────────────────────
+const pN = 220;
+const pArr = new Float32Array(pN*3);
+for (let i=0; i<pN; i++) {
+  pArr[i*3]  = (Math.random()-.5)*11;
+  pArr[i*3+1]= (Math.random()-.5)*9;
+  pArr[i*3+2]= (Math.random()-.5)*8;
+}
+const pGeo = new THREE.BufferGeometry();
+pGeo.setAttribute('position', new THREE.BufferAttribute(pArr, 3));
+scene.add(new THREE.Points(pGeo,
+  new THREE.PointsMaterial({color:0x00d4ff, size:0.022, transparent:true, opacity:0.24})
+));
+
+// Floor grid
+const grid = new THREE.GridHelper(16, 30, 0x001525, 0x001525);
+grid.position.y = -2.8;
+grid.material.transparent = true; grid.material.opacity = 0.26;
+scene.add(grid);
+
+// ════════════════════════════════════════════════════════
+//  EMOTION SYSTEM
+// ════════════════════════════════════════════════════════
+const ECOL = {
+  neutral: {iris:0x00d4ff, emi:0x005577, fill:0x00ff88, mouth:0x00d4ff, vi:0x00d4ff},
+  happy:   {iris:0x00ffaa, emi:0x004433, fill:0x00ffcc, mouth:0x00ffaa, vi:0x00ffaa},
+  alert:   {iris:0xff3a5c, emi:0x440011, fill:0xff6680, mouth:0xff3a5c, vi:0xff3a5c},
+  curious: {iris:0xffaa00, emi:0x442200, fill:0xffcc44, mouth:0xffcc00, vi:0xffaa00},
+  sleepy:  {iris:0x4466ff, emi:0x112255, fill:0x6688ff, mouth:0x3355ff, vi:0x4466ff},
+};
+
+function setEmotion(e) {
+  emotion = e;
+  document.querySelectorAll('.ec').forEach(c=>c.classList.toggle('active', c.dataset.e===e));
+  document.getElementById('hEmot').textContent = e.toUpperCase();
+  const c = ECOL[e]||ECOL.neutral;
+  [LEye, REye].forEach(eye => {
+    eye.irisMat.color.setHex(c.iris);
+    eye.irisMat.emissive.setHex(c.emi);
+    [eye.hexRing, eye.innerRing, eye.midRing, eye.pupilRing, eye.rA].forEach(r=>r.material.color.setHex(c.iris));
+  });
+  fL.color.setHex(c.fill);
+  mouthMat.color.setHex(c.mouth);
+  visorMat.color.setHex(c.vi);
+}
+document.querySelectorAll('.ec').forEach(c=>c.addEventListener('click',()=>setEmotion(c.dataset.e)));
+
+// ════════════════════════════════════════════════════════
+//  GAZE — shifts irisGroup in local XY
+// ════════════════════════════════════════════════════════
+function updateGaze(yaw, pitch) {
+  const maxX=0.09, maxY=0.068;
+  const ox=Math.sin(yaw)*maxX, oy=Math.sin(pitch)*maxY;
+  LEye.irisG.position.set(ox, oy, 0);
+  REye.irisG.position.set(ox, oy, 0);
+}
+
+// ════════════════════════════════════════════════════════
+//  BLINK STATE MACHINE
+//  phase: 0=idle, 1=closing, 2=hold, 3=opening
+// ════════════════════════════════════════════════════════
+const BLK = {
+  phase:0, prog:0, timer:0, holdTimer:0,
+  nextIdle: 240,          // frames until next blink
+  CLOSE_SPD: 0.22,        // fraction per frame
+  OPEN_SPD:  0.16,
+  HOLD_FRAMES: 3,         // frames with eyes fully closed
+};
+
+function tickBlink() {
+  BLK.timer++;
+  switch(BLK.phase) {
+    case 0:  // idle — wait
+      if (BLK.timer >= BLK.nextIdle) {
+        BLK.phase=1; BLK.prog=0; BLK.timer=0;
+      }
+      break;
+    case 1:  // closing
+      BLK.prog = Math.min(1, BLK.prog + BLK.CLOSE_SPD);
+      if (BLK.prog >= 1) { BLK.phase=2; BLK.holdTimer=0; }
+      break;
+    case 2:  // hold closed
+      if (++BLK.holdTimer >= BLK.HOLD_FRAMES) BLK.phase=3;
+      break;
+    case 3:  // opening
+      BLK.prog = Math.max(0, BLK.prog - BLK.OPEN_SPD);
+      if (BLK.prog <= 0) {
+        BLK.phase=0; BLK.timer=0;
+        BLK.nextIdle = 160 + Math.random()*220;
+      }
+      break;
+  }
+  const v = BLK.prog;
+  [LEye, REye].forEach(eye => {
+    // Scale Y of entire root → simulates lid sweeping down
+    eye.root.scale.y     = 1 - v * 0.96;
+    // Blink cover disc also expands to fill
+    eye.blinkMesh.scale.y = v;
+  });
+}
+
+// ════════════════════════════════════════════════════════
+//  MOUTH ANIMATION — opens/closes when TTS is playing
+// ════════════════════════════════════════════════════════
+const M_OPEN_Y  = 0.038;  // how far lips move apart (world units)
+const M_NEUTRAL_TOP = -0.435;
+const M_NEUTRAL_BOT = -0.505;
+
+function animateMouth(dt) {
+  if (isTalking) {
+    talkPhase += dt * 8.5;
+    // primary open driven by sine, secondary wobble
+    // ttsRms blends in real audio level when TTS analyser is available
+    const rmsBoost = typeof ttsRms !== 'undefined' ? ttsRms * 1.8 : 0;
+    const openAmt = Math.min(M_OPEN_Y, (Math.abs(Math.sin(talkPhase)) * 0.7
+                   + Math.abs(Math.sin(talkPhase*1.7)) * 0.3) * M_OPEN_Y
+                   + rmsBoost * M_OPEN_Y);
+    mTop.position.y += (M_NEUTRAL_TOP + openAmt - mTop.position.y) * 0.28;
+    mBot.position.y += (M_NEUTRAL_BOT - openAmt - mBot.position.y) * 0.28;
+    // width varies slightly
+    const wScale = 1 + openAmt/M_OPEN_Y * 0.12;
+    mTop.scale.x += (wScale - mTop.scale.x) * 0.2;
+    mBot.scale.x += (wScale - mBot.scale.x) * 0.2;
+    // brightness pulse
+    const bright = 0.45 + openAmt/M_OPEN_Y * 0.55;
+    mouthMat.color.setHSL(0.54, 1.0, bright);
+  } else {
+    // snap back to neutral
+    mTop.position.y += (M_NEUTRAL_TOP - mTop.position.y) * 0.14;
+    mBot.position.y += (M_NEUTRAL_BOT - mBot.position.y) * 0.14;
+    mTop.scale.x += (1 - mTop.scale.x) * 0.14;
+    mBot.scale.x += (1 - mBot.scale.x) * 0.14;
+    const c = ECOL[emotion]||ECOL.neutral;
+    const hex = c.mouth;
+    mouthMat.color.setHex(hex);
+  }
+}
+
+// ════════════════════════════════════════════════════════
+//  RENDER LOOP
+// ════════════════════════════════════════════════════════
+let clock=0, lastT=performance.now();
+
+(function animate() {
+  requestAnimationFrame(animate);
+  const now=performance.now(), dt=Math.min((now-lastT)/1000, 0.05);
+  lastT=now; clock+=dt; fpsCount++;
+
+  // Smooth head rotation
+  curYaw   += (faceYaw   - curYaw)   * 0.09;
+  curPitch += (facePitch - curPitch) * 0.09;
+  headGroup.rotation.y = curYaw;
+  headGroup.rotation.x = curPitch;
+
+  // Subtle idle float
+  headGroup.position.y = Math.sin(clock*0.52)*0.04;
+  headGroup.position.x = Math.sin(clock*0.30)*0.012;
+
+  // Gaze
+  updateGaze(curYaw*0.50, curPitch*0.50);
+
+  // ── Eye ring rotations ──────────────────────────────
+  // Each ring rotates in alternating directions for mechanical feel
+  LEye.hexRing.rotation.z   += dt * 2.0;    // fast CW
+  REye.hexRing.rotation.z   -= dt * 2.0;    // fast CCW (mirrored)
+  LEye.innerRing.rotation.z -= dt * 1.3;    // medium CCW
+  REye.innerRing.rotation.z += dt * 1.3;
+  LEye.midRing.rotation.z   += dt * 0.7;    // slow CW
+  REye.midRing.rotation.z   -= dt * 0.7;
+  LEye.rA.rotation.z        -= dt * 0.30;   // outer ring slow drift
+  REye.rA.rotation.z        += dt * 0.30;
+  LEye.rB.rotation.z        += dt * 0.18;
+  REye.rB.rotation.z        -= dt * 0.18;
+
+  // Iris emissive pulse (different phase per eye for life-like feel)
+  const pulse = 0.9 + Math.sin(clock*2.2)*0.36;
+  LEye.irisMat.emissiveIntensity = pulse + Math.sin(clock*3.1)*0.18;
+  REye.irisMat.emissiveIntensity = pulse + Math.sin(clock*3.1+0.8)*0.18;
+
+  // Outer ring opacity breathe
+  LEye.rA.material.opacity = 0.40 + Math.sin(clock*1.5)*0.18;
+  REye.rA.material.opacity = 0.40 + Math.sin(clock*1.5+0.4)*0.18;
+
+  // Head / visor pulse
+  headMat.emissiveIntensity  = 0.22 + Math.sin(clock*1.8)*0.07;
+  visorMat.emissiveIntensity = 0.50 + Math.sin(clock*1.4)*0.20;
+
+  // Blink
+  tickBlink();
+
+  // Update ttsRms from TTS analyser
+  if (ttsAnalyser && isTalking) {
+    const _tb = new Uint8Array(ttsAnalyser.frequencyBinCount);
+    ttsAnalyser.getByteTimeDomainData(_tb);
+    let _s=0; for(let _i=0;_i<_tb.length;_i++){const _v=_tb[_i]/128-1;_s+=_v*_v;}
+    ttsRms = Math.sqrt(_s/_tb.length);
+  } else { ttsRms=0; }
+
+  // Mouth
+  animateMouth(dt);
+
+  // Particle drift upward
+  for (let i=0; i<pN; i++) {
+    pArr[i*3+1] += 0.0020;
+    if (pArr[i*3+1] > 4.0) pArr[i*3+1] = -4.0;
+  }
+  pGeo.attributes.position.needsUpdate = true;
+
+  renderer.render(scene, camera);
+})();
+
+// ════════════════════════════════════════════════════════
+//  MOTOR CONTROL
+// ════════════════════════════════════════════════════════
+async function setMotor(dp, dt) {
+  if (dp!==null) panAngle  = Math.max(-30, Math.min(30, panAngle+dp));
+  if (dt!==null) tiltAngle = Math.max(-10, Math.min(10, tiltAngle+dt));
+  updateAngleUI();
+  try {
+    const b={};
+    if (dp!==null) b.pan  = panAngle;
+    if (dt!==null) b.tilt = tiltAngle;
+    await fetch(`${API}/api/motor`, {
+      method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(b)
+    });
+  } catch(e) {}
+  faceYaw   =  (panAngle/30)  * 0.44;
+  facePitch = -(tiltAngle/10) * 0.28;
+}
+async function motorReset() {
+  panAngle=0; tiltAngle=0; faceYaw=0; facePitch=0; updateAngleUI();
+  try { await fetch(`${API}/api/motor/reset`,{method:'POST'}); } catch(e) {}
+}
+function updateAngleUI() {
+  [['panV','mPan','hPan'],['tiltV','mTilt','hTilt']].forEach(([a,b,c],i) => {
+    const v = i===0 ? panAngle : tiltAngle;
+    [a,b,c].forEach(id => { const el=document.getElementById(id); if(el) el.textContent=v+'°'; });
+  });
+}
+
+// Touch-friendly hold-repeat for D-pad
+function dpadBind(id, dp, dt) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const go    = () => setMotor(dp, dt);
+  const start = e => { e.preventDefault(); go(); el.classList.add('on'); motorTimer=setInterval(go,145); };
+  const stop  = ()  => { clearInterval(motorTimer); el.classList.remove('on'); };
+  el.addEventListener('mousedown',  start);
+  el.addEventListener('touchstart', start, {passive:false});
+  ['mouseup','mouseleave','touchend','touchcancel'].forEach(ev=>el.addEventListener(ev, stop));
+}
+dpadBind('bU',  null,-STEP);
+dpadBind('bD',  null, STEP);
+dpadBind('bL', -STEP, null);
+dpadBind('bRt', STEP, null);
+
+document.getElementById('bR0').addEventListener('click', motorReset);
+document.getElementById('bR0').addEventListener('touchstart', e=>{e.preventDefault(); motorReset();});
+
+document.addEventListener('keydown', e => {
+  if (document.getElementById('chatIn')===document.activeElement) return;
+  const km = {ArrowUp:[null,-STEP],ArrowDown:[null,STEP],ArrowLeft:[-STEP,null],ArrowRight:[STEP,null]};
+  if (km[e.key]) { e.preventDefault(); setMotor(...km[e.key]); }
+});
+
+// ════════════════════════════════════════════════════════
+//  FACE TRACKING
+// ════════════════════════════════════════════════════════
+let trkTimer=null;
+function toggleTracking() {
+  tracking=!tracking;
+  const btn=document.getElementById('trkBtn');
+  btn.textContent=tracking?'🎯 TRACK: ON':'🎯 TRACK';
+  btn.classList.toggle('on', tracking);
+  document.getElementById('hTrack').textContent=tracking?'ON':'OFF';
+
+  if (tracking) {
+    trkTimer=setInterval(async()=>{
+      try {
+        const r=await fetch(`${HB}/heartbeat`);
+        const d=(await r.json()).data;
+        const pos=d.human.position||'CC';
+        document.getElementById('hEmot') && (document.getElementById('hEmot').textContent=pos);
+
+        let dp=0, dt2=0;
+        if(pos.endsWith('L')) dp=-STEP; else if(pos.endsWith('R')) dp=STEP;
+        if(pos.startsWith('T')) dt2=-STEP; else if(pos.startsWith('B')) dt2=STEP;
+        if(dp||dt2) setMotor(dp||null, dt2||null);
+
+        const GX={L:-0.44,C:0,R:0.44}, GY={T:-0.28,C:0,B:0.28};
+        faceYaw  =GX[pos.slice(-1)]??0;
+        facePitch=GY[pos.slice(0,1)]??0;
+
+        if(d.human.box) {
+          const fb=document.getElementById('faceBox'),m=document.getElementById('faceArea');
+          fb.style.cssText=`display:block;left:${d.human.box.x/640*m.clientWidth}px;
+            top:${d.human.box.y/480*m.clientHeight}px;
+            width:${d.human.box.w/640*m.clientWidth}px;
+            height:${d.human.box.h/480*m.clientHeight}px;`;
+        }
+        const em=(d.human.emotion||'').toLowerCase();
+        if(em.includes('happy')||em.includes('joy')) setEmotion('happy');
+        else if(em.includes('ang')||em.includes('fear')) setEmotion('alert');
+        else if(em.includes('surp')) setEmotion('curious');
+        else setEmotion('neutral');
+      } catch(e){}
+    }, 200);
+  } else {
+    clearInterval(trkTimer);
+    document.getElementById('faceBox').style.display='none';
+  }
+}
+
+// ════════════════════════════════════════════════════════
+//  FPS + CLOCK
+// ════════════════════════════════════════════════════════
+setInterval(()=>{
+  const dt2=(Date.now()-lastFpsT)/1000;
+  const fps=Math.round(fpsCount/dt2);
+  document.getElementById('mFps').textContent=fps;
+  document.getElementById('hFps').textContent=fps;
+  fpsCount=0; lastFpsT=Date.now();
+},1000);
+
+setInterval(()=>{
+  const n=new Date();
+  document.getElementById('clk').textContent=
+    [n.getHours(),n.getMinutes(),n.getSeconds()].map(v=>String(v).padStart(2,'0')).join(':');
+},1000);
+
+// ════════════════════════════════════════════════════════
+//  ROBOT CAMERA STREAM
+// ════════════════════════════════════════════════════════
+function toggleCam() {
+  camOpen=!camOpen;
+  document.getElementById('camOv').classList.toggle('open', camOpen);
+  document.getElementById('camBtn').classList.toggle('on', camOpen);
+  if (camOpen) {
+    try { fetch(`${HB}/start_collection`); } catch(e){}
+    document.getElementById('camImg').src=
+      (camMode==='seg'?`${API}/stream/seg`:`${API}/stream/raw`)+'?t='+Date.now();
+  } else {
+    document.getElementById('camImg').src='';
+  }
+}
+function closeCam() {
+  camOpen=false;
+  document.getElementById('camOv').classList.remove('open');
+  document.getElementById('camBtn').classList.remove('on');
+  document.getElementById('camImg').src='';
+}
+function setCamMode(mode) {
+  camMode=mode;
+  document.getElementById('csBtnRaw').classList.toggle('active', mode==='raw');
+  document.getElementById('csBtnSeg').classList.toggle('active', mode==='seg');
+  if(camOpen) document.getElementById('camImg').src=
+    (mode==='seg'?`${API}/stream/seg`:`${API}/stream/raw`)+'?t='+Date.now();
+}
+document.getElementById('camClose').addEventListener('click', closeCam);
+document.getElementById('camClose').addEventListener('touchstart', e=>{e.preventDefault();closeCam();});
+document.getElementById('csBtnRaw').addEventListener('click', ()=>setCamMode('raw'));
+document.getElementById('csBtnSeg').addEventListener('click', ()=>setCamMode('seg'));
+
+// ════════════════════════════════════════════════════════
+//  LOCAL WEBCAM (hidden dev option)
+// ════════════════════════════════════════════════════════
+async function toggleWC() {
+  if (!wcOpen) {
+    try {
+      wcStream = await navigator.mediaDevices.getUserMedia({video:true,audio:false});
+      document.getElementById('wcVid').srcObject=wcStream;
+      document.getElementById('wcOv').classList.add('open');
+      document.getElementById('wcBtn').classList.add('on');
+      wcOpen=true;
+    } catch(e) { alert('Webcam access denied'); }
+  } else closeWC();
+}
+function closeWC() {
+  if(wcStream){ wcStream.getTracks().forEach(t=>t.stop()); wcStream=null; }
+  document.getElementById('wcVid').srcObject=null;
+  document.getElementById('wcOv').classList.remove('open');
+  document.getElementById('wcBtn').classList.remove('on');
+  wcOpen=false;
+}
+document.getElementById('wcClose').addEventListener('click', closeWC);
+document.getElementById('wcClose').addEventListener('touchstart', e=>{e.preventDefault();closeWC();});
+
+// ════════════════════════════════════════════════════════
+//  VOICE RECORDING
+// ════════════════════════════════════════════════════════
+async function toggleVoice() {
+  if (isProc) return;
+  if (!isRec) await startRec(); else stopRec();
+}
+async function startRec() {
+  isRec=true;
+  const btn=document.getElementById('micBtn');
+  btn.classList.add('rec');
+  document.getElementById('micLbl').textContent='RECORDING...';
+  document.getElementById('micIco').textContent='🔴';
+  document.getElementById('xscript').textContent='— listening —';
+  try {
+    const stream=await navigator.mediaDevices.getUserMedia({audio:true,video:false});
+    gumStream=stream;
+    audioCtx=new(window.AudioContext||window.webkitAudioContext)();
+    const src=audioCtx.createMediaStreamSource(stream);
+    analyser=audioCtx.createAnalyser(); analyser.fftSize=256; src.connect(analyser);
+    drawWave();
+    let chunks=[];
+    mediaRec=new MediaRecorder(stream,{audioBitsPerSecond:16000});
+    mediaRec.ondataavailable=e=>chunks.push(e.data);
+    mediaRec.onstop=async()=>{
+      stopWave();
+      if(!chunks.length){resetMic();return;}
+      await processVoice(new Blob(chunks,{type:'audio/ogg;codecs=opus'}));
+      chunks=[];
+    };
+    mediaRec.start();
+  } catch(e) { resetMic(); document.getElementById('xscript').textContent='⚠ mic access denied'; }
+}
+function stopRec() {
+  isRec=false; isProc=true;
+  const btn=document.getElementById('micBtn');
+  btn.classList.remove('rec'); btn.classList.add('proc');
+  document.getElementById('micLbl').textContent='PROCESSING...';
+  document.getElementById('micIco').textContent='⟳';
+  if(mediaRec?.state!=='inactive') mediaRec.stop();
+  if(gumStream){ gumStream.getAudioTracks().forEach(t=>t.stop()); gumStream=null; }
+}
+async function processVoice(blob) {
+  const fd=new FormData(); fd.append('file',blob,'voice.ogg');
+  try {
+    const r=await fetch(`${LLM}/stt?lang=${lang}&isPlay=0`,{method:'POST',body:fd});
+    const d=await r.json();
+    const txt=(d.text||d.data||'').trim();
+    if(txt){ document.getElementById('xscript').textContent=txt; await sendToAI(txt); }
+    else document.getElementById('xscript').textContent='— no speech detected —';
+  } catch(e) { document.getElementById('xscript').textContent='⚠ STT error'; }
+  resetMic();
+}
+function resetMic() {
+  isProc=false;
+  const btn=document.getElementById('micBtn');
+  btn.classList.remove('rec','proc');
+  document.getElementById('micLbl').textContent='HOLD TO SPEAK';
+  document.getElementById('micIco').textContent='🎤';
+}
+function drawWave() {
+  const c=document.getElementById('waveC'), ctx=c.getContext('2d');
+  const buf=new Uint8Array(analyser.frequencyBinCount);
+  (function loop(){
+    waveAF=requestAnimationFrame(loop);
+    analyser.getByteTimeDomainData(buf);
+    ctx.clearRect(0,0,c.width,c.height);
+    ctx.beginPath(); ctx.strokeStyle='rgba(0,212,255,.62)'; ctx.lineWidth=1.4;
+    const sw=c.width/buf.length; let x=0;
+    for(let i=0;i<buf.length;i++){
+      const y=((buf[i]/128-1)*c.height/2)+c.height/2;
+      i===0?ctx.moveTo(x,y):ctx.lineTo(x,y); x+=sw;
+    }
+    ctx.stroke();
+  })();
+}
+function stopWave() {
+  if(waveAF) cancelAnimationFrame(waveAF);
+  const c=document.getElementById('waveC');
+  c.getContext('2d').clearRect(0,0,c.width,c.height);
+}
+
+// ════════════════════════════════════════════════════════
+//  AI CHAT
+// ════════════════════════════════════════════════════════
+function addMsg(txt, role) {
+  const log=document.getElementById('chatLog');
+  const d=document.createElement('div');
+  d.className=`cm ${role}`;
+  const t=new Date().toLocaleTimeString();
+  d.innerHTML=`<div class="ml">${role.toUpperCase()} ${t}</div>`;
+  const span=document.createElement('span');
+  span.textContent=txt; d.appendChild(span);
+  log.appendChild(d); log.scrollTop=log.scrollHeight;
+  return span;
+}
+async function sendToAI(txt) {
+  addMsg(txt,'user');
+  isTalking=true;
+  const span=addMsg('','ai');
+  try {
+    const r=await fetch(`${LLM}/txt2chat?`+new URLSearchParams({
+      prompt:txt, system:LANG_SYS[lang]||LANG_SYS.en, isPlay:'0', lang
+    }));
+    const reader=r.body.getReader(), dec=new TextDecoder();
+    let full='', lastEnd=0;
+    while(true){
+      const{done,value}=await reader.read(); if(done)break;
+      full+=dec.decode(value,{stream:true})+'\n';
+      span.textContent=full;
+      document.getElementById('chatLog').scrollTop=9999;
+      const ss=full.slice(lastEnd).match(/[^.!?。！？]*[.!?。！？]/g);
+      if(ss){ ss.forEach(s=>{const c=s.trim();if(c)ttsQ.push(c);}); lastEnd=full.length; processTts(); }
+    }
+    const tail=full.slice(lastEnd).trim();
+    if(tail){ ttsQ.push(tail); processTts(); }
+  } catch(e) { span.textContent='⚠ connection error'; }
+  isTalking=false;
+}
+function sendChat(){
+  const inp=document.getElementById('chatIn'), t=inp.value.trim();
+  if(!t)return; inp.value=''; sendToAI(t);
+}
+document.getElementById('chatIn').addEventListener('keydown',e=>{if(e.key==='Enter')sendChat();});
+document.getElementById('sendBtn').addEventListener('click',sendChat);
+document.getElementById('sendBtn').addEventListener('touchstart',e=>{e.preventDefault();sendChat();});
+
+// ════════════════════════════════════════════════════════
+//  TTS
+// ════════════════════════════════════════════════════════
+async function processTts() {
+  if(ttsPlaying||!ttsQ.length)return;
+  ttsPlaying=true;
+  isTalking=true;
+  while(ttsQ.length){
+    const t=ttsQ.shift();
+    await processTtsWithAnalyser(t).catch(async()=>{
+      // fallback: plain Audio if analyser fails (CORS etc.)
+      await new Promise(res=>{
+        const a=new Audio(`${TTS_}/tts?`+new URLSearchParams({
+          text:t, voice:(LANG_VOICE[lang]||8)-1, lang, static:'0', isPlay:'0'
+        }));
+        a.onended=res; a.onerror=res; a.play().catch(res);
+      });
+    });
+  }
+  ttsPlaying=false;
+  isTalking=false;
+}
+
+// ════════════════════════════════════════════════════════
+//  BOTTOM BAR BUTTONS — touch + click
+// ════════════════════════════════════════════════════════
+function touchClick(id, fn) {
+  const el=document.getElementById(id);
+  if(!el) return;
+  el.addEventListener('click', fn);
+  el.addEventListener('touchstart', e=>{ e.preventDefault(); fn(); el.classList.add('on'); setTimeout(()=>el.classList.remove('on'),200); }, {passive:false});
+}
+function play(name) { try{ fetch(`${MOTION}/motion?name=${name}`); }catch(e){} }
+
+touchClick('btnStop',  ()=>play('stop'));
+touchClick('btnHello', ()=>play('hello'));
+touchClick('btnClap',  ()=>play('clap'));
+touchClick('btnBye',   ()=>play('bye'));
+touchClick('btnIntro', ()=>play('intro'));
+touchClick('btnHands', ()=>play('hands'));
+touchClick('camBtn',   toggleCam);
+touchClick('trkBtn',   toggleTracking);
+touchClick('wcBtn',    toggleWC);
+touchClick('btnRst',   motorReset);
+
+document.getElementById('micBtn').addEventListener('click',toggleVoice);
+document.getElementById('micBtn').addEventListener('touchstart',e=>{e.preventDefault();toggleVoice();},{passive:false});
+document.getElementById('langSel').addEventListener('change',e=>lang=e.target.value);
+
+
+// ════════════════════════════════════════════════════════
+//  SOUND MONITOR — continuous ambient mic level + event detection
+// ════════════════════════════════════════════════════════
+let envAudioCtx = null, envAnalyser = null, envStream = null;
+let envAF = null, envRunning = false;
+let sndThresh = 18;   // RMS threshold for "sound event"
+let sndCooldown = 0;  // frames of quiet needed before re-triggering
+
+const SND_LABELS = [
+  [80, 'LOUD EVENT',   'ev-hi'],
+  [50, 'NOISE',        'ev-hi'],
+  [28, 'SOUND',        'ev-ok'],
+  [18, 'QUIET SOUND',  'ev-ok'],
+];
+
+function sndEvtPush(label, cls) {
+  const el = document.getElementById('sndEvtLog');
+  const t  = new Date().toLocaleTimeString();
+  el.innerHTML = `<span class="${cls}">[${t}] ${label}</span>`;
+}
+
+async function startEnvMic() {
+  if (envRunning) return;
+  try {
+    envStream   = await navigator.mediaDevices.getUserMedia({audio:true, video:false});
+    envAudioCtx = new (window.AudioContext||window.webkitAudioContext)();
+    const src   = envAudioCtx.createMediaStreamSource(envStream);
+    envAnalyser = envAudioCtx.createAnalyser();
+    envAnalyser.fftSize = 256;
+    src.connect(envAnalyser);
+    envRunning = true;
+    tickEnvMic();
+  } catch(e) {
+    document.getElementById('sndEvtLog').textContent = '⚠ mic denied';
+  }
+}
+
+function tickEnvMic() {
+  if (!envRunning) return;
+  envAF = requestAnimationFrame(tickEnvMic);
+
+  // Skip if we're already recording voice (same mic, avoid double grab)
+  if (isRec) return;
+
+  const buf = new Uint8Array(envAnalyser.frequencyBinCount);
+  envAnalyser.getByteTimeDomainData(buf);
+
+  // Compute RMS amplitude 0–100
+  let sum = 0;
+  for (let i=0; i<buf.length; i++) { const v=(buf[i]/128-1); sum+=v*v; }
+  const rms = Math.round(Math.sqrt(sum/buf.length)*100);
+
+  // Update VU bar
+  document.getElementById('vuFill').style.width = Math.min(rms*1.8, 100)+'%';
+  document.getElementById('vuVal').textContent   = rms+'dB';
+
+  // Colour the bar based on level
+  const fill = document.getElementById('vuFill');
+  if      (rms > 60) fill.style.background='linear-gradient(90deg,var(--c4),var(--c3))';
+  else if (rms > 30) fill.style.background='linear-gradient(90deg,var(--c2),var(--c4))';
+  else               fill.style.background='linear-gradient(90deg,var(--c2),var(--c1))';
+
+  // Also drive mouth scale slightly via env sound when not TTS-talking
+  if (!isTalking && rms > sndThresh) {
+    talkPhase += 0.18;   // nudge mouth open
+  }
+
+  // Sound event detection (with cooldown)
+  if (sndCooldown > 0) { sndCooldown--; return; }
+  if (rms > sndThresh) {
+    let lbl='SOUND DETECTED', cls='ev-ok';
+    for (const [threshold, label, c] of SND_LABELS) {
+      if (rms >= threshold) { lbl=label; cls=c; break; }
+    }
+    sndEvtPush(lbl + '  ' + rms + 'dB', cls);
+    sndCooldown = 45;   // ~0.75s cooldown at 60fps
+  }
+}
+
+// Start env mic automatically after a short delay
+setTimeout(startEnvMic, 1200);
+
+// ════════════════════════════════════════════════════════
+//  TTS — route audio through AnalyserNode for real mouth sync
+// ════════════════════════════════════════════════════════
+
+async function processTtsWithAnalyser(text) {
+  return new Promise(res => {
+    const url = `${TTS_}/tts?` + new URLSearchParams({
+      text, voice:(LANG_VOICE[lang]||8)-1, lang, static:'0', isPlay:'0'
+    });
+    const audio = new Audio(url);
+    audio.crossOrigin = 'anonymous';
+
+    audio.addEventListener('canplay', () => {
+      try {
+        if (!ttsAudioCtx2) {
+          ttsAudioCtx2 = new (window.AudioContext||window.webkitAudioContext)();
+          ttsAnalyser   = ttsAudioCtx2.createAnalyser();
+          ttsAnalyser.fftSize = 256;
+          ttsAnalyser.connect(ttsAudioCtx2.destination);
+        }
+        const src = ttsAudioCtx2.createMediaElementSource(audio);
+        src.connect(ttsAnalyser);
+      } catch(e) { /* CORS or already connected — fallback to timer-based */ }
+    }, {once:true});
+
+    audio.onended = res;
+    audio.onerror = res;
+    audio.play().catch(res);
+  });
+}
+
+
+// ════════════════════════════════════════════════════════
+//  VISION PANEL — poll heartbeat for person + YOLO objects
+// ════════════════════════════════════════════════════════
+const POS_MAP = {
+  TL:'↖ TOP-LEFT',  TC:'↑ TOP-CENTER',  TR:'↗ TOP-RIGHT',
+  CL:'← CENTER-L',  CC:'⊙ CENTER',       CR:'→ CENTER-R',
+  BL:'↙ BOT-LEFT',  BC:'↓ BOT-CENTER',  BR:'↘ BOT-RIGHT',
+};
+const GENDER_MAP = { M:'MALE', F:'FEMALE' };
+
+let visionTimer = null;
+
+function startVisionPoll() {
+  if (visionTimer) return;
+  visionTimer = setInterval(async () => {
+    try {
+      const r = await fetch(`${HB}/heartbeat`);
+      const d = (await r.json()).data;
+      const h = d.human || {};
+
+      // ── Person info
+      const detected = d.cnt_live > 0;
+      document.getElementById('vpPerson').textContent  = detected ? `YES (${d.cnt_live})` : 'NONE';
+      document.getElementById('vpPerson').className    = 'vp-val ' + (detected ? 'ok' : '');
+      document.getElementById('vpPos').textContent     = POS_MAP[h.position] || '--';
+      document.getElementById('vpGender').textContent  = GENDER_MAP[h.gender] || '--';
+      document.getElementById('vpAge').textContent     = h.age != null ? h.age+'yr' : '--';
+      document.getElementById('vpEmot').textContent    = (h.emotion||'--').toUpperCase();
+
+      // ── YOLO objects (if heartbeat returns them)
+      const objs = d.objects || [];
+      document.getElementById('vpObjCount').textContent = objs.length;
+      document.getElementById('vpObjCount').className   = 'vp-val ' + (objs.length ? 'ok' : '');
+
+      const list = document.getElementById('objList');
+      list.innerHTML = '';
+      objs.slice(0, 8).forEach(obj => {
+        const row = document.createElement('div');
+        row.className = 'obj-row';
+        const conf = obj.confidence != null ? Math.round(obj.confidence*100)+'%' : '';
+        const box  = obj.box ? `[${obj.box.x},${obj.box.y}]` : '';
+        row.innerHTML = `<span class="obj-nm">${(obj.label||obj.class||'OBJ').toUpperCase()}</span>
+                         <span class="obj-conf">${conf}</span>
+                         <span class="obj-box">${box}</span>`;
+        list.appendChild(row);
+      });
+
+      // Also update face bounding box overlay if detected
+      if (detected && h.box) {
+        const fb=document.getElementById('faceBox'), m=document.getElementById('faceArea');
+        fb.style.cssText=`display:block;left:${h.box.x/640*m.clientWidth}px;
+          top:${h.box.y/480*m.clientHeight}px;
+          width:${h.box.w/640*m.clientWidth}px;
+          height:${h.box.h/480*m.clientHeight}px;`;
+      } else {
+        document.getElementById('faceBox').style.display='none';
+      }
+    } catch(e) {
+      document.getElementById('vpPerson').textContent = 'OFFLINE';
+    }
+  }, 300);
+}
+
+// Start vision polling always (independent of tracking button)
+setTimeout(startVisionPoll, 1500);
+
+// ════════════════════════════════════════════════════════
+//  INIT MESSAGE
+// ════════════════════════════════════════════════════════
+setTimeout(()=>addMsg('ARCos Neural Interface online. Intel NPU initialized. Ready.','ai'), 800);
+</script>
+</body>
+</html>
