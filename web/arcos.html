@@ -1068,8 +1068,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 else if (pos.startsWith('B')) tiltDelta = +MOTOR_STEP;  // 아래에 있으면 아래로
 
                 // 좌우 (Pan)
-                if (pos.endsWith('L'))      panDelta = -MOTOR_STEP;  // 왼쪽에 있으면 왼쪽으로
-                else if (pos.endsWith('R')) panDelta = +MOTOR_STEP;  // 오른쪽에 있으면 오른쪽으로
+                if (pos.endsWith('L'))      panDelta = +MOTOR_STEP;  // 왼쪽에 있으면 왼쪽으로
+                else if (pos.endsWith('R')) panDelta = -MOTOR_STEP;  // 오른쪽에 있으면 오른쪽으로
 
                 if (panDelta !== 0 || tiltDelta !== 0) {
                     sendMotor(panDelta, tiltDelta);
