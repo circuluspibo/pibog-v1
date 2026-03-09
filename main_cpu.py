@@ -24,6 +24,12 @@ import csv
 import os
 from datetime import datetime
 from monitor import CPUPowerMonitor
+import subprocess
+
+def play_sound(file_path):
+    subprocess.run(["play", file_path])
+
+
 def getHash(text):
   hash_func = hashlib.new('md5')
   hash_func.update(text.encode('utf-8'))
@@ -147,7 +153,7 @@ def tts1(text="", voice=31, lang='ko', static=0, isPlay=0):
         return "output/human.wav"
 
     if int(isPlay) > 0:
-        playsound(f"output/{filename}.wav")
+        play_sound(f"output/{filename}.wav")
 
     write(data=audio, rate=sampling_rate, filename=f"output/{filename}.wav")
     return f"output/{filename}.wav"
@@ -179,7 +185,7 @@ def tts2(text = "", voice=6, lang='ko', static=0):
 
     print(t.time() - start)
     write(data=audio, rate=conf_tts.data.sampling_rate, filename=f"output/{filename}.wav")
-    playsound(f"output/{filename}.wav")
+    play_sound(f"output/{filename}.wav")
     
     return f"output/{filename}.wav"
 
