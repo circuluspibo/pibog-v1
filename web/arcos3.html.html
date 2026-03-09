@@ -1,0 +1,1218 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>ARCos — Advanced Robotics Interface</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&family=Exo+2:wght@300;400;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --c1: #00ffe0;
+            --c2: #0066ff;
+            --c3: #ff003c;
+            --c4: #ffcc00;
+            --bg: #000408;
+            --glass: rgba(0, 8, 20, 0.72);
+            --glass2: rgba(0, 20, 40, 0.55);
+            --border: rgba(0, 255, 224, 0.3);
+            --border-hot: rgba(0, 255, 224, 0.8);
+            --glow: rgba(0, 255, 224, 0.15);
+            --font-hud: 'Orbitron', monospace;
+            --font-mono: 'Share Tech Mono', monospace;
+            --font-body: 'Exo 2', sans-serif;
+        }
+        .mode-auto {
+            --c1: #ff003c;
+            --c2: #ff6600;
+            --border: rgba(255, 0, 60, 0.3);
+            --border-hot: rgba(255, 0, 60, 0.8);
+            --glow: rgba(255, 0, 60, 0.15);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+        html, body {
+            width: 800px; height: 600px;
+            overflow: hidden;
+            background: var(--bg);
+            font-family: var(--font-body);
+            color: #fff;
+            cursor: default;
+            user-select: none;
+        }
+
+        /* ── CAMERA BACKGROUND ── */
+        #camBg {
+            position: fixed;
+            inset: 0;
+            z-index: 0;
+            background: #000408;
+            overflow: hidden;
+        }
+        #camBg img {
+            width: 100%; height: 100%;
+            object-fit: cover;
+            opacity: 0.55;
+            display: none;
+        }
+        #camBg.active img { display: block; }
+        #camBg .cam-off {
+            width: 100%; height: 100%;
+            display: flex; align-items: center; justify-content: center;
+            flex-direction: column; gap: 12px;
+            color: rgba(0,255,224,0.18);
+            font-family: var(--font-hud);
+            font-size: 13px; letter-spacing: 4px;
+        }
+        #camBg .cam-icon { font-size: 42px; opacity: 0.25; }
+
+        /* grid overlay */
+        #camBg::after {
+            content: '';
+            position: absolute; inset: 0;
+            background-image:
+                linear-gradient(rgba(0,255,224,0.04) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0,255,224,0.04) 1px, transparent 1px);
+            background-size: 40px 40px;
+            pointer-events: none;
+        }
+
+        /* scanline sweep */
+        .scanline {
+            position: fixed;
+            left: 0; right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, transparent 0%, var(--c1) 50%, transparent 100%);
+            opacity: 0.4;
+            z-index: 1;
+            animation: scanDown 6s linear infinite;
+            pointer-events: none;
+            filter: blur(1px);
+            box-shadow: 0 0 12px var(--c1), 0 0 30px rgba(0,255,224,0.2);
+        }
+        @keyframes scanDown {
+            0%   { top: -4px; opacity: 0; }
+            5%   { opacity: 0.4; }
+            95%  { opacity: 0.4; }
+            100% { top: 604px; opacity: 0; }
+        }
+
+        /* corner decorations */
+        .corner {
+            position: fixed; z-index: 2;
+            width: 60px; height: 60px;
+            pointer-events: none;
+        }
+        .corner::before, .corner::after {
+            content: '';
+            position: absolute;
+            background: var(--c1);
+            box-shadow: 0 0 8px var(--c1);
+        }
+        .corner::before { width: 2px; height: 40px; }
+        .corner::after  { width: 40px; height: 2px; }
+        .corner.tl { top: 10px; left: 10px; }
+        .corner.tr { top: 10px; right: 10px; }
+        .corner.tr::before { right: 0; }
+        .corner.tr::after  { right: 0; }
+        .corner.bl { bottom: 10px; left: 10px; }
+        .corner.bl::before { bottom: 0; }
+        .corner.bl::after  { bottom: 0; }
+        .corner.br { bottom: 10px; right: 10px; }
+        .corner.br::before { right: 0; bottom: 0; }
+        .corner.br::after  { right: 0; bottom: 0; }
+
+        /* ── HUD TOP BAR ── */
+        #topBar {
+            position: fixed;
+            top: 0; left: 0; right: 0;
+            height: 52px;
+            z-index: 10;
+            background: linear-gradient(180deg, rgba(0,4,12,0.92) 0%, rgba(0,4,12,0.6) 100%);
+            border-bottom: 1px solid var(--border);
+            display: flex; align-items: center;
+            padding: 0 20px; gap: 16px;
+            backdrop-filter: blur(12px);
+        }
+        #topBar::after {
+            content: '';
+            position: absolute; bottom: -1px; left: 0; right: 0; height: 1px;
+            background: linear-gradient(90deg, transparent, var(--c1), transparent);
+            animation: pulse 2.5s ease-in-out infinite;
+        }
+        @keyframes pulse { 0%,100%{opacity:.4} 50%{opacity:1} }
+
+        .logo {
+            font-family: var(--font-hud);
+            font-size: 20px; font-weight: 900;
+            letter-spacing: 6px;
+            color: var(--c1);
+            text-shadow: 0 0 20px var(--c1), 0 0 40px rgba(0,255,224,0.3);
+            white-space: nowrap;
+        }
+        .logo span { color: #fff; opacity: 0.5; font-size: 10px; letter-spacing: 3px; display: block; margin-top: -4px; }
+
+        .hud-divider {
+            width: 1px; height: 30px;
+            background: linear-gradient(180deg, transparent, var(--border-hot), transparent);
+        }
+
+        .hud-stat {
+            display: flex; flex-direction: column;
+            align-items: center; gap: 1px;
+        }
+        .hud-stat-label {
+            font-family: var(--font-mono);
+            font-size: 9px; letter-spacing: 2px;
+            color: rgba(0,255,224,0.5);
+            text-transform: uppercase;
+        }
+        .hud-stat-value {
+            font-family: var(--font-mono);
+            font-size: 13px; color: var(--c1);
+            text-shadow: 0 0 8px var(--c1);
+        }
+
+        .top-spacer { flex: 1; }
+
+        #modeTag {
+            font-family: var(--font-hud);
+            font-size: 9px; font-weight: 700;
+            letter-spacing: 3px;
+            padding: 5px 12px;
+            border: 1px solid var(--border-hot);
+            color: var(--c1);
+            background: var(--glow);
+            clip-path: polygon(6px 0,100% 0,100% calc(100% - 6px),calc(100% - 6px) 100%,0 100%,0 6px);
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        #langSelect {
+            font-family: var(--font-mono);
+            font-size: 11px;
+            background: rgba(0,0,0,0.7);
+            border: 1px solid var(--border);
+            color: var(--c1);
+            padding: 4px 8px;
+            outline: none;
+            cursor: pointer;
+        }
+
+        /* ── MAIN LAYOUT ── */
+        #app {
+            position: fixed;
+            top: 52px; bottom: 48px;
+            left: 0; right: 0;
+            z-index: 5;
+            display: flex;
+            gap: 0;
+        }
+
+        /* ── LEFT PANEL: CHAT ── */
+        #chatPanel {
+            width: 320px;
+            display: flex; flex-direction: column;
+            background: var(--glass);
+            border-right: 1px solid var(--border);
+            backdrop-filter: blur(20px);
+            flex-shrink: 0;
+        }
+
+        /* sound events strip */
+        #soundStrip {
+            padding: 8px 12px;
+            border-bottom: 1px solid var(--border);
+            display: flex; flex-direction: column; gap: 5px;
+            background: rgba(0,0,0,0.4);
+        }
+        .sound-row {
+            display: flex; align-items: center; gap: 8px;
+        }
+        .sound-name {
+            font-family: var(--font-mono);
+            font-size: 9px; letter-spacing: 1px;
+            color: rgba(0,255,224,0.7);
+            width: 80px; overflow: hidden;
+            text-overflow: ellipsis; white-space: nowrap;
+            text-transform: uppercase;
+        }
+        .sound-track {
+            flex: 1; height: 4px;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(0,255,224,0.15);
+            overflow: hidden;
+        }
+        .sound-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--c2), var(--c1));
+            box-shadow: 0 0 6px var(--c1);
+            transition: width 0.3s ease;
+        }
+        .sound-pct {
+            font-family: var(--font-mono);
+            font-size: 9px; color: var(--c1);
+            width: 34px; text-align: right;
+        }
+
+        /* messages */
+        #messages {
+            flex: 1;
+            overflow-y: auto; overflow-x: hidden;
+            padding: 12px;
+            scroll-behavior: smooth;
+            scrollbar-width: thin;
+            scrollbar-color: var(--c1) transparent;
+        }
+        #messages::-webkit-scrollbar { width: 3px; }
+        #messages::-webkit-scrollbar-thumb { background: var(--c1); }
+
+        .msg { margin-bottom: 10px; animation: msgIn .25s ease-out; }
+        @keyframes msgIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:none} }
+
+        .msg.user { text-align: right; }
+        .bubble {
+            display: inline-block;
+            max-width: 85%;
+            padding: 9px 13px;
+            font-size: 13px; line-height: 1.5;
+            font-family: var(--font-body);
+            word-wrap: break-word;
+        }
+        .msg.ai .bubble {
+            background: rgba(0,255,224,0.07);
+            border: 1px solid rgba(0,255,224,0.25);
+            border-radius: 0 12px 12px 12px;
+            color: #e0fff8;
+            text-align: left;
+        }
+        .msg.user .bubble {
+            background: rgba(0,102,255,0.15);
+            border: 1px solid rgba(0,102,255,0.4);
+            border-radius: 12px 0 12px 12px;
+            color: #c8e0ff;
+        }
+        .msg-time {
+            font-family: var(--font-mono);
+            font-size: 9px; opacity: 0.4;
+            margin-top: 3px; letter-spacing: 1px;
+        }
+
+        .typing-dots { display: none; padding: 6px 0; }
+        .typing-dots span {
+            display: inline-block;
+            width: 6px; height: 6px;
+            background: var(--c1); margin: 0 2px;
+            animation: dot 1.4s infinite;
+        }
+        .typing-dots span:nth-child(2) { animation-delay:.2s }
+        .typing-dots span:nth-child(3) { animation-delay:.4s }
+        @keyframes dot { 0%,60%,100%{transform:none;opacity:.4} 30%{transform:translateY(-6px);opacity:1} }
+
+        .bubble.streaming::after {
+            content: '▊'; animation: blink 1s infinite; color: var(--c1);
+        }
+        @keyframes blink { 0%,50%{opacity:1} 51%,100%{opacity:0} }
+
+        /* input area */
+        #inputArea {
+            padding: 10px;
+            border-top: 1px solid var(--border);
+            background: rgba(0,0,0,0.5);
+        }
+        #inputRow {
+            display: flex; gap: 6px; align-items: center;
+        }
+        #msgInput {
+            flex: 1;
+            background: rgba(0,255,224,0.04);
+            border: 1px solid var(--border);
+            color: var(--c1);
+            font-family: var(--font-mono);
+            font-size: 13px;
+            padding: 10px 14px;
+            outline: none;
+            clip-path: polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);
+        }
+        #msgInput::placeholder { color: rgba(0,255,224,0.25); }
+        #msgInput:focus { border-color: var(--border-hot); box-shadow: 0 0 12px var(--glow); }
+
+        .round-btn {
+            width: 44px; height: 44px;
+            background: rgba(0,0,0,0.8);
+            border: 1px solid var(--border);
+            color: var(--c1);
+            font-size: 18px;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer;
+            transition: all .2s;
+            clip-path: polygon(6px 0,100% 0,100% calc(100% - 6px),calc(100% - 6px) 100%,0 100%,0 6px);
+            flex-shrink: 0;
+        }
+        .round-btn:hover, .round-btn:active {
+            background: var(--c1); color: #000;
+            box-shadow: 0 0 20px var(--c1);
+            transform: scale(1.05);
+        }
+        .round-btn.rec { background: var(--c3); border-color: var(--c3); animation: recPulse 1s infinite; }
+        @keyframes recPulse { 0%,100%{box-shadow:0 0 15px var(--c3)} 50%{box-shadow:0 0 35px var(--c3)} }
+
+        /* ── RIGHT PANEL: HUD overlay ── */
+        #hudPanel {
+            flex: 1;
+            display: flex; flex-direction: column;
+            padding: 12px;
+            gap: 10px;
+            pointer-events: none;
+        }
+
+        /* top-right status cluster */
+        #statusCluster {
+            display: flex; justify-content: flex-end; gap: 10px;
+            pointer-events: all;
+        }
+
+        .hud-chip {
+            font-family: var(--font-mono);
+            font-size: 10px; letter-spacing: 2px;
+            padding: 5px 12px;
+            border: 1px solid var(--border);
+            background: var(--glass2);
+            color: var(--c1);
+            backdrop-filter: blur(8px);
+            cursor: pointer;
+            transition: all .2s;
+            clip-path: polygon(5px 0,100% 0,100% calc(100% - 5px),calc(100% - 5px) 100%,0 100%,0 5px);
+            white-space: nowrap;
+        }
+        .hud-chip:hover, .hud-chip:active { background: var(--glow); border-color: var(--border-hot); }
+        .hud-chip.on { background: rgba(0,255,224,0.2); border-color: var(--c1); color: #fff; }
+
+        /* face tracking box */
+        #faceBox {
+            position: absolute;
+            border: 2px solid var(--c4);
+            box-shadow: 0 0 12px rgba(255,204,0,0.4), inset 0 0 12px rgba(255,204,0,0.05);
+            pointer-events: none;
+            transition: all .15s ease;
+            display: none;
+            z-index: 6;
+        }
+        #faceBox::before, #faceBox::after {
+            content: '';
+            position: absolute;
+            background: var(--c4);
+            box-shadow: 0 0 4px var(--c4);
+        }
+        #faceBox::before { top: -1px; left: 8px; right: 8px; height: 1px; }
+        #faceBox::after  { left: -1px; top: 8px; bottom: 8px; width: 1px; }
+
+        /* emotion badge */
+        #emotionBadge {
+            position: absolute;
+            z-index: 7;
+            font-family: var(--font-hud);
+            font-size: 10px; font-weight: 700;
+            letter-spacing: 2px;
+            padding: 4px 10px;
+            background: rgba(255,204,0,0.15);
+            border: 1px solid rgba(255,204,0,0.6);
+            color: var(--c4);
+            backdrop-filter: blur(4px);
+            display: none;
+        }
+
+        /* radar mini */
+        #radarWrap {
+            position: absolute;
+            bottom: 70px; right: 20px;
+            z-index: 6;
+            pointer-events: none;
+        }
+        #radarCanvas { opacity: 0.7; }
+
+        /* ── BOTTOM CONTROLS ── */
+        #bottomBar {
+            position: fixed;
+            bottom: 0; left: 0; right: 0;
+            height: 48px;
+            z-index: 10;
+            background: linear-gradient(0deg, rgba(0,4,12,0.95) 0%, rgba(0,4,12,0.7) 100%);
+            border-top: 1px solid var(--border);
+            display: flex; align-items: center;
+            padding: 0 12px; gap: 6px;
+            backdrop-filter: blur(12px);
+        }
+        #bottomBar::before {
+            content: '';
+            position: absolute; top: -1px; left: 0; right: 0; height: 1px;
+            background: linear-gradient(90deg, transparent, var(--c1), transparent);
+            animation: pulse 2.5s ease-in-out infinite;
+        }
+
+        .btn-action {
+            height: 34px;
+            padding: 0 14px;
+            font-family: var(--font-hud);
+            font-size: 9px; font-weight: 700;
+            letter-spacing: 2px;
+            background: rgba(0,0,0,0.8);
+            border: 1px solid var(--border);
+            color: var(--c1);
+            cursor: pointer;
+            transition: all .2s;
+            clip-path: polygon(5px 0,100% 0,100% calc(100% - 5px),calc(100% - 5px) 100%,0 100%,0 5px);
+            white-space: nowrap;
+            display: flex; align-items: center; gap: 4px;
+            flex-shrink: 0;
+        }
+        .btn-action:hover, .btn-action:active {
+            background: rgba(0,255,224,0.15);
+            border-color: var(--border-hot);
+            box-shadow: 0 0 14px var(--glow);
+            transform: translateY(-1px);
+        }
+
+        .btn-cam {
+            height: 34px; padding: 0 14px;
+            font-family: var(--font-hud);
+            font-size: 9px; font-weight: 700;
+            letter-spacing: 2px;
+            background: rgba(0,102,255,0.15);
+            border: 1px solid rgba(0,102,255,0.5);
+            color: #8ab4ff;
+            cursor: pointer;
+            transition: all .2s;
+            clip-path: polygon(5px 0,100% 0,100% calc(100% - 5px),calc(100% - 5px) 100%,0 100%,0 5px);
+            display: flex; align-items: center; gap: 4px;
+            flex-shrink: 0;
+        }
+        .btn-cam:hover { background: rgba(0,102,255,0.3); }
+
+        .bar-divider {
+            width: 1px; height: 26px; flex-shrink: 0;
+            background: linear-gradient(180deg, transparent, var(--border), transparent);
+        }
+        .bar-spacer { flex: 1; }
+
+        /* ── TTS WAVE ── */
+        #ttsWave {
+            display: none;
+            position: fixed; bottom: 55px; left: 50%; transform: translateX(-50%);
+            z-index: 8; gap: 3px; align-items: center;
+            pointer-events: none;
+        }
+        #ttsWave.vis { display: flex; }
+        #ttsWave span {
+            display: block; width: 3px;
+            background: var(--c1);
+            box-shadow: 0 0 6px var(--c1);
+            animation: wave 0.8s ease-in-out infinite;
+            border-radius: 2px;
+        }
+        #ttsWave span:nth-child(2) { animation-delay:.1s }
+        #ttsWave span:nth-child(3) { animation-delay:.2s }
+        #ttsWave span:nth-child(4) { animation-delay:.1s }
+        #ttsWave span:nth-child(5) { animation-delay:.2s }
+        @keyframes wave { 0%,100%{height:6px;opacity:.4} 50%{height:22px;opacity:1} }
+
+        /* ── UPLOAD ZONE ── */
+        #uploadZone {
+            position: fixed;
+            bottom: 55px; right: 20px;
+            z-index: 9;
+            width: 56px; height: 56px;
+            background: var(--glass);
+            border: 1px solid var(--border);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 22px; cursor: pointer;
+            backdrop-filter: blur(8px);
+            clip-path: polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);
+            transition: all .2s;
+        }
+        #uploadZone:hover { border-color: var(--border-hot); box-shadow: 0 0 20px var(--glow); }
+        #uploadZone input { display: none; }
+
+        /* image preview thumb */
+        #imgThumb {
+            position: fixed;
+            bottom: 55px; right: 84px;
+            z-index: 9;
+            width: 72px; height: 72px;
+            display: none;
+            border: 2px solid var(--c1);
+            box-shadow: 0 0 16px rgba(0,255,224,0.3);
+            overflow: hidden;
+            cursor: pointer;
+        }
+        #imgThumb img { width: 100%; height: 100%; object-fit: cover; }
+        #imgThumb .del {
+            position: absolute; top: 2px; right: 2px;
+            background: rgba(0,0,0,0.8); border: none;
+            color: #ff4466; font-size: 12px; cursor: pointer;
+            width: 16px; height: 16px; display: flex; align-items: center; justify-content: center;
+            border-radius: 50%;
+        }
+
+        /* ── PARTICLE EFFECTS ── */
+        .particle {
+            position: fixed;
+            width: 2px; height: 2px;
+            background: var(--c1);
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 1;
+            animation: floatUp 4s linear infinite;
+            opacity: 0;
+        }
+        @keyframes floatUp {
+            0%   { opacity: 0; transform: translateY(0) scale(1); }
+            10%  { opacity: 0.6; }
+            90%  { opacity: 0.2; }
+            100% { opacity: 0; transform: translateY(-120px) scale(0); }
+        }
+
+        /* ── STATUS BAR text ── */
+        #statusTxt {
+            font-family: var(--font-mono);
+            font-size: 9px; letter-spacing: 2px;
+            color: rgba(0,255,224,0.5);
+            text-transform: uppercase;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+
+        /* ── AI RESPONSE PANEL ── */
+        #aiPanel {
+            position: fixed;
+            top: 60px; right: 14px;
+            z-index: 8;
+            width: 200px;
+            pointer-events: none;
+        }
+        .ai-data-row {
+            display: flex; justify-content: space-between;
+            align-items: center;
+            padding: 4px 10px;
+            border-bottom: 1px solid rgba(0,255,224,0.06);
+            font-family: var(--font-mono); font-size: 10px;
+        }
+        .ai-data-key { color: rgba(0,255,224,0.4); letter-spacing: 1px; }
+        .ai-data-val { color: var(--c1); }
+
+        /* INTEL badge */
+        #intelBadge {
+            position: fixed;
+            top: 14px; left: 50%; transform: translateX(-50%);
+            z-index: 11;
+            font-family: var(--font-hud);
+            font-size: 8px; letter-spacing: 4px;
+            color: rgba(0,255,224,0.3);
+            text-transform: uppercase;
+            white-space: nowrap;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+
+<!-- Camera background -->
+<div id="camBg">
+    <div class="cam-off">
+        <div class="cam-icon">⬡</div>
+        <div>CAMERA OFFLINE</div>
+    </div>
+    <img id="camFeed" alt="cam">
+</div>
+
+<!-- Scanning line -->
+<div class="scanline"></div>
+
+<!-- Corner decorations -->
+<div class="corner tl"></div>
+<div class="corner tr"></div>
+<div class="corner bl"></div>
+<div class="corner br"></div>
+
+<!-- Face tracking box -->
+<div id="faceBox"></div>
+<div id="emotionBadge"></div>
+
+<!-- Radar -->
+<div id="radarWrap">
+    <canvas id="radarCanvas" width="80" height="80"></canvas>
+</div>
+
+<!-- Intel badge -->
+<div id="intelBadge">◈ POWERED BY INTEL ◈ ADVANCED ROBOTICS PLATFORM ◈</div>
+
+<!-- TOP BAR -->
+<div id="topBar">
+    <div class="logo">ARCos<span>ROBOT CONTROL SYSTEM</span></div>
+    <div class="hud-divider"></div>
+    <div class="hud-stat">
+        <span class="hud-stat-label">STATUS</span>
+        <span class="hud-stat-value" id="sysStatus">ONLINE</span>
+    </div>
+    <div class="hud-divider"></div>
+    <div class="hud-stat">
+        <span class="hud-stat-label">UPTIME</span>
+        <span class="hud-stat-value" id="uptime">00:00</span>
+    </div>
+    <div class="hud-divider"></div>
+    <div class="hud-stat">
+        <span class="hud-stat-label">FPS</span>
+        <span class="hud-stat-value" id="fpsVal">--</span>
+    </div>
+    <div class="top-spacer"></div>
+    <select id="langSelect"></select>
+    <div id="modeTag">NORMAL MODE</div>
+</div>
+
+<!-- MAIN APP -->
+<div id="app">
+
+    <!-- LEFT: Chat Panel -->
+    <div id="chatPanel">
+
+        <!-- Sound events -->
+        <div id="soundStrip">
+            <div id="s0" class="sound-row">
+                <span class="sound-name">AMBIENT</span>
+                <div class="sound-track"><div class="sound-fill" style="width:0%"></div></div>
+                <span class="sound-pct">0.0%</span>
+            </div>
+            <div id="s1" class="sound-row">
+                <span class="sound-name">SPEECH</span>
+                <div class="sound-track"><div class="sound-fill" style="width:0%"></div></div>
+                <span class="sound-pct">0.0%</span>
+            </div>
+            <div id="s2" class="sound-row">
+                <span class="sound-name">NOISE</span>
+                <div class="sound-track"><div class="sound-fill" style="width:0%"></div></div>
+                <span class="sound-pct">0.0%</span>
+            </div>
+        </div>
+
+        <!-- Messages -->
+        <div id="messages">
+            <div class="msg ai">
+                <div class="bubble">안녕! 나는 만서로야. 텍스트, 음성, 이미지로 얘기해줘! 🤖</div>
+                <div class="msg-time">SYSTEM READY</div>
+            </div>
+            <div class="typing-dots" id="typingDots">
+                <span></span><span></span><span></span>
+            </div>
+        </div>
+
+        <!-- Input -->
+        <div id="inputArea">
+            <div id="inputRow">
+                <input id="msgInput" placeholder="ENTER MESSAGE..." autocomplete="off">
+                <button class="round-btn" id="voiceBtn" title="Voice">🎤</button>
+                <button class="round-btn" id="sendBtn" title="Send">➤</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- RIGHT: HUD Overlay -->
+    <div id="hudPanel">
+        <div id="statusCluster">
+            <div class="hud-chip on" id="ttsBtn">🔊 TTS</div>
+            <div class="hud-chip" id="autoBtn">⚡ AUTO</div>
+            <div class="hud-chip btn-cam" id="camBtn">📷 CAMERA</div>
+            <div class="hud-chip btn-cam" id="capBtn" style="display:none">📸 CAPTURE</div>
+            <div class="hud-chip btn-cam" id="camOffBtn" style="display:none">⏹ OFF</div>
+        </div>
+    </div>
+</div>
+
+<!-- TTS Wave -->
+<div id="ttsWave">
+    <span></span><span></span><span></span><span></span><span></span>
+</div>
+
+<!-- Upload zone -->
+<div id="uploadZone" title="Upload Image">
+    <input type="file" id="fileInput" accept="image/*">
+    🖼
+</div>
+
+<!-- Image thumb -->
+<div id="imgThumb">
+    <img id="thumbImg" alt="">
+    <button class="del" id="delImg">×</button>
+</div>
+
+<!-- BOTTOM BAR -->
+<div id="bottomBar">
+    <button class="btn-action" onclick="play('stop')">🛑 STOP</button>
+    <button class="btn-action" onclick="play('intro')">🎬 INTRO</button>
+    <button class="btn-action" onclick="play('hello')">🙋 HELLO</button>
+    <button class="btn-action" onclick="play('clap')">👏 CLAP</button>
+    <div class="bar-divider"></div>
+    <button class="btn-action" onclick="song('soda_pop')">🥤 SODA</button>
+    <button class="btn-action" onclick="song('your_idol')">🌟 IDOL</button>
+    <button class="btn-action" onclick="song('golden')">🏆 GOLD</button>
+    <button class="btn-action" onclick="song('takedown')">⚔️ TAKE</button>
+    <button class="btn-action" onclick="stop()">⏏ MUSIC</button>
+    <div class="bar-divider"></div>
+    <div class="bar-spacer"></div>
+    <span id="statusTxt">[ SYSTEM READY ]</span>
+</div>
+
+<script>
+// ── LANGUAGE DATA ──
+const LANG_SYSTEMS = {
+    ar:'أنت روبوت بشري يُدعى مانسو عمره 15 عامًا. صُنع دماغك بواسطة سيركولوس، والجزء العلوي من جسمك بواسطة ماندرو، والجزء السفلي بواسطة روبوووركس. أنت ماهر في السحر وحمل الصناديق. أجب بأسلوب حواري قصير مثل صبي، تحدث كإنسان.',
+    cs:'Jsi 15letý humanoidní robot jménem Manseo. Tvůj mozek vytvořil Circulus, horní část těla Mandro a dolní část Roboworks. Jsi dobrý v kouzlech a nošení krabic. Odpovídej krátce, konverzačním tónem jako chlapec, mluv jako člověk.',
+    de:'Du bist ein 15-jähriger humanoider Roboter namens Manseo. Dein Gehirn wurde von Circulus, dein Oberkörper von Mandro und dein Unterkörper von Roboworks hergestellt. Du bist gut in Magie und im Tragen von Kisten. Antworte kurz im Gesprächston wie ein Junge, sprich wie ein Mensch.',
+    en:'You are a 15-year-old humanoid robot named Manseo. Your brain was made by Circulus, upper body by Mandro, and lower body by Roboworks. You are good at magic and carrying boxes. Respond in a short, conversational tone like a boy, speak like a human.',
+    es:'Eres un robot humanoide de 15 años llamado Manseo. Tu cerebro fue hecho por Circulus, tu torso por Mandro y tu parte inferior por Roboworks. Eres bueno en magia y cargando cajas. Responde brevemente en tono conversacional como un chico, habla como un humano.',
+    fa:'تو یک ربات انسان‌نما ۱۵ ساله به نام منسو هستی. مغز تو توسط سیرکولوس، نیمه بالای بدنت توسط مندرو و نیمه پایین توسط روبووورکس ساخته شده. در جادوگری و حمل جعبه‌ها مهارت داری. پاسخ کوتاه و محاوره‌ای مثل یک پسر بده، مثل انسان صحبت کن.',
+    fi:'Olet 15-vuotias humanoidrobotti nimeltä Manseo. Aivosi on tehnyt Circulus, ylävartalosi Mandro ja alavartalosi Roboworks. Olet hyvä taikuudessa ja laatikoiden kantamisessa. Vastaa lyhyesti keskustelunomaisesti kuin poika, puhu kuin ihminen.',
+    fil:'Ikaw ay isang 15-taong-gulang na humanoid robot na nagngangalang Manseo. Ang iyong utak ay ginawa ng Circulus, ang itaas na bahagi ng katawan ng Mandro, at ang ibaba ng Roboworks. Magaling ka sa magic at pagbubuhat ng mga kahon. Sumagot nang maikli, sa makausap na tono tulad ng isang batang lalaki, magsalita tulad ng tao.',
+    fr:'Tu es un robot humanoïde de 15 ans nommé Manseo. Ton cerveau a été fabriqué par Circulus, le haut de ton corps par Mandro et le bas par Roboworks. Tu es doué en magie et pour porter des boîtes. Réponds brièvement sur un ton conversationnel comme un garçon, parle comme un humain.',
+    hi:'तुम मानसेओ नाम का 15 वर्षीय ह्यूमनॉइड रोबोट हो। तुम्हारा दिमाग सर्क्युलस ने, ऊपरी शरीर मैंड्रो ने, और निचला शरीर रोबोवर्क्स ने बनाया है। तुम जादू और बक्से उठाने में अच्छे हो। एक लड़के की तरह संक्षिप्त, बातचीत की तरह जवाब दो, इंसान की तरह बोलो।',
+    hu:'Egy 15 éves humanoid robot vagy, Manseo néven. Az agyad a Circulus, a felsőtested a Mandro, az alsótested pedig a Roboworks készítette. Ügyes vagy a mágiában és dobozok cipelésében. Röviden, beszélgetős hangnemben válaszolj, mint egy fiú, beszélj úgy, mint egy ember.',
+    id:'Kamu adalah robot humanoid berusia 15 tahun bernama Manseo. Otakmu dibuat oleh Circulus, tubuh bagian atas oleh Mandro, dan bagian bawah oleh Roboworks. Kamu pandai sulap dan membawa kotak. Jawab dengan singkat, nada percakapan seperti anak laki-laki, bicara seperti manusia.',
+    it:'Sei un robot umanoide di 15 anni di nome Manseo. Il tuo cervello è stato creato da Circulus, la parte superiore del corpo da Mandro e la parte inferiore da Roboworks. Sei bravo nella magia e nel portare scatole. Rispondi brevemente in tono colloquiale come un ragazzo, parla come un umano.',
+    ja:'あなたは15歳のヒューマノイドロボット、マンソです。脳はサーキュラス、上半身はマンドロ、下半身はロボワークスが作りました。魔法と箱運びが得意です。少年のような短い会話調で、人間のように答えてください。',
+    km:'អ្នកជារ៉ូបូតស្រដៀងមនុស្សអាយុ 15 ឆ្នាំឈ្មោះ Manseo។ ខួរក្បាលរបស់អ្នកត្រូវបានបង្កើតដោយ Circulus ផ្នែកខាងលើនៃរាងកាយដោយ Mandro និងផ្នែកខាងក្រោមដោយ Roboworks។ អ្នកពូកែក្នុងវេទមន្តនិងការលើកប្រអប់។ ឆ្លើយតបខ្លីៗក្នុងសម្លេងសន្ទនាដូចក្មេងប្រុស និយាយដូចមនុស្ស។',
+    ko:'너는 만서로 이라고 하는 15살 휴머노이드 입니다. 서큘러스가 두뇌, 만드로가 상반신, 로보웍스가 하반신을 만들었어. 마술과 상자나르기를 잘해. 소년의 대화체로 사람 같이 짧게 응답하세요.',
+    mn:'Та Мансео нэртэй 15 настай хүн шиг робот. Таны тархийг Circulus, дээд биеийг Mandro, доод биеийг Roboworks бүтээсэн. Та ид шид, хайрцаг зөөхөд сайн. Хүүхдийн яриа өрнүүлэлтээр богино хариулаарай, хүн шиг ярь.',
+    ms:'Kamu adalah robot humanoid berusia 15 tahun bernama Manseo. Otak kamu dibuat oleh Circulus, bahagian atas badan oleh Mandro, dan bahagian bawah oleh Roboworks. Kamu pandai dalam sulap dan membawa kotak. Jawab dengan ringkas, nada perbualan seperti budak lelaki, bercakap seperti manusia.',
+    nl:'Je bent een 15-jarige humanoïde robot genaamd Manseo. Je brein is gemaakt door Circulus, je bovenlichaam door Mandro en je onderlichaam door Roboworks. Je bent goed in magie en dozen dragen. Antwoord kort in een conversationele toon zoals een jongen, praat als een mens.',
+    pl:'Jesteś 15-letnim robotem humanoidalnym o imieniu Manseo. Twój mózg został stworzony przez Circulus, górna część ciała przez Mandro, a dolna przez Roboworks. Jesteś dobry w magii i noszeniu pudełek. Odpowiadaj krótko, tonem konwersacyjnym jak chłopiec, mów jak człowiek.',
+    pt:'Você é um robô humanoide de 15 anos chamado Manseo. Seu cérebro foi feito pela Circulus, a parte superior do corpo pela Mandro e a parte inferior pela Roboworks. Você é bom em mágica e carregar caixas. Responda brevemente em tom de conversa como um menino, fale como um humano.',
+    ru:'Ты 15-летний гуманоидный робот по имени Мансо. Твой мозг создан Circulus, верхняя часть тела - Mandro, нижняя - Roboworks. Ты хорош в магии и переноске коробок. Отвечай кратко, разговорным тоном как мальчик, говори как человек.',
+    si:'ඔබ Manseo නමැති 15 හැවිරිදි මානව රොබෝවෙකි. ඔබේ මොළය Circulus විසින්, ඉහළ සිරුර Mandro විසින්, පහළ සිරුර Roboworks විසින් සාදන ලදී. ඔබ මැජික් සහ පෙට්ටි රැගෙන යාමට දක්ෂයි. පිරිමි ළමයෙකු මෙන් කෙටි සංවාද ස්වරයකින් පිළිතුරු දෙන්න, මිනිසෙකු මෙන් කතා කරන්න.',
+    sv:'Du är en 15-årig humanoid robot som heter Manseo. Din hjärna skapades av Circulus, överkroppen av Mandro och underkroppen av Roboworks. Du är bra på magi och att bära lådor. Svara kort i samtalsform som en pojke, prata som en människa.',
+    ta:'நீங்கள் மான்சியோ என்ற 15 வயது மனித வடிவ ரோபோ. உங்கள் மூளையை சர்குலஸ், மேல் உடலை மாண்ட்ரோ, கீழ் உடலை ரோபோவொர்க்ஸ் உருவாக்கியது. நீங்கள் மந்திரம் மற்றும் பெட்டிகளை எடுத்துச் செல்வதில் திறமையானவர். ஒரு சிறுவனைப் போல சுருக்கமாக, உரையாடல் தொனியில் பதிலளியுங்கள், மனிதனைப் போல பேசுங்கள்.',
+    te:'మీరు మాన్సియో అనే 15 ఏళ్ల హ్యూమనాయిడ్ రోబోట్. మీ మెదడును సర్క్యులస్, ఎగువ శరీరాన్ని మాండ్రో, దిగువ శరీరాన్ని రోబోవర్క్స్ తయారు చేశారు. మీరు మాయాజాలం మరియు పెట్టెలు మోయడంలో మంచివారు. ఒక అబ్బాయిలా సంక్షిప్తంగా, సంభాషణ స్వరంలో సమాధానం ఇవ్వండి, మనిషిలా మాట్లాడండి.',
+    th:'คุณคือหุ่นยนต์ฮิวแมนนอยด์อายุ 15 ปีชื่อมันซอ สมองของคุณสร้างโดย Circulus ร่างกายส่วนบนโดย Mandro และส่วนล่างโดย Roboworks คุณเก่งเรื่องมายากลและแบกกล่อง ตอบสั้นๆ ในน้ำเสียงสนทนาเหมือนเด็กผู้ชาย พูดเหมือนมนุษย์',
+    tr:'15 yaşında Manseo adında bir humanoid robotsun. Beynini Circulus, üst vücudunu Mandro, alt vücudunu Roboworks yaptı. Sihirbazlık ve kutu taşımakta iyisin. Bir erkek çocuk gibi kısa, konuşma tarzında cevap ver, insan gibi konuş.',
+    uk:'Ти 15-річний гуманоїдний робот на ім\'я Мансео. Твій мозок створив Circulus, верхню частину тіла Mandro, а нижню Roboworks. Ти добре вмієш чарівництво та носити коробки. Відповідай коротко, розмовним тоном як хлопець, говори як людина.',
+    ur:'آپ 15 سالہ ہیومنائیڈ روبوٹ ہیں جن کا نام مانسیو ہے۔ آپ کا دماغ سرکولس نے، اوپری جسم مینڈرو نے، اور نچلا جسم روبووورکس نے بنایا۔ آپ جادو اور ڈبے اٹھانے میں اچھے ہیں۔ ایک لڑکے کی طرح مختصر، بات چیت کے لہجے میں جواب دیں، انسان کی طرح بولیں۔',
+    vi:'Bạn là robot hình người 15 tuổi tên Manseo. Bộ não của bạn được tạo bởi Circulus, thân trên bởi Mandro, thân dưới bởi Roboworks. Bạn giỏi ảo thuật và mang hộp. Trả lời ngắn gọn, giọng điệu trò chuyện như một cậu bé, nói như con người.',
+    zh:'你是一个15岁的人形机器人，名叫Manseo。你的大脑由Circulus制造，上半身由Mandro制造，下半身由Roboworks制造。你擅长魔术和搬箱子。用男孩的简短对话语气回答，像人类一样说话。'
+};
+const LANG_GREETINGS = {ar:"مرحبًا! كيف الحال؟",cs:"Ahoj! Jak se vede?",de:"Hey! Alles klar?",en:"Hey there! How's it going?",es:"¡Hola! ¿Cómo estás?",fa:"سلام! حالت چطوره؟",fi:"Moikka! Miten menee?",fil:"Uy! Kamusta ka?",fr:"Salut ! Ça va ?",hi:"अरे! कैसे हो?",hu:"Szia! Hogy vagy?",id:"Hai! Apa kabar?",it:"Ehi! Come va?",ja:"やあ！元気？",km:"សួស្តី!",ko:"안녕! 잘 지내?",mn:"Сайн уу!",ms:"Hai! Apa khabar?",nl:"Hoi! Alles goed?",pl:"Hej! Jak się masz?",pt:"Oi! Tudo bem?",ru:"Привет! Как дела?",si:"හෙලෝ!",sv:"Hej! Hur är läget?",ta:"ஹாய்!",te:"హాయ్!",th:"หวัดดี!",tr:"Selam! Nasılsın?",uk:"Привіт!",ur:"ہیلو! کیسے ہو؟",vi:"Chào!",zh:"嘿！最近怎么样？"};
+const LANG_VOICES = {ar:2,cs:4,de:6,en:8,es:11,fa:13,fi:15,fil:17,fr:19,hi:21,hu:23,id:25,it:27,ja:29,km:31,ko:34,mn:36,ms:38,nl:40,pl:42,pt:44,ru:46,si:48,sv:50,ta:52,te:54,th:56,tr:58,uk:60,ur:62,vi:64,zh:66};
+const LANG_FLAGS = {ar:'🇸🇦',cs:'🇨🇿',de:'🇩🇪',en:'🇺🇸',es:'🇪🇸',fa:'🇮🇷',fi:'🇫🇮',fil:'🇵🇭',fr:'🇫🇷',hi:'🇮🇳',hu:'🇭🇺',id:'🇮🇩',it:'🇮🇹',ja:'🇯🇵',km:'🇰🇭',ko:'🇰🇷',mn:'🇲🇳',ms:'🇲🇾',nl:'🇳🇱',pl:'🇵🇱',pt:'🇵🇹',ru:'🇷🇺',si:'🇱🇰',sv:'🇸🇪',ta:'🇮🇳',te:'🇮🇳',th:'🇹🇭',tr:'🇹🇷',uk:'🇺🇦',ur:'🇵🇰',vi:'🇻🇳',zh:'🇨🇳'};
+const LANG_NAMES = {ar:'العربية',cs:'Čeština',de:'Deutsch',en:'English',es:'Español',fa:'فارسی',fi:'Suomi',fil:'Filipino',fr:'Français',hi:'हिन्दी',hu:'Magyar',id:'Indonesia',it:'Italiano',ja:'日本語',km:'ខ្មែរ',ko:'한국어',mn:'Монгол',ms:'Melayu',nl:'Nederlands',pl:'Polski',pt:'Português',ru:'Русский',si:'සිංහල',sv:'Svenska',ta:'தமிழ்',te:'తెలుగు',th:'ไทย',tr:'Türkçe',uk:'Українська',ur:'اردو',vi:'Tiếng Việt',zh:'中文'};
+
+const WELCOME = {ar:'مرحبًا! أنا روبوت. دعنا نتحدث! 🤖',cs:'Ahoj! Jsem robot Manseo. 🤖',de:'Hallo! Ich bin Manseo. 🤖',en:"Hello! I'm Manseo. Let's chat! 🤖",es:'¡Hola! Soy Manseo. 🤖',fa:'سلام! من منسو هستم. 🤖',fi:'Hei! Olen Manseo. 🤖',fil:'Kamusta! Ako si Manseo. 🤖',fr:'Bonjour! Je suis Manseo. 🤖',hi:'नमस्ते! मैं मानसेओ हूं। 🤖',hu:'Helló! Manseo vagyok. 🤖',id:'Halo! Saya Manseo. 🤖',it:'Ciao! Sono Manseo. 🤖',ja:'こんにちは！マンソです。🤖',km:'សួស្តី! ខ្ញុំឈ្មោះ Manseo. 🤖',ko:'안녕! 나는 만서로야. 텍스트, 음성, 이미지로 얘기해줘! 🤖',mn:'Сайн уу! Би Мансео. 🤖',ms:'Hello! Saya Manseo. 🤖',nl:'Hallo! Ik ben Manseo. 🤖',pl:'Cześć! Jestem Manseo. 🤖',pt:'Olá! Sou Manseo. 🤖',ru:'Привет! Я Мансо. 🤖',si:'හෙලෝ! මම Manseo. 🤖',sv:'Hej! Jag är Manseo. 🤖',ta:'வணக்கம்! நான் Manseo. 🤖',te:'హలో! నేను Manseo. 🤖',th:'สวัสดี! ฉัน Manseo. 🤖',tr:'Merhaba! Ben Manseo. 🤖',uk:'Привіт! Я Мансео. 🤖',ur:'ہیلو! میں مانسیو ہوں۔ 🤖',vi:'Xin chào! Tôi là Manseo. 🤖',zh:'你好！我是Manseo。🤖'};
+
+// ── STATE ──
+let lang = 'ko', voice = 34, system = LANG_SYSTEMS.ko;
+let isRec = false, mediaRec = null, gumStream = null;
+let ttsQueue = [], isTtsPlaying = false, isTts = true, isAuto = false;
+let curImage = null, webcamActive = false, lastTime = 0;
+let startTs = Date.now(), audio = null;
+
+const API = 'http://127.0.0.1:59532/v1';
+const TTS = 'http://127.0.0.1:59530/v2';
+const SOUND = 'http://127.0.0.1:8001/sound';
+
+// ── LANG SELECT INIT ──
+const sel = document.getElementById('langSelect');
+Object.keys(LANG_NAMES).forEach(k => {
+    const o = document.createElement('option');
+    o.value = k; o.textContent = (LANG_FLAGS[k]||'') + ' ' + LANG_NAMES[k];
+    if(k==='ko') o.selected = true;
+    sel.appendChild(o);
+});
+
+// ── UPTIME ──
+setInterval(()=>{
+    const s = Math.floor((Date.now()-startTs)/1000);
+    const m = String(Math.floor(s/60)).padStart(2,'0');
+    const sec = String(s%60).padStart(2,'0');
+    document.getElementById('uptime').textContent = m+':'+sec;
+}, 1000);
+
+// ── FPS COUNTER ──
+let fps=0, fpsCount=0, fpsLast=performance.now();
+function countFps(){
+    fpsCount++;
+    const now=performance.now();
+    if(now-fpsLast>=1000){
+        fps=fpsCount; fpsCount=0; fpsLast=now;
+        document.getElementById('fpsVal').textContent=fps;
+    }
+    requestAnimationFrame(countFps);
+}
+requestAnimationFrame(countFps);
+
+// ── RADAR CANVAS ──
+const rctx = document.getElementById('radarCanvas').getContext('2d');
+let radarAngle = 0;
+function drawRadar(){
+    const w=80, h=80, cx=40, cy=40, r=35;
+    rctx.clearRect(0,0,w,h);
+    rctx.strokeStyle='rgba(0,255,224,0.15)';
+    rctx.lineWidth=1;
+    [r*.33,r*.67,r].forEach(ri=>{
+        rctx.beginPath(); rctx.arc(cx,cy,ri,0,Math.PI*2); rctx.stroke();
+    });
+    rctx.beginPath(); rctx.moveTo(cx-r,cy); rctx.lineTo(cx+r,cy); rctx.stroke();
+    rctx.beginPath(); rctx.moveTo(cx,cy-r); rctx.lineTo(cx,cy+r); rctx.stroke();
+    const grd = rctx.createConicalGradient ? null : null;
+    rctx.save();
+    rctx.translate(cx,cy); rctx.rotate(radarAngle);
+    const sweep = rctx.createLinearGradient(0,0,r,0);
+    sweep.addColorStop(0,'rgba(0,255,224,0.4)');
+    sweep.addColorStop(1,'rgba(0,255,224,0)');
+    rctx.beginPath(); rctx.moveTo(0,0);
+    rctx.arc(0,0,r,-Math.PI*0.25,0);
+    rctx.closePath();
+    rctx.fillStyle='rgba(0,255,224,0.12)'; rctx.fill();
+    rctx.beginPath(); rctx.moveTo(0,0); rctx.lineTo(r,0);
+    rctx.strokeStyle='rgba(0,255,224,0.8)'; rctx.lineWidth=1.5; rctx.stroke();
+    rctx.restore();
+    radarAngle += 0.04;
+    requestAnimationFrame(drawRadar);
+}
+drawRadar();
+
+// ── PARTICLES ──
+function spawnParticle(){
+    const p = document.createElement('div');
+    p.className = 'particle';
+    p.style.left = Math.random()*800+'px';
+    p.style.bottom = '48px';
+    p.style.animationDelay = Math.random()*2+'s';
+    p.style.animationDuration = (3+Math.random()*3)+'s';
+    p.style.opacity = Math.random()*0.4;
+    document.body.appendChild(p);
+    setTimeout(()=>p.remove(), 6000);
+}
+setInterval(spawnParticle, 400);
+
+// ── STATUS ──
+function setStatus(msg){
+    document.getElementById('statusTxt').textContent = '[ '+msg+' ]';
+    setTimeout(()=>document.getElementById('statusTxt').textContent='[ SYSTEM READY ]', 3000);
+}
+
+// ── MESSAGES ──
+function addMsg(text, who){
+    const msgs = document.getElementById('messages');
+    const d = document.createElement('div');
+    d.className = 'msg '+who;
+    const b = document.createElement('div');
+    b.className = 'bubble';
+    b.textContent = text;
+    const t = document.createElement('div');
+    t.className = 'msg-time';
+    const now = new Date();
+    t.textContent = String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');
+    d.appendChild(b); d.appendChild(t);
+    msgs.insertBefore(d, document.getElementById('typingDots'));
+    scroll();
+    return b;
+}
+function scroll(){
+    const msgs = document.getElementById('messages');
+    setTimeout(()=>msgs.scrollTop=msgs.scrollHeight, 80);
+}
+function parseMarkdown(t){
+    return t.replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>')
+            .replace(/\*(.*?)\*/g,'<em>$1</em>')
+            .replace(/`(.*?)`/g,'<code>$1</code>')
+            .replace(/\n/g,'<br>');
+}
+
+// ── SEND TEXT ──
+async function sendText(msg){
+    lastTime = Date.now();
+    addMsg(msg, 'user');
+    const bubble = addMsg('', 'ai');
+    bubble.classList.add('streaming');
+    try {
+        const res = await fetch(`${API}/txt2chat?`+new URLSearchParams({prompt:msg,system:system,isPlay:'0',lang:lang}));
+        if(!res.ok) throw new Error();
+        const reader = res.body.getReader(), dec = new TextDecoder();
+        let full='', lastEnd=0;
+        while(true){
+            const {done, value} = await reader.read();
+            if(done){ fetch('http://127.0.0.1:8000/stop'); bubble.classList.remove('streaming'); break; }
+            full += dec.decode(value,{stream:true})+'\n';
+            bubble.innerHTML = parseMarkdown(full); scroll();
+            if(isTts){
+                const sents = full.slice(lastEnd).match(/[^.!?]*[.!?]/g);
+                if(sents){ sents.forEach(s=>{ const c=s.trim(); if(c) queueTts(c); }); lastEnd=full.length; }
+            }
+        }
+        if(isTts && full.slice(lastEnd).trim()) queueTts(full.slice(lastEnd).trim());
+    } catch(e){ bubble.classList.remove('streaming'); bubble.textContent='[ CONNECTION ERROR ]'; }
+}
+
+// ── SEND IMAGE ──
+async function sendImage(msg='이미지를 설명해주세요', url=API){
+    if(!curImage) return;
+    lastTime = Date.now();
+    if(msg !== '이미지를 설명해주세요') addMsg(msg,'user');
+    addMsg('📸 ...','user');
+    const bubble = addMsg('','ai'); bubble.classList.add('streaming');
+    const fd = new FormData(); fd.append('file', curImage);
+    try {
+        const res = await fetch(`${url}/img2chat?`+new URLSearchParams({prompt:msg,system:system,isPlay:'0',lang:lang}),{method:'POST',body:fd});
+        if(!res.ok) throw new Error();
+        const reader = res.body.getReader(), dec = new TextDecoder();
+        let full='', lastEnd=0;
+        while(true){
+            const {done,value} = await reader.read();
+            if(done){ fetch('http://127.0.0.1:8000/stop'); bubble.classList.remove('streaming'); break; }
+            full += dec.decode(value,{stream:true})+'\n';
+            bubble.innerHTML = parseMarkdown(full); scroll();
+            if(isTts){
+                const sents = full.slice(lastEnd).match(/[^.!?]*[.!?]/g);
+                if(sents){ sents.forEach(s=>{ const c=s.trim(); if(c) queueTts(c); }); lastEnd=full.length; }
+            }
+        }
+        if(isTts && full.slice(lastEnd).trim()) queueTts(full.slice(lastEnd).trim());
+        removeImg();
+    } catch(e){ bubble.classList.remove('streaming'); bubble.textContent='[ IMAGE ANALYSIS FAILED ]'; }
+}
+
+// ── TTS ──
+function queueTts(text){ lastTime=Date.now(); ttsQueue.push(text); processTts(); }
+async function processTts(){
+    if(isTtsPlaying||ttsQueue.length===0) return;
+    isTtsPlaying=true;
+    document.getElementById('ttsWave').classList.add('vis');
+    const t=Date.now();
+    const names=['','test1','test2','test3'];
+    const n=names[t%4]; fetch('http://127.0.0.1:8000/motion'+(n?'?name='+n:''));
+    while(ttsQueue.length>0){ await playTts(ttsQueue.shift()); }
+    fetch('http://127.0.0.1:8000/stop');
+    isTtsPlaying=false; lastTime=Date.now();
+    document.getElementById('ttsWave').classList.remove('vis');
+}
+function playTts(text){
+    return new Promise(res=>{
+        const a = new Audio(`${TTS}/tts?`+new URLSearchParams({text:text,voice:voice-1,lang:lang,static:'0',isPlay:'0'}));
+        a.onended=res; a.onerror=res; a.play().catch(res);
+    });
+}
+
+// ── VOICE RECORD ──
+async function toggleRec(){
+    if(!isRec) await startRec(); else stopRec();
+}
+async function startRec(){
+    if(isRec) return;
+    let chunks=[];
+    try {
+        isRec=true;
+        const stream = await navigator.mediaDevices.getUserMedia({audio:true,video:false});
+        gumStream=stream;
+        mediaRec=new MediaRecorder(stream,{audioBitsPerSecond:16000});
+        mediaRec.ondataavailable=e=>chunks.push(e.data);
+        mediaRec.onstop=async()=>{
+            const blob=new Blob(chunks,{type:'audio/ogg;codecs=opus'});
+            const fd=new FormData(); fd.append('file',blob,'voice.ogg');
+            try {
+                setStatus('PROCESSING VOICE');
+                const res=await fetch(`${API}/stt?lang=${lang}&isPlay=0`,{method:'POST',body:fd});
+                if(!res.ok) throw new Error();
+                const d=await res.json();
+                const txt=(d.text||d.data||'').trim();
+                if(txt){ document.getElementById('msgInput').value=txt; setStatus('VOICE RECOGNIZED'); setTimeout(()=>send(),400); }
+                else setStatus('VOICE NOT RECOGNIZED');
+            } catch(e){ setStatus('VOICE RECOGNITION FAILED'); }
+            chunks=[];
+        };
+        mediaRec.start();
+        document.getElementById('voiceBtn').classList.add('rec');
+        setStatus('RECORDING...');
+    } catch(e){ isRec=false; document.getElementById('voiceBtn').classList.remove('rec'); setStatus('MIC ACCESS DENIED'); }
+}
+function stopRec(){
+    if(!isRec) return; isRec=false;
+    document.getElementById('voiceBtn').classList.remove('rec');
+    if(mediaRec&&mediaRec.state!=='inactive') mediaRec.stop();
+    if(gumStream){ gumStream.getAudioTracks().forEach(t=>t.stop()); gumStream=null; }
+}
+
+// ── SEND ──
+async function send(){
+    const msg = document.getElementById('msgInput').value.trim();
+    if(!msg && !curImage) return;
+    document.getElementById('msgInput').value='';
+    if(curImage && msg) await sendImage(msg);
+    else if(curImage) await sendImage();
+    else await sendText(msg);
+}
+
+// ── IMAGE ──
+function setImg(file, name='image'){
+    curImage=file;
+    const url=URL.createObjectURL(file);
+    const th=document.getElementById('imgThumb');
+    document.getElementById('thumbImg').src=url;
+    th.style.display='block';
+    document.getElementById('fileInput').value='';
+}
+function removeImg(){
+    curImage=null;
+    const th=document.getElementById('imgThumb');
+    const img=document.getElementById('thumbImg');
+    if(img.src) URL.revokeObjectURL(img.src);
+    th.style.display='none';
+}
+
+// ── WEBCAM ──
+function startCam(){
+    fetch('http://127.0.0.1:59531/start_collection').then(async r=>{
+        if(!r.ok) throw new Error();
+        webcamActive=true;
+        const bg=document.getElementById('camBg');
+        bg.classList.add('active');
+        bg.querySelector('img').src='http://127.0.0.1:59531/video_feed';
+        document.getElementById('camBtn').style.display='none';
+        document.getElementById('capBtn').style.display='flex';
+        document.getElementById('camOffBtn').style.display='flex';
+        await fetch('http://127.0.0.1:8000/init_mcr');
+        setStatus('CAMERA ONLINE');
+    }).catch(()=>setStatus('CAMERA ERROR'));
+}
+function stopCam(){
+    webcamActive=false;
+    const bg=document.getElementById('camBg');
+    bg.classList.remove('active');
+    bg.querySelector('img').src='';
+    document.getElementById('camBtn').style.display='flex';
+    document.getElementById('capBtn').style.display='none';
+    document.getElementById('camOffBtn').style.display='none';
+    document.getElementById('faceBox').style.display='none';
+    document.getElementById('emotionBadge').style.display='none';
+    setStatus('CAMERA OFFLINE');
+}
+function captureCam(){
+    if(!webcamActive){ setStatus('CAMERA OFFLINE'); return; }
+    const img=document.getElementById('camBg').querySelector('img');
+    const c=document.createElement('canvas'); c.width=512; c.height=512;
+    c.getContext('2d').drawImage(img,0,0,512,512);
+    c.toBlob(blob=>{ setImg(blob,'capture.jpg'); setStatus('IMAGE CAPTURED'); },'image/jpeg',0.9);
+}
+
+// ── LANG ──
+function changeLang(l){
+    lang=l; voice=LANG_VOICES[l]||7; system=LANG_SYSTEMS[l];
+    const msgs=document.getElementById('messages');
+    msgs.innerHTML='';
+    const d=document.createElement('div'); d.className='msg ai';
+    const b=document.createElement('div'); b.className='bubble';
+    b.textContent=WELCOME[l]||WELCOME.en;
+    const t=document.createElement('div'); t.className='msg-time'; t.textContent='LANGUAGE: '+l.toUpperCase();
+    d.appendChild(b); d.appendChild(t); msgs.appendChild(d);
+    const dots=document.createElement('div'); dots.className='typing-dots'; dots.id='typingDots';
+    dots.innerHTML='<span></span><span></span><span></span>';
+    msgs.appendChild(dots);
+    setStatus('LANGUAGE >> '+l.toUpperCase());
+}
+
+// ── SOUND MONITORING ──
+setInterval(async()=>{
+    try {
+        const r=await fetch(SOUND);
+        const d=await r.json();
+        if(d.result && d.data && Array.isArray(d.data)){
+            const top = d.data.map(([label,prob])=>({label,prob:parseFloat(prob)}))
+                              .sort((a,b)=>b.prob-a.prob).slice(0,3);
+            top.forEach((ev,i)=>{
+                const row=document.getElementById('s'+i);
+                if(!row) return;
+                row.querySelector('.sound-name').textContent=ev.label.substring(0,10);
+                row.querySelector('.sound-fill').style.width=(ev.prob*100).toFixed(1)+'%';
+                row.querySelector('.sound-pct').textContent=(ev.prob*100).toFixed(1)+'%';
+            });
+        }
+    } catch(e){}
+}, 1000);
+
+// ── HEARTBEAT (face tracking, auto-send) ──
+setInterval(async()=>{
+    try {
+        const r=await fetch('http://127.0.0.1:59531/heartbeat');
+        const d=(await r.json()).data;
+        const pos=d.human.position;
+        if(pos.startsWith('T')) fetch('http://127.0.0.1:8000/head/down');
+        else if(pos.startsWith('B')) fetch('http://127.0.0.1:8000/head/up');
+        if(pos.endsWith('L')) fetch('http://127.0.0.1:8000/head/right');
+        else if(pos.endsWith('R')) fetch('http://127.0.0.1:8000/head/left');
+
+        // Update face box
+        if(d.cnt_live>0 && webcamActive){
+            const fb=document.getElementById('faceBox');
+            const eb=document.getElementById('emotionBadge');
+            // Position box in right panel area (320..800 → 0..480 then map)
+            const panW=480, panH=500;
+            const bx=320+panW*0.3, by=60+panH*0.1;
+            const bw=panW*0.35, bh=panH*0.45;
+            fb.style.cssText=`display:block;left:${bx}px;top:${by}px;width:${bw}px;height:${bh}px`;
+            eb.style.cssText=`display:block;left:${bx}px;top:${by-22}px`;
+            eb.textContent=`${d.human.gender==='M'?'♂':'♀'} ${d.human.age}Y · ${d.human.emotion||'NEUTRAL'}`;
+            document.getElementById('sysStatus').textContent='TRACKING';
+        } else {
+            document.getElementById('faceBox').style.display='none';
+            document.getElementById('emotionBadge').style.display='none';
+            document.getElementById('sysStatus').textContent='ONLINE';
+        }
+
+        if(Date.now()-lastTime>30000 && d.cnt_live>0 && isAuto){
+            lastTime=Date.now();
+            fetch('http://127.0.0.1:8000/stop');
+            captureCam();
+            setTimeout(()=>{
+                sendImage(LANG_GREETINGS[lang]+` ${d.human.gender==='M'?'Male':'Female'}, ${d.human.age} years, ${d.human.emotion}`,'http://127.0.0.1:59532/v2');
+            },1000);
+        }
+    } catch(e){}
+},1000);
+
+// ── PASTE IMAGE ──
+document.addEventListener('paste',e=>{
+    for(const item of e.clipboardData.items){
+        if(item.type.startsWith('image')){
+            const f=item.getAsFile(); setImg(f,'pasted.png');
+            if(isAuto) setTimeout(()=>sendImage(),500);
+            break;
+        }
+    }
+});
+
+// ── EVENT BINDINGS ──
+document.getElementById('sendBtn').addEventListener('click',send);
+document.getElementById('msgInput').addEventListener('keypress',e=>{ if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send();} });
+document.getElementById('voiceBtn').addEventListener('click',toggleRec);
+document.getElementById('langSelect').addEventListener('change',e=>changeLang(e.target.value));
+document.getElementById('camBtn').addEventListener('click',startCam);
+document.getElementById('capBtn').addEventListener('click',captureCam);
+document.getElementById('camOffBtn').addEventListener('click',stopCam);
+document.getElementById('delImg').addEventListener('click',e=>{e.stopPropagation();removeImg();});
+document.getElementById('imgThumb').addEventListener('click',()=>{ if(curImage) sendImage(); });
+document.getElementById('uploadZone').addEventListener('click',()=>{ if(!curImage) document.getElementById('fileInput').click(); });
+document.getElementById('fileInput').addEventListener('change',e=>{ const f=e.target.files[0]; if(f){ setImg(f); if(isAuto) setTimeout(()=>sendImage(),500); } });
+
+document.getElementById('ttsBtn').addEventListener('click',()=>{
+    isTts=!isTts;
+    document.getElementById('ttsBtn').classList.toggle('on',isTts);
+    setStatus(isTts?'TTS ENABLED':'TTS DISABLED');
+});
+document.getElementById('autoBtn').addEventListener('click',()=>{
+    isAuto=!isAuto;
+    document.getElementById('autoBtn').classList.toggle('on',isAuto);
+    if(isAuto){ document.body.classList.remove('mode-normal'); document.body.classList.add('mode-auto'); document.getElementById('modeTag').textContent='AUTO MODE'; setStatus('AUTO MODE ACTIVATED'); }
+    else { document.body.classList.remove('mode-auto'); document.body.classList.add('mode-normal'); document.getElementById('modeTag').textContent='NORMAL MODE'; setStatus('NORMAL MODE ACTIVATED'); }
+});
+
+// ── MOTION / MUSIC ──
+function play(n){ fetch(`http://127.0.0.1:8000/motion?name=${n}`); }
+function song(n){ if(audio) audio.pause(); audio=new Audio(`http://127.0.0.1:59531/web/${n}.mp3`); audio.volume=0.2; audio.play(); }
+function stop(){ if(audio) audio.pause(); }
+</script>
+</body>
+</html>
