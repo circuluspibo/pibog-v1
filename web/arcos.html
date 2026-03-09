@@ -1,1593 +1,1067 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>ARCos — Powered by Intel</title>
-<!--<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@700;900&family=Rajdhani:wght@500;600&display=swap" rel="stylesheet">
-  -->
-<style>
-/* ══ VARIABLES ══ */
-:root {
-  --c0:#000810; --c1:#00d4ff; --c2:#0affb4; --c3:#ff3a5c; --c4:#ffaa00;
-  --intel:#0071C5;
-  --border: rgba(0,212,255,.28);
-  --dim:    rgba(0,212,255,.14);
-  --fhud:'Orbitron',monospace;
-  --fbody:'Rajdhani',sans-serif;
-  --fmono:'Share Tech Mono',monospace;
-  --touch: 56px;   /* minimum touch target height */
-}
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>ARCos - Advanced Robotics Interface</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
-/* ══ RESET ══ */
-*, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
-html, body {
-  width:100%; height:100%;
-  background:var(--c0); color:var(--c1);
-  font-family:var(--fbody);
-  overflow:hidden; user-select:none;
-  -webkit-tap-highlight-color:transparent;
-}
-/* scanline overlay */
-body::before {
-  content:''; position:fixed; inset:0; pointer-events:none; z-index:9000;
-  background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.07) 2px,rgba(0,0,0,.07) 3px);
-}
+        :root {
+            --pc: #00c8ff;
+            --pg: rgba(0,200,255,0.18);
+            --sc: #0080ff;
+            --bc: #00c8ff;
+            --gc: rgba(0,200,255,0.25);
+            --red: #ff0040;
+            --rg: rgba(255,0,64,0.18);
+        }
+        .mode-auto {
+            --pc: #ff0040; --pg: rgba(255,0,64,0.18);
+            --sc: #ff0080; --bc: #ff0040; --gc: rgba(255,0,64,0.25);
+        }
 
-/* ══ ROOT GRID  topbar / [face | panel] / bottombar ══ */
-#app {
-  display:grid;
-  grid-template-rows: 44px 1fr 60px;
-  width:100vw; height:100vh;
-}
+        @keyframes glowPulse { 0%,100%{opacity:.6} 50%{opacity:1} }
+        @keyframes scanV { 0%{top:-6px;opacity:0} 10%{opacity:1} 90%{opacity:1} 100%{top:100%;opacity:0} }
+        @keyframes gridMove { 0%{transform:translateY(0)} 100%{transform:translateY(40px)} }
+        @keyframes blink { 0%,50%{opacity:1} 51%,100%{opacity:0} }
+        @keyframes msgIn { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
+        @keyframes recordPulse { 0%,100%{box-shadow:0 0 20px var(--pg)} 50%{box-shadow:0 0 40px var(--pg)} }
+        @keyframes typing { 0%,60%,100%{transform:translateY(0);opacity:.5} 30%{transform:translateY(-6px);opacity:1} }
+        @keyframes borderFlow {
+            0%{background-position:0% 50%} 50%{background-position:100% 50%} 100%{background-position:0% 50%}
+        }
+        @keyframes cornerSpin { 0%{transform:rotate(0deg)} 100%{transform:rotate(360deg)} }
+        @keyframes soundBar { 0%,100%{transform:scaleY(.4)} 50%{transform:scaleY(1)} }
+        @keyframes hexPulse { 0%,100%{opacity:.3;transform:scale(1)} 50%{opacity:.7;transform:scale(1.05)} }
 
-/* ══ TOPBAR ══ */
-#topbar {
-  display:flex; align-items:center; justify-content:space-between;
-  padding:0 16px;
-  border-bottom:1px solid var(--border);
-  background:rgba(0,6,14,.98);
-  position:relative; z-index:100;
-}
-#topbar::after {
-  content:''; position:absolute; bottom:-2px; left:0; right:0; height:2px;
-  background:linear-gradient(90deg,transparent,var(--intel) 20%,var(--c1) 50%,var(--intel) 80%,transparent);
-}
-.logo      { font-family:var(--fhud); font-size:18px; font-weight:900; letter-spacing:5px;
-             color:var(--c1); text-shadow:0 0 20px var(--c1),0 0 40px rgba(0,212,255,.4); }
-.logo-line { display:flex; align-items:baseline; gap:10px; }
-.logo-sub  { font-family:var(--fmono); font-size:9px; letter-spacing:2px; color:rgba(0,212,255,.45);
-             display:flex; align-items:center; gap:6px; }
-.ibadge    { background:var(--intel); color:#fff; padding:1px 7px; font-size:8px;
-             font-family:var(--fhud); letter-spacing:1px; border-radius:1px; }
-.status-dots { display:flex; gap:16px; }
-.sdot { display:flex; align-items:center; gap:5px; font-family:var(--fmono); font-size:8px;
-        letter-spacing:1px; color:rgba(0,212,255,.5); }
-.dot  { width:6px; height:6px; border-radius:50%; background:var(--c1);
-        box-shadow:0 0 6px var(--c1); animation:dp 2s ease-in-out infinite; }
-.dot.y { background:var(--c4); box-shadow:0 0 6px var(--c4); animation-delay:.6s; }
-.dot.r { background:var(--c3); box-shadow:0 0 6px var(--c3); animation-delay:1.2s; }
-@keyframes dp { 0%,100%{opacity:1} 50%{opacity:.22} }
-#clk { font-family:var(--fmono); font-size:10px; color:rgba(0,212,255,.32); }
+        html, body {
+            width: 800px; height: 600px;
+            overflow: hidden;
+            font-family: 'Courier New', monospace;
+            background: #000;
+            color: #fff;
+            touch-action: manipulation;
+        }
 
-/* ══ MIDDLE ══ */
-#mid {
-  display:grid;
-  grid-template-columns: 1fr 292px;
-  overflow:hidden;
-}
+        /* ── BG Grid ── */
+        .bg-grid {
+            position: fixed; inset: 0; z-index: 0; pointer-events: none;
+            background-image:
+                linear-gradient(0deg, transparent 49%, var(--gc) 50%, transparent 51%),
+                linear-gradient(90deg, transparent 49%, var(--gc) 50%, transparent 51%);
+            background-size: 40px 40px;
+            animation: gridMove 8s linear infinite;
+            opacity: .4;
+        }
 
-/* ══ FACE AREA ══ */
-#faceArea {
-  position:relative; overflow:hidden;
-  background:radial-gradient(ellipse at 50% 46%,rgba(0,40,100,.12) 0%,transparent 68%);
-}
-#faceArea::before {
-  content:''; position:absolute; inset:0; pointer-events:none; z-index:0;
-  background-image:
-    linear-gradient(rgba(0,212,255,.025) 1px,transparent 1px),
-    linear-gradient(90deg,rgba(0,212,255,.025) 1px,transparent 1px);
-  background-size:48px 48px;
-}
-#threeCanvas { width:100%; height:100%; display:block; position:relative; z-index:1; }
+        /* ── HEX DECO ── */
+        .hex-deco {
+            position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden;
+        }
+        .hex {
+            position: absolute; width: 80px; height: 80px;
+            border: 1px solid var(--pc); opacity: .12;
+            clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+            animation: hexPulse 4s ease-in-out infinite;
+        }
+        .hex:nth-child(1){top:5%;left:3%;animation-delay:0s}
+        .hex:nth-child(2){top:70%;left:1%;animation-delay:1s;width:50px;height:50px}
+        .hex:nth-child(3){top:20%;right:2%;animation-delay:2s;width:60px;height:60px}
+        .hex:nth-child(4){bottom:5%;right:4%;animation-delay:.5s}
+        .hex:nth-child(5){top:45%;left:50%;animation-delay:1.5s;width:40px;height:40px;opacity:.07}
 
-/* HUD corners */
-.hc   { position:absolute; pointer-events:none; z-index:5; }
-.htl  { top:10px; left:12px; }
-.htr  { top:10px; right:12px; text-align:right; }
-.hbl  { bottom:10px; left:12px; }
-.htxt { font-family:var(--fmono); font-size:8px; letter-spacing:1.2px;
-        color:rgba(0,212,255,.32); line-height:2.1; }
-.hv   { color:var(--c1); }
+        /* ── LAYOUT ── */
+        .app { 
+            position: relative; z-index:1;
+            display: grid;
+            grid-template-columns: 310px 1fr;
+            grid-template-rows: 1fr;
+            width: 800px; height: 600px;
+        }
 
-/* face detect box */
-#faceBox {
-  position:absolute; display:none;
-  border:1.5px solid var(--c2);
-  box-shadow:0 0 10px rgba(0,255,180,.25);
-  pointer-events:none; z-index:6;
-  transition:all .12s;
-}
-#faceBox::before,#faceBox::after {
-  content:''; position:absolute; width:9px; height:9px;
-  border-color:var(--c1); border-style:solid;
-}
-#faceBox::before { top:-1px; left:-1px; border-width:2px 0 0 2px; }
-#faceBox::after  { bottom:-1px; right:-1px; border-width:0 2px 2px 0; }
+        /* ══════════════════════════════
+           LEFT: CHAT PANEL
+        ══════════════════════════════ */
+        .chat-panel {
+            display: flex; flex-direction: column;
+            border-right: 2px solid var(--bc);
+            background: rgba(0,0,0,.92);
+            position: relative;
+            box-shadow: 4px 0 30px var(--pg);
+        }
 
-/* emotion chips */
-#emotBar {
-  position:absolute; bottom:10px; left:50%; transform:translateX(-50%);
-  display:flex; gap:5px; z-index:8;
-}
-.ec {
-  padding:5px 11px;
-  border:1px solid rgba(0,212,255,.18);
-  font-family:var(--fmono); font-size:8px; letter-spacing:1px;
-  color:rgba(0,212,255,.3); cursor:pointer; touch-action:manipulation;
-  transition:all .2s;
-  clip-path:polygon(4px 0,100% 0,100% calc(100% - 4px),calc(100% - 4px) 100%,0 100%,0 4px);
-}
-.ec.active {
-  background:rgba(0,212,255,.1); color:var(--c1);
-  border-color:var(--c1); box-shadow:0 0 9px rgba(0,212,255,.22);
-}
+        /* Header */
+        .chat-header {
+            height: 52px;
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 0 14px;
+            background: rgba(0,0,0,.97);
+            border-bottom: 1px solid var(--bc);
+            position: relative;
+            flex-shrink: 0;
+        }
+        .chat-header::after {
+            content:''; position:absolute; bottom:-2px; left:0; right:0; height:2px;
+            background: linear-gradient(90deg, transparent, var(--pc), transparent);
+            box-shadow: 0 0 12px var(--pg);
+            animation: glowPulse 2s ease-in-out infinite;
+        }
+        .logo {
+            font-size: 18px; font-weight:700; letter-spacing:3px;
+            color: var(--pc); text-shadow: 0 0 12px var(--pc), 0 0 24px var(--pg);
+            text-transform: uppercase;
+        }
+        .logo-sub { font-size:9px; letter-spacing:2px; color:var(--pc); opacity:.6; margin-top:1px; }
 
-/* ── OVERLAYS (cam / webcam) ── */
-.overlay {
-  display:none; position:absolute; inset:0; z-index:20;
-  background:rgba(0,6,14,.92);
-  flex-direction:column; align-items:center; justify-content:center;
-}
-.overlay.open { display:flex; }
-.ov-lbl  { position:absolute; top:10px; left:12px; font-family:var(--fmono);
-           font-size:8px; letter-spacing:2px; color:rgba(0,212,255,.45); }
-.ov-close {
-  position:absolute; top:9px; right:9px;
-  width:44px; height:44px;
-  border:1px solid rgba(255,58,92,.5); background:rgba(255,58,92,.1); color:var(--c3);
-  font-size:18px; cursor:pointer; touch-action:manipulation;
-  display:flex; align-items:center; justify-content:center;
-  clip-path:polygon(6px 0,100% 0,100% calc(100% - 6px),calc(100% - 6px) 100%,0 100%,0 6px);
-}
-.cam-sel { position:absolute; bottom:12px; left:50%; transform:translateX(-50%); display:flex; gap:8px; }
-.csb {
-  padding:8px 16px;
-  border:1px solid rgba(0,212,255,.28); background:rgba(0,6,14,.9);
-  color:rgba(0,212,255,.5); font-family:var(--fmono); font-size:9px; letter-spacing:1px;
-  cursor:pointer; touch-action:manipulation; transition:all .15s;
-  clip-path:polygon(4px 0,100% 0,100% calc(100% - 4px),calc(100% - 4px) 100%,0 100%,0 4px);
-}
-.csb.active,.csb:active { background:rgba(0,212,255,.1); color:var(--c1); border-color:var(--c1); }
-#camImg  { max-width:100%; max-height:90%; object-fit:contain; }
-#wcVid   { width:90%; max-height:88%; object-fit:cover; border:1px solid rgba(0,212,255,.2); }
+        /* Language select */
+        .lang-wrap select {
+            padding: 5px 8px; background: rgba(0,0,0,.9);
+            border: 1px solid var(--bc); color: var(--pc);
+            font-family: 'Courier New', monospace; font-size: 12px;
+            cursor: pointer; outline: none;
+            clip-path: polygon(6px 0,100% 0,100% calc(100% - 6px),calc(100% - 6px) 100%,0 100%,0 6px);
+        }
 
-/* ══ SIDE PANEL ══ */
-#panel {
-  display:flex; flex-direction:column;
-  border-left:1px solid var(--border);
-  background:rgba(0,4,10,.97);
-  overflow:hidden; position:relative;
-}
-#panel::before {
-  content:''; position:absolute; top:0; left:0; width:1px; height:100%;
-  background:linear-gradient(180deg,transparent,var(--c1) 30%,var(--c1) 70%,transparent);
-  opacity:.2; animation:sp 4s ease-in-out infinite;
-}
-@keyframes sp { 0%,100%{opacity:.12} 50%{opacity:.32} }
+        /* Messages */
+        .chat-messages {
+            flex: 1; overflow-y: auto; overflow-x: hidden;
+            padding: 12px;
+            scrollbar-width: thin; scrollbar-color: var(--pc) transparent;
+        }
+        .chat-messages::-webkit-scrollbar { width: 4px; }
+        .chat-messages::-webkit-scrollbar-thumb { background: var(--pc); }
 
-.psec  { border-bottom:1px solid var(--dim); padding:10px 13px; flex-shrink:0; }
-.pttl  {
-  font-family:var(--fhud); font-size:7px; font-weight:700; letter-spacing:2.5px;
-  color:rgba(0,212,255,.36); margin-bottom:8px;
-  display:flex; align-items:center; gap:6px;
-}
-.pttl::before { content:''; width:14px; height:1px; background:rgba(0,212,255,.26); }
+        .message { margin-bottom: 10px; animation: msgIn .25s ease-out; }
+        .message.user { text-align: right; }
+        .message-bubble {
+            display: inline-block; max-width: 82%;
+            padding: 9px 13px; font-size: 13px; line-height: 1.45;
+            word-break: break-word;
+            border: 1px solid var(--bc);
+            background: var(--pg);
+            clip-path: polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);
+            box-shadow: 0 0 14px var(--pg);
+        }
+        .message.user .message-bubble { color: var(--pc); }
+        .message.ai .message-bubble { color: #e8f8ff; }
+        .message-bubble.streaming::after { content:'▊'; animation: blink 1s infinite; color: var(--pc); }
+        .message-time { font-size: 9px; color: var(--pc); opacity:.6; margin-top:3px; letter-spacing:1px; }
 
-/* ── D-PAD ── big touch targets */
-.dpad { display:grid; grid-template-columns:repeat(3,1fr); gap:5px; }
-.db {
-  height:var(--touch);
-  border:1px solid rgba(0,212,255,.26); background:rgba(0,212,255,.04);
-  color:var(--c1); cursor:pointer; font-size:20px;
-  display:flex; align-items:center; justify-content:center;
-  touch-action:manipulation; transition:background .1s, transform .1s;
-  clip-path:polygon(6px 0,100% 0,100% calc(100% - 6px),calc(100% - 6px) 100%,0 100%,0 6px);
-  -webkit-user-select:none;
-}
-.db:active, .db.on {
-  background:rgba(0,212,255,.18); transform:scale(.93);
-  box-shadow:0 0 14px rgba(0,212,255,.32);
-}
-.db.emp { background:transparent; border:none; pointer-events:none; }
-.db.ctr { font-family:var(--fmono); font-size:8px; letter-spacing:1px; }
-.angles { display:flex; gap:5px; margin-top:7px; }
-.adsp {
-  flex:1; background:rgba(0,212,255,.03); border:1px solid rgba(0,212,255,.13);
-  padding:5px 8px; font-family:var(--fmono); font-size:11px; color:var(--c1);
-  display:flex; justify-content:space-between; align-items:center;
-}
-.albl { font-size:8px; color:rgba(0,212,255,.36); letter-spacing:1px; }
+        /* Typing */
+        .typing-indicator { display:none; padding:8px 12px; }
+        .typing-dots { display:flex; gap:3px; }
+        .typing-dots span {
+            width:7px; height:7px; background:var(--pc);
+            animation: typing 1.4s infinite;
+            clip-path: polygon(50% 0%,100% 50%,50% 100%,0% 50%);
+        }
+        .typing-dots span:nth-child(2){animation-delay:.2s}
+        .typing-dots span:nth-child(3){animation-delay:.4s}
 
-/* ── VOICE ── */
-.va { display:flex; flex-direction:column; gap:5px; }
-#micBtn {
-  width:100%; height:var(--touch);
-  border:1.5px solid rgba(0,212,255,.34); background:rgba(0,212,255,.05);
-  color:var(--c1); font-family:var(--fmono); font-size:10px; letter-spacing:2px;
-  cursor:pointer; touch-action:manipulation; transition:all .18s;
-  clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);
-  display:flex; align-items:center; justify-content:center; gap:8px;
-}
-#micBtn.rec  { border-color:var(--c3); color:var(--c3); background:rgba(255,58,92,.1);
-               animation:rp .85s ease-in-out infinite; }
-#micBtn.proc { border-color:var(--c4); color:var(--c4); background:rgba(255,153,0,.07); }
-@keyframes rp { 0%,100%{box-shadow:0 0 8px rgba(255,58,92,.3)} 50%{box-shadow:0 0 24px rgba(255,58,92,.6)} }
-#waveC  { width:100%; height:28px; border:1px solid rgba(0,212,255,.08); background:rgba(0,212,255,.015); }
-#xscript {
-  font-family:var(--fbody); font-size:11px; line-height:1.45;
-  color:rgba(0,212,255,.56); min-height:28px; padding:4px 8px;
-  border:1px solid rgba(0,212,255,.07); background:rgba(0,212,255,.015);
-}
+        /* Input area */
+        .input-area {
+            padding: 10px 12px;
+            background: rgba(0,0,0,.97);
+            border-top: 1px solid var(--bc);
+            box-shadow: 0 0 20px var(--pg);
+            flex-shrink: 0;
+        }
+        .ctrl-row {
+            display: flex; gap: 6px; margin-bottom: 8px; flex-wrap: wrap;
+        }
+        .ctrl-btn {
+            padding: 8px 11px; font-size: 11px; font-weight:700;
+            font-family: 'Courier New', monospace; text-transform: uppercase; letter-spacing:.5px;
+            border: 1px solid var(--bc); background: var(--pg); color: var(--pc);
+            cursor: pointer; transition: all .2s;
+            clip-path: polygon(5px 0,100% 0,100% calc(100% - 5px),calc(100% - 5px) 100%,0 100%,0 5px);
+            min-width: 44px; min-height: 36px;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .ctrl-btn:active, .ctrl-btn.active {
+            background: var(--pc); color: #000;
+            box-shadow: 0 0 20px var(--pg);
+        }
+        .input-row { display:flex; gap:8px; align-items:flex-end; }
+        .msg-input {
+            flex:1; padding: 11px 14px; font-size: 14px;
+            border: 1px solid var(--bc); background: rgba(0,0,0,.85);
+            color: var(--pc); font-family: 'Courier New', monospace;
+            resize: none; max-height: 80px; min-height: 44px;
+            clip-path: polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);
+            outline: none;
+        }
+        .msg-input::placeholder { color: rgba(0,200,255,.4); }
+        .icon-btn {
+            width: 44px; height: 44px; border: 1px solid var(--bc);
+            background: rgba(0,0,0,.9); color: var(--pc); cursor: pointer;
+            display:flex; align-items:center; justify-content:center;
+            font-size: 18px; transition: all .2s;
+            clip-path: polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);
+            flex-shrink: 0;
+        }
+        .icon-btn:active { background: var(--pc); color:#000; box-shadow:0 0 20px var(--pg); }
+        .voice-btn.recording {
+            background: var(--pc); color: #000;
+            animation: recordPulse 1s infinite;
+        }
 
-/* ── CHAT ── */
-#chatLog {
-  flex:1; overflow-y:auto; padding:7px 12px;
-  display:flex; flex-direction:column; gap:5px;
-  scrollbar-width:thin; scrollbar-color:rgba(0,212,255,.14) transparent;
-}
-.cm { padding:6px 10px; font-family:var(--fbody); font-size:11px; line-height:1.55; animation:mi .2s ease-out; }
-@keyframes mi { from{opacity:0;transform:translateX(5px)} to{opacity:1;transform:none} }
-.cm.user { background:rgba(0,212,255,.05); border-left:2px solid var(--c1);
-           color:rgba(0,212,255,.78); clip-path:polygon(4px 0,100% 0,100% 100%,0 100%,0 4px); }
-.cm.ai   { background:rgba(68,136,255,.04); border-left:2px solid #4488ff;
-           color:rgba(165,200,255,.8); clip-path:polygon(4px 0,100% 0,100% 100%,0 100%,0 4px); }
-.cm .ml  { font-family:var(--fmono); font-size:7px; letter-spacing:2px; opacity:.34; margin-bottom:2px; }
+        /* ══════════════════════════════
+           RIGHT: MEDIA PANEL
+        ══════════════════════════════ */
+        .media-panel {
+            display: grid;
+            grid-template-rows: 1fr auto auto;
+            background: rgba(0,0,0,.9);
+            position: relative;
+        }
 
-.ci-row {
-  display:flex; gap:5px; padding:8px 12px; border-top:1px solid var(--dim); flex-shrink:0;
-}
-#chatIn {
-  flex:1; background:rgba(0,212,255,.04); border:1px solid rgba(0,212,255,.16);
-  color:var(--c1); font-family:var(--fbody); font-size:12px; padding:8px 10px; outline:none;
-  clip-path:polygon(5px 0,100% 0,100% calc(100% - 5px),calc(100% - 5px) 100%,0 100%,0 5px);
-}
-#chatIn::placeholder { color:rgba(0,212,255,.18); }
-#chatIn:focus { border-color:rgba(0,212,255,.38); background:rgba(0,212,255,.06); }
-#sendBtn {
-  width:var(--touch); height:var(--touch);
-  border:1px solid rgba(0,212,255,.34); background:rgba(0,212,255,.07);
-  color:var(--c1); font-size:18px; cursor:pointer; touch-action:manipulation;
-  clip-path:polygon(5px 0,100% 0,100% calc(100% - 5px),calc(100% - 5px) 100%,0 100%,0 5px);
-  display:flex; align-items:center; justify-content:center;
-}
-#sendBtn:active { background:rgba(0,212,255,.18); }
+        /* Action buttons row */
+        .action-bar {
+            display: flex; gap: 6px; flex-wrap: wrap;
+            padding: 8px 10px;
+            background: rgba(0,0,0,.97);
+            border-bottom: 1px solid var(--bc);
+            box-shadow: 0 4px 20px var(--pg);
+        }
+        .act-btn {
+            padding: 8px 12px; font-size: 11px; font-weight:700;
+            font-family: 'Courier New', monospace; text-transform: uppercase;
+            border: 1px solid var(--bc); background: var(--pg); color: var(--pc);
+            cursor: pointer; transition: all .2s;
+            clip-path: polygon(5px 0,100% 0,100% calc(100% - 5px),calc(100% - 5px) 100%,0 100%,0 5px);
+            min-height: 36px; flex: 1; white-space: nowrap;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .act-btn:active { background: var(--pc); color:#000; box-shadow:0 0 20px var(--pg); }
 
-/* ══ BOTTOMBAR — large touch buttons ══ */
-#bot {
-  display:flex; align-items:center;
-  padding:0 10px; gap:6px;
-  border-top:1px solid var(--border);
-  background:rgba(0,4,10,.98);
-  overflow-x:auto; overflow-y:hidden;
-}
-#bot::-webkit-scrollbar { display:none; }
+        /* Camera view */
+        .cam-wrap {
+            position: relative; overflow: hidden;
+            background: #000;
+            clip-path: polygon(16px 0,100% 0,100% calc(100% - 16px),calc(100% - 16px) 100%,0 100%,0 16px);
+            box-shadow: inset 0 0 40px rgba(0,0,0,.6), 0 0 20px var(--pg);
+        }
 
-/* touch button base */
-.tb {
-  flex-shrink:0;
-  height:var(--touch); padding:0 14px;
-  border:1px solid rgba(0,212,255,.24); background:rgba(0,212,255,.05);
-  color:rgba(0,212,255,.62); font-family:var(--fmono); font-size:9px; letter-spacing:1.2px;
-  cursor:pointer; white-space:nowrap; touch-action:manipulation;
-  transition:background .12s, box-shadow .12s; text-transform:uppercase;
-  clip-path:polygon(6px 0,100% 0,100% calc(100% - 6px),calc(100% - 6px) 100%,0 100%,0 6px);
-  display:flex; align-items:center; justify-content:center; gap:5px;
-  -webkit-user-select:none;
-}
-.tb:active, .tb.on {
-  background:rgba(0,212,255,.15); color:var(--c1);
-  border-color:var(--c1); box-shadow:0 0 12px rgba(0,212,255,.24);
-}
-.tb.danger        { border-color:rgba(255,58,92,.26); color:rgba(255,58,92,.62); }
-.tb.danger:active { background:rgba(255,58,92,.12); color:var(--c3); border-color:var(--c3); }
-.tb.hidden-dev    { border-style:dashed; opacity:.4; }
-.tb.hidden-dev:active { opacity:1; }
+        /* Scan line */
+        .cam-wrap::after {
+            content:''; position:absolute; left:0; right:0; height:4px;
+            background: linear-gradient(180deg,transparent,var(--pc) 50%,transparent);
+            animation: scanV 3.5s linear infinite; z-index:10; pointer-events:none;
+            box-shadow: 0 0 16px var(--pc), 0 0 32px var(--pg);
+        }
+        /* CRT scanlines */
+        .cam-wrap::before {
+            content:''; position:absolute; inset:0;
+            background: repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.25) 2px,rgba(0,0,0,.25) 4px);
+            pointer-events:none; z-index:5;
+        }
 
-/* divider in bottom bar */
-.bdiv { flex-shrink:0; width:1px; height:32px; background:rgba(0,212,255,.15); }
+        /* Corner brackets */
+        .cam-corner {
+            position:absolute; width:20px; height:20px; z-index:15; pointer-events:none;
+        }
+        .cam-corner.tl { top:8px; left:8px; border-top:2px solid var(--pc); border-left:2px solid var(--pc); }
+        .cam-corner.tr { top:8px; right:8px; border-top:2px solid var(--pc); border-right:2px solid var(--pc); }
+        .cam-corner.bl { bottom:8px; left:8px; border-bottom:2px solid var(--pc); border-left:2px solid var(--pc); }
+        .cam-corner.br { bottom:8px; right:8px; border-bottom:2px solid var(--pc); border-right:2px solid var(--pc); }
 
-/* metrics strip */
-#bmet { font-family:var(--fmono); font-size:8px; color:rgba(0,212,255,.28); letter-spacing:1px;
-        display:flex; gap:12px; flex-shrink:0; }
-#bmet .mv { color:var(--c1); }
+        #webcamPlaceholder {
+            display:flex; flex-direction:column; align-items:center; justify-content:center;
+            height:100%; color:var(--pc); font-size:13px; text-align:center;
+            letter-spacing:2px; opacity:.6; gap:8px; text-transform:uppercase;
+        }
+        .cam-icon { font-size:36px; opacity:.4; }
 
-#langSel {
-  flex-shrink:0; height:var(--touch); padding:0 8px;
-  background:rgba(0,4,10,.9); border:1px solid rgba(0,212,255,.22); color:var(--c1);
-  font-family:var(--fmono); font-size:9px; cursor:pointer; outline:none;
-}
+        #webcamVideo { width:100%; height:100%; object-fit:cover; display:none; }
 
-/* ══ SOUND MONITOR ══ */
-#soundPanel {
-  border-bottom:1px solid var(--dim); padding:10px 13px; flex-shrink:0;
-}
-.vu-wrap { display:flex; align-items:center; gap:7px; margin-bottom:6px; }
-.vu-lbl  { font-family:var(--fmono); font-size:8px; letter-spacing:1.2px; color:rgba(0,212,255,.38); width:28px; }
-#vuBar   { flex:1; height:10px; background:rgba(0,212,255,.06);
-           border:1px solid rgba(0,212,255,.14); position:relative; overflow:hidden;
-           clip-path:polygon(3px 0,100% 0,100% calc(100%-3px),calc(100%-3px) 100%,0 100%,0 3px); }
-#vuFill  { height:100%; width:0%; background:linear-gradient(90deg,var(--c2),var(--c1),var(--c4));
-           transition:width .05s; }
-#vuVal   { font-family:var(--fmono); font-size:9px; color:rgba(0,212,255,.5); width:30px; text-align:right; }
-.snd-evt { height:36px; overflow:hidden; }
-#sndEvtLog { font-family:var(--fmono); font-size:8px; letter-spacing:1px;
-             color:rgba(0,212,255,.4); line-height:1.9; }
-#sndEvtLog .ev-hi { color:var(--c4); }
-#sndEvtLog .ev-ok { color:var(--c2); }
+        /* Sound overlay */
+        .sound-overlay {
+            position:absolute; bottom:10px; left:10px; z-index:20;
+            display:flex; flex-direction:column; gap:6px; pointer-events:none;
+        }
+        .sound-item {
+            background: rgba(0,0,0,.88); border: 1px solid var(--bc);
+            padding: 7px 11px; min-width:170px;
+            clip-path: polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);
+            box-shadow: 0 0 12px var(--pg);
+        }
+        .sound-head { display:flex; justify-content:space-between; margin-bottom:4px; }
+        .sound-label { font-size:11px; color:var(--pc); text-transform:uppercase; letter-spacing:.5px; font-weight:700; }
+        .sound-rank { font-size:9px; color:var(--pc); background:var(--pg); padding:1px 5px; }
+        .sound-bar { height:4px; background:rgba(0,0,0,.8); border:1px solid var(--bc); overflow:hidden; }
+        .sound-fill {
+            height:100%; background:linear-gradient(90deg,var(--sc),var(--pc));
+            transition: width .3s; box-shadow:0 0 6px var(--pg);
+        }
+        .sound-pct { font-size:9px; color:var(--pc); text-align:right; margin-top:2px; }
 
-/* ══ VISION / OBJECT PANEL ══ */
-#visionPanel {
-  border-bottom:1px solid var(--dim); padding:10px 13px; flex-shrink:0;
-}
-.vp-row { display:flex; justify-content:space-between; align-items:center;
-          font-family:var(--fmono); font-size:9px; line-height:1.9; }
-.vp-key { color:rgba(0,212,255,.36); letter-spacing:1px; }
-.vp-val { color:var(--c1); letter-spacing:.5px; }
-.vp-val.hi { color:var(--c4); }
-.vp-val.ok { color:var(--c2); }
-#objList { margin-top:5px; display:flex; flex-direction:column; gap:3px; max-height:88px; overflow-y:auto;
-           scrollbar-width:thin; scrollbar-color:rgba(0,212,255,.1) transparent; }
-.obj-row { display:flex; justify-content:space-between; align-items:center;
-           padding:2px 7px; background:rgba(0,212,255,.03); border-left:2px solid rgba(0,212,255,.2);
-           font-family:var(--fmono); font-size:8px; animation:mi .18s ease-out; }
-.obj-nm  { color:rgba(0,212,255,.7); letter-spacing:.5px; }
-.obj-conf{ color:var(--c4); }
-.obj-box { color:rgba(0,212,255,.3); font-size:7px; }
+        /* Cam buttons */
+        .cam-btns {
+            position:absolute; bottom:10px; right:10px; z-index:20;
+            display:flex; flex-direction:column; gap:6px;
+        }
+        .cam-btn {
+            width:38px; height:38px; border:1px solid var(--bc);
+            background:rgba(0,0,0,.9); color:var(--pc);
+            cursor:pointer; display:flex; align-items:center; justify-content:center;
+            font-size:17px; transition:all .2s;
+            clip-path: polygon(5px 0,100% 0,100% calc(100% - 5px),calc(100% - 5px) 100%,0 100%,0 5px);
+        }
+        .cam-btn:active { background:var(--pc); color:#000; }
 
-</style>
+        /* Upload area */
+        .upload-area {
+            padding: 8px 10px;
+            background: rgba(0,0,0,.95);
+            border-top: 1px solid var(--bc);
+            cursor: pointer;
+            transition: all .2s;
+            display: flex; align-items: center; gap: 10px;
+            min-height: 56px;
+        }
+        .upload-area:active { background: rgba(0,0,0,1); box-shadow:0 0 12px var(--pg); }
+        .upload-area input { display:none; }
+        .upload-icon { font-size:22px; flex-shrink:0; }
+        .upload-text { font-size:11px; color:var(--pc); opacity:.7; text-transform:uppercase; letter-spacing:1px; }
+        #uploadedImage { max-height:40px; max-width:60px; border:1px solid var(--bc); }
+        .remove-img {
+            margin-left:auto; padding:5px 9px; font-size:10px;
+            border:1px solid var(--bc); background:var(--pg); color:var(--pc);
+            cursor:pointer; font-family:'Courier New',monospace; text-transform:uppercase;
+        }
+        .remove-img:active { background:var(--pc); color:#000; }
+
+        /* Status bar */
+        .status-bar {
+            padding: 8px 14px;
+            background: rgba(0,0,0,.97);
+            border-top: 1px solid var(--bc);
+            display: flex; align-items: center; justify-content: space-between;
+            font-size: 10px; color: var(--pc); letter-spacing:2px; text-transform:uppercase;
+            box-shadow: 0 0 16px var(--pg);
+            flex-shrink: 0;
+        }
+        .status-dots { display:flex; gap:5px; }
+        .status-dot {
+            width:7px; height:7px; background:var(--pc); opacity:.5;
+            clip-path:polygon(50% 0%,100% 50%,50% 100%,0% 50%);
+        }
+        .status-dot.active { opacity:1; box-shadow:0 0 6px var(--pc); }
+
+        /* Mode badge */
+        .mode-badge {
+            position:fixed; top:8px; right:8px; z-index:999;
+            padding:6px 14px; background:rgba(0,0,0,.95);
+            border:1px solid var(--bc); color:var(--pc);
+            font-size:10px; font-weight:700; letter-spacing:2px; text-transform:uppercase;
+            clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);
+            box-shadow:0 0 14px var(--pg);
+            animation:glowPulse 2s ease-in-out infinite;
+        }
+
+        /* Sound bars visual */
+        .sound-bars {
+            display:flex; align-items:flex-end; gap:2px; height:16px;
+        }
+        .sbar {
+            width:3px; background:var(--pc); opacity:.7;
+            animation: soundBar 1s ease-in-out infinite;
+        }
+        .sbar:nth-child(1){height:40%;animation-delay:.0s}
+        .sbar:nth-child(2){height:70%;animation-delay:.1s}
+        .sbar:nth-child(3){height:100%;animation-delay:.2s}
+        .sbar:nth-child(4){height:55%;animation-delay:.3s}
+        .sbar:nth-child(5){height:80%;animation-delay:.15s}
+    </style>
 </head>
-<body>
-<div id="app">
+<body class="mode-normal">
 
-<!-- ══ TOPBAR ══ -->
-<header id="topbar">
-  <div class="logo-line">
-    <div class="logo">ARCos</div>
-    <div class="logo-sub">POWERED BY <span class="ibadge">Intel</span>
-      <span style="opacity:.28">| NEURAL OS v2.4</span></div>
-  </div>
-  <div class="status-dots">
-    <div class="sdot"><div class="dot"></div>MOTOR</div>
-    <div class="sdot"><div class="dot y"></div>VISION</div>
-    <div class="sdot"><div class="dot r"></div>AUDIO</div>
-    <div class="sdot"><div class="dot"></div>NEURAL</div>
-  </div>
-  <div id="clk">--:--:--</div>
-</header>
+<div class="bg-grid"></div>
+<div class="hex-deco">
+    <div class="hex"></div><div class="hex"></div>
+    <div class="hex"></div><div class="hex"></div><div class="hex"></div>
+</div>
 
-<!-- ══ MIDDLE ══ -->
-<div id="mid">
+<div class="mode-badge" id="modeBadge">◈ NORMAL MODE</div>
 
-  <!-- FACE CANVAS -->
-  <div id="faceArea">
-    <canvas id="threeCanvas"></canvas>
+<div class="app">
 
-    <!-- HUD overlays -->
-    <div class="hc htl htxt">
-      <div>FPS  ▸ <span class="hv" id="hFps">--</span></div>
-      <div>PAN  ▸ <span class="hv" id="hPan">0°</span></div>
-      <div>TILT ▸ <span class="hv" id="hTilt">0°</span></div>
-    </div>
-    <div class="hc htr htxt">
-      <div>EMOT  ▸ <span class="hv" id="hEmot">NEUTRAL</span></div>
-      <div>TRACK ▸ <span class="hv" id="hTrack">OFF</span></div>
-    </div>
+    <!-- ═══════════ LEFT: CHAT ═══════════ -->
+    <div class="chat-panel">
+        <div class="chat-header">
+            <div>
+                <div class="logo">◢ ARCos ◣</div>
+                <div class="logo-sub">ADVANCED ROBOTICS INTERFACE</div>
+            </div>
+            <div class="lang-wrap">
+                <select id="languageSelect">
+                    <option value="ar">🇸🇦 AR</option>
+                    <option value="cs">🇨🇿 CS</option>
+                    <option value="de">🇩🇪 DE</option>
+                    <option value="en">🇺🇸 EN</option>
+                    <option value="es">🇪🇸 ES</option>
+                    <option value="fa">🇮🇷 FA</option>
+                    <option value="fi">🇫🇮 FI</option>
+                    <option value="fil">🇵🇭 FIL</option>
+                    <option value="fr">🇫🇷 FR</option>
+                    <option value="hi">🇮🇳 HI</option>
+                    <option value="hu">🇭🇺 HU</option>
+                    <option value="id">🇮🇩 ID</option>
+                    <option value="it">🇮🇹 IT</option>
+                    <option value="ja">🇯🇵 JA</option>
+                    <option value="km">🇰🇭 KM</option>
+                    <option value="ko" selected>🇰🇷 KO</option>
+                    <option value="mn">🇲🇳 MN</option>
+                    <option value="ms">🇲🇾 MS</option>
+                    <option value="nl">🇳🇱 NL</option>
+                    <option value="pl">🇵🇱 PL</option>
+                    <option value="pt">🇵🇹 PT</option>
+                    <option value="ru">🇷🇺 RU</option>
+                    <option value="si">🇱🇰 SI</option>
+                    <option value="sv">🇸🇪 SV</option>
+                    <option value="ta">🇮🇳 TA</option>
+                    <option value="te">🇮🇳 TE</option>
+                    <option value="th">🇹🇭 TH</option>
+                    <option value="tr">🇹🇷 TR</option>
+                    <option value="uk">🇺🇦 UK</option>
+                    <option value="ur">🇵🇰 UR</option>
+                    <option value="vi">🇻🇳 VI</option>
+                    <option value="zh">🇨🇳 ZH</option>
+                </select>
+            </div>
+        </div>
 
-    <div id="faceBox"></div>
+        <div class="chat-messages" id="chatMessages">
+            <div class="message ai">
+                <div class="message-bubble">안녕하세요! 저는 ARCos입니다. 텍스트, 음성, 이미지로 대화할 수 있어요! 🤖</div>
+                <div class="message-time">SYSTEM READY</div>
+            </div>
+            <div class="typing-indicator" id="typingIndicator">
+                <div class="typing-dots"><span></span><span></span><span></span></div>
+            </div>
+        </div>
 
-    <!-- Emotion chips -->
-    <div id="emotBar">
-      <div class="ec active" data-e="neutral">NEUTRAL</div>
-      <div class="ec" data-e="happy">HAPPY</div>
-      <div class="ec" data-e="alert">ALERT</div>
-      <div class="ec" data-e="curious">CURIOUS</div>
-      <div class="ec" data-e="sleepy">SLEEPY</div>
-    </div>
+        <div class="input-area">
+            <div class="ctrl-row">
+                <button class="ctrl-btn active" id="ttsToggle">🔊 TTS</button>
+                <button class="ctrl-btn" id="autoSendImage">⚡ A.I</button>
 
-    <!-- Robot cam overlay -->
-    <div id="camOv" class="overlay">
-      <div class="ov-lbl">⬡ ROBOT VISION</div>
-      <button class="ov-close" id="camClose">✕</button>
-      <img id="camImg" src="" alt="">
-      <div class="cam-sel">
-        <button class="csb active" id="csBtnRaw">RAW</button>
-        <button class="csb" id="csBtnSeg">YOLO SEG</button>
-      </div>
-    </div>
-
-    <!-- Local webcam overlay (hidden dev option) -->
-    <div id="wcOv" class="overlay" style="z-index:21">
-      <div class="ov-lbl">⬡ LOCAL WEBCAM</div>
-      <button class="ov-close" id="wcClose">✕</button>
-      <video id="wcVid" autoplay playsinline muted></video>
-    </div>
-  </div>
-
-  <!-- ══ SIDE PANEL ══ -->
-  <aside id="panel">
-
-    <!-- Motor D-pad -->
-    <div class="psec">
-      <div class="pttl">PAN / TILT</div>
-      <div class="dpad">
-        <div class="db emp"></div>
-        <button class="db" id="bU">▲</button>
-        <div class="db emp"></div>
-        <button class="db" id="bL">◀</button>
-        <button class="db ctr" id="bR0">RST</button>
-        <button class="db" id="bRt">▶</button>
-        <div class="db emp"></div>
-        <button class="db" id="bD">▼</button>
-        <div class="db emp"></div>
-      </div>
-      <div class="angles">
-        <div class="adsp"><span class="albl">PAN</span><span id="panV">0°</span></div>
-        <div class="adsp"><span class="albl">TILT</span><span id="tiltV">0°</span></div>
-      </div>
+            </div>
+            <div class="input-row">
+                <textarea class="msg-input" id="messageInput" placeholder="ENTER MESSAGE..." rows="1"></textarea>
+                <button class="icon-btn voice-btn" id="voiceBtn">🎤</button>
+                <button class="icon-btn" id="sendBtn">➤</button>
+            </div>
+        </div>
     </div>
 
+    <!-- ═══════════ RIGHT: MEDIA ═══════════ -->
+    <div class="media-panel">
+        <!-- Action bar -->
 
-    <!-- Sound Monitor -->
-    <div class="psec" id="soundPanel">
-      <div class="pttl">SOUND MONITOR</div>
-      <div class="vu-wrap">
-        <span class="vu-lbl">ENV</span>
-        <div id="vuBar"><div id="vuFill"></div></div>
-        <span id="vuVal">0dB</span>
-      </div>
-      <div class="snd-evt">
-        <div id="sndEvtLog">— monitoring —</div>
-      </div>
+
+        <!-- Camera -->
+        <div class="cam-wrap" id="camWrap">
+            <div class="cam-corner tl"></div>
+            <div class="cam-corner tr"></div>
+            <div class="cam-corner bl"></div>
+            <div class="cam-corner br"></div>
+
+            <div class="sound-overlay" id="soundEventsOverlay"></div>
+
+            <div id="webcamPlaceholder">
+                <div class="cam-icon">📷</div>
+                <span>CAMERA OFFLINE</span>
+                <span style="font-size:10px;opacity:.4">TAP 📷 TO ACTIVATE</span>
+            </div>
+            <img id="webcamVideo" alt="cam">
+
+            <div class="cam-btns">
+                <button class="cam-btn" id="startWebcam" title="Start">📷</button>
+                <button class="cam-btn" id="captureImage" title="Capture" style="display:none">📸</button>
+                <button class="cam-btn" id="stopWebcam" title="Stop" style="display:none">⏹</button>
+            </div>
+        </div>
+
+        <!-- Upload area -->
+        <div class="upload-area" id="imageUpload">
+            <input type="file" id="fileInput" accept="image/*">
+            <div class="upload-icon">🖼️</div>
+            <div id="uploadText" class="upload-text">IMAGE UPLOAD · TAP TO SELECT</div>
+            <img id="uploadedImage" style="display:none" alt="upload">
+            <button class="remove-img" id="removeImage" style="display:none">✕</button>
+        </div>
+
+        <!-- Status bar -->
+        <div class="status-bar" id="statusBar">
+            <span id="statusText">[ SYSTEM READY ]</span>
+            <div class="status-dots">
+                <div class="sound-bars">
+                    <div class="sbar"></div><div class="sbar"></div>
+                    <div class="sbar"></div><div class="sbar"></div><div class="sbar"></div>
+                </div>
+            </div>
+        </div>
     </div>
+</div>
 
-    <!-- Vision / Object Detection -->
-    <div class="psec" id="visionPanel">
-      <div class="pttl">VISION / DETECTION</div>
-      <div class="vp-row"><span class="vp-key">PERSON</span><span class="vp-val" id="vpPerson">--</span></div>
-      <div class="vp-row"><span class="vp-key">POS</span><span class="vp-val" id="vpPos">--</span></div>
-      <div class="vp-row"><span class="vp-key">GENDER</span><span class="vp-val" id="vpGender">--</span></div>
-      <div class="vp-row"><span class="vp-key">AGE</span><span class="vp-val" id="vpAge">--</span></div>
-      <div class="vp-row"><span class="vp-key">EMOTION</span><span class="vp-val" id="vpEmot">--</span></div>
-      <div class="vp-row"><span class="vp-key">OBJECTS</span><span class="vp-val" id="vpObjCount">0</span></div>
-      <div id="objList"></div>
-    </div>
-    <!-- Voice input -->
-    <div class="psec">
-      <div class="pttl">VOICE INPUT</div>
-      <div class="va">
-        <button id="micBtn">
-          <span id="micIco">🎤</span><span id="micLbl">HOLD TO SPEAK</span>
-        </button>
-        <canvas id="waveC"></canvas>
-        <div id="xscript">— awaiting input —</div>
-      </div>
-    </div>
-
-    <!-- Chat log (fills remaining space) -->
-    <div id="chatLog"></div>
-
-    <!-- Chat input row -->
-    <div class="ci-row">
-      <input id="chatIn" placeholder="TYPE MESSAGE...">
-      <button id="sendBtn">➤</button>
-    </div>
-  </aside>
-</div><!-- #mid -->
-
-<!-- ══ BOTTOMBAR ══ -->
-<footer id="bot">
-  <!-- Motion buttons -->
-  <button class="tb" id="btnStop">⬛ STOP</button>
-  <button class="tb" id="btnHello">🙋 HELLO</button>
-  <button class="tb" id="btnClap">👏 CLAP</button>
-  <button class="tb" id="btnBye">👋 BYE</button>
-  <button class="tb" id="btnIntro">🎬 INTRO</button>
-  <button class="tb" id="btnHands">👐 HANDS</button>
-
-  <div class="bdiv"></div>
-
-  <button class="tb" id="camBtn">📷 CAM</button>
-  <button class="tb" id="trkBtn">🎯 TRACK</button>
-  <button class="tb hidden-dev" id="wcBtn">🔬 WEBCAM</button>
-
-  <div class="bdiv"></div>
-
-  <div id="bmet">
-    <span>PAN <span class="mv" id="mPan">0°</span></span>
-    <span>TILT <span class="mv" id="mTilt">0°</span></span>
-    <span>FPS <span class="mv" id="mFps">--</span></span>
-  </div>
-
-  <div style="flex:1"></div>
-
-  <select id="langSel">
-    <option value="ko" selected>🇰🇷 KO</option>
-    <option value="en">🇺🇸 EN</option>
-    <option value="ja">🇯🇵 JA</option>
-    <option value="zh">🇨🇳 ZH</option>
-    <option value="de">🇩🇪 DE</option>
-    <option value="fr">🇫🇷 FR</option>
-  </select>
-  <button class="tb danger" id="btnRst">⟲ RST</button>
-</footer>
-
-</div><!-- #app -->
-
-<!-- ══ THREE.JS ══ -->
-<script src="./three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/recorder.js/0.1.0/recorder.min.js"></script>
 <script>
-'use strict';
-// ════════════════════════════════════════════════════════
-//  ENDPOINTS
-// ════════════════════════════════════════════════════════
-const API    = 'http://127.0.0.1:8001';
-const LLM    = 'http://127.0.0.1:59532/v1';
-const TTS_   = 'http://127.0.0.1:59530/v2';
-const HB     = 'http://127.0.0.1:59531';
-const MOTION = 'http://127.0.0.1:8000';
-const STEP   = 3;
+let lastTime = 0;
 
-const LANG_SYS = {
-  ko:'너는 만서로 이라는 15살 휴머노이드야. 서큘러스가 두뇌, 만드로가 상반신, 로보웍스가 하반신. 소년의 대화체로 짧게 응답해.',
-  en:'You are Manseo, a 15-year-old humanoid robot. Brain: Circulus. Upper body: Mandro. Lower body: Roboworks. Short boyish responses only.',
-  ja:'あなたはマンソ、15歳のヒューマノイド。少年のような短い口調で答えて。',
-  zh:'你是Manseo，15岁人形机器人。用男孩简短口语回答。',
-  de:'Du bist Manseo, 15-jähriger Roboter. Kurze Jungs-Antworten.',
-  fr:'Tu es Manseo, robot 15 ans. Réponses courtes style garçon.',
-};
-const LANG_VOICE = {ko:34,en:8,ja:29,zh:66,de:6,fr:19};
-
-// ════════════════════════════════════════════════════════
-//  APP STATE
-// ════════════════════════════════════════════════════════
-let panAngle=0, tiltAngle=0, lang='ko';
-let tracking=false, camOpen=false, camMode='raw';
-let wcOpen=false, wcStream=null;
-let isRec=false, isProc=false, mediaRec=null, gumStream=null;
-let ttsQ=[], ttsPlaying=false, audioCtx=null, analyser=null, waveAF=null;
-let emotion='neutral', fpsCount=0, lastFpsT=Date.now(), motorTimer=null;
-let faceYaw=0, facePitch=0, curYaw=0, curPitch=0;
-let isTalking=false, talkPhase=0;
-let ttsRms=0, ttsAnalyser=null, ttsAudioCtx2=null;
-
-// ════════════════════════════════════════════════════════
-//  THREE.JS SETUP
-// ════════════════════════════════════════════════════════
-const canvas3  = document.getElementById('threeCanvas');
-const renderer = new THREE.WebGLRenderer({canvas:canvas3, antialias:true, alpha:true});
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-renderer.setClearColor(0x000810, 0);
-
-const scene  = new THREE.Scene();
-scene.fog    = new THREE.FogExp2(0x000c18, 0.011);
-
-const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 100);
-camera.position.set(0, 0.06, 6.2);
-
-function resize3() {
-  const el = document.getElementById('faceArea');
-  renderer.setSize(el.clientWidth, el.clientHeight);
-  camera.aspect = el.clientWidth / el.clientHeight;
-  camera.updateProjectionMatrix();
-}
-resize3();
-window.addEventListener('resize', resize3);
-
-// ── LIGHTS ──────────────────────────────────────────────
-scene.add(new THREE.AmbientLight(0x001a28, 0.9));
-const kL = new THREE.DirectionalLight(0x00d4ff, 1.6); kL.position.set(2,3,5);   scene.add(kL);
-const rL = new THREE.DirectionalLight(0x0071C5, 1.1); rL.position.set(-3,1,-2); scene.add(rL);
-const fL = new THREE.PointLight(0x00ff88, 0.65, 10);  fL.position.set(0,-2,4);  scene.add(fL);
-const tL = new THREE.PointLight(0x00d4ff, 0.45,  7);  tL.position.set(0,5,2);   scene.add(tL);
-
-// ── SHARED MATERIALS ────────────────────────────────────
-const headMat = new THREE.MeshStandardMaterial({
-  color:0x001828, emissive:0x001e2e, emissiveIntensity:0.3,
-  metalness:0.9, roughness:0.14, transparent:true, opacity:0.96,
-});
-const wireMat = new THREE.MeshBasicMaterial({
-  color:0x00d4ff, wireframe:true, transparent:true, opacity:0.055,
-});
-const visorMat = new THREE.MeshStandardMaterial({
-  color:0x00d4ff, emissive:0x003650, emissiveIntensity:0.65,
-  metalness:0.9, roughness:0.1, transparent:true, opacity:0.72,
-});
-
-// ════════════════════════════════════════════════════════
-//  HEAD MESH
-// ════════════════════════════════════════════════════════
-const headGroup = new THREE.Group();
-scene.add(headGroup);
-
-// Sculpted sphere head
-const headGeo = new THREE.SphereGeometry(1.2, 44, 34);
-(function sculpt(){
-  const pos = headGeo.attributes.position;
-  for (let i=0; i<pos.count; i++) {
-    let x=pos.getX(i), y=pos.getY(i), z=pos.getZ(i);
-    if (z < 0) z *= 0.66;                                           // flatten back
-    if (y > -0.12 && y < 0.58) x *= 1.07;                         // widen cheeks
-    if (y > 0.68)  x *= (1-(y-0.68)*0.3);                         // narrow crown
-    if (y < -0.58) { x*=0.64; z*=0.72; }                          // taper chin
-    if (y > 0.26 && z > 0) z += 0.06;                             // push forehead
-    if (Math.abs(x)<0.65 && y<0.28 && y>-0.52 && z>0) z += 0.04*(1-Math.abs(x)/0.65); // face bulge
-    pos.setXYZ(i, x, y, z);
-  }
-  headGeo.computeVertexNormals();
-})();
-
-headGroup.add(new THREE.Mesh(headGeo, headMat));
-const headWire = new THREE.Mesh(headGeo, wireMat);
-headWire.scale.setScalar(1.003);
-headGroup.add(headWire);
-
-// Forehead visor strip
-const visorMesh = new THREE.Mesh(
-  new THREE.BoxGeometry(1.1, 0.072, 0.054), visorMat
-);
-visorMesh.position.set(0, 0.85, 0.73);
-headGroup.add(visorMesh);
-
-// Temple plates + LED strips
-[-1.02, 1.02].forEach(sx => {
-  const tp = new THREE.Mesh(new THREE.BoxGeometry(0.05,0.70,0.50),
-    new THREE.MeshStandardMaterial({color:0x001220,metalness:0.85,roughness:0.22}));
-  tp.position.set(sx, 0.1, 0.52); headGroup.add(tp);
-  const led = new THREE.Mesh(new THREE.BoxGeometry(0.007,0.50,0.007),
-    new THREE.MeshBasicMaterial({color:0x0071C5}));
-  led.position.set(sx*0.96, 0.1, 0.8); headGroup.add(led);
-});
-
-// Helper: quick mesh
-function qm(geo, mat, px, py, pz) {
-  const m = new THREE.Mesh(geo, mat);
-  m.position.set(px, py, pz);
-  headGroup.add(m);
-  return m;
-}
-
-// Nose
-qm(new THREE.BoxGeometry(0.05,0.19,0.068),
-   new THREE.MeshStandardMaterial({color:0x001e30,metalness:0.8,roughness:0.3}),
-   0,-0.01,1.0);
-
-// Grille bars
-const grillMat = new THREE.MeshStandardMaterial({color:0x000e1c,metalness:0.88,roughness:0.22});
-for (let i=-2; i<=2; i++) qm(new THREE.BoxGeometry(0.52,0.018,0.03), grillMat, 0,-0.48+i*0.048,0.96);
-
-// ── MOUTH (animated) ────────────────────────────────────
-// Two flat LED bars that separate when talking
-const mouthMat = new THREE.MeshBasicMaterial({color:0x00d4ff});
-const mTop = qm(new THREE.BoxGeometry(0.38,0.015,0.015), mouthMat, 0,-0.435,0.985);
-const mBot = qm(new THREE.BoxGeometry(0.38,0.015,0.015), mouthMat, 0,-0.505,0.985);
-// Corner dots
-[-0.19,0.19].forEach(cx => qm(
-  new THREE.SphereGeometry(0.014,6,6), mouthMat, cx,-0.47,0.986
-));
-
-// Chin
-qm(new THREE.BoxGeometry(0.58,0.10,0.05),
-   new THREE.MeshStandardMaterial({color:0x001422,metalness:0.82,roughness:0.2}),
-   0,-0.76,0.87);
-
-// Neck
-qm(new THREE.CylinderGeometry(0.25,0.30,0.36,18),
-   new THREE.MeshStandardMaterial({color:0x000d16,metalness:0.84,roughness:0.26}),
-   0,-1.44,0);
-
-// Circuit line details
-(function circuits(){
-  const mat = new THREE.LineBasicMaterial({color:0x00d4ff, transparent:true, opacity:0.12});
-  [
-    [[-0.65,0.1,0.88],[-0.53,-0.06,0.9],[-0.50,-0.27,0.88]],
-    [[ 0.65,0.1,0.88],[ 0.53,-0.06,0.9],[ 0.50,-0.27,0.88]],
-    [[-0.40,0.70,0.82],[0,0.76,0.85],[0.40,0.70,0.82]],
-    [[-0.20,-0.65,0.88],[0,-0.59,0.9],[0.20,-0.65,0.88]],
-    [[-0.25,0.44,0.87],[-0.50,0.38,0.82]],
-    [[ 0.25,0.44,0.87],[ 0.50,0.38,0.82]],
-  ].forEach(pts => {
-    const g = new THREE.BufferGeometry().setFromPoints(pts.map(p=>new THREE.Vector3(...p)));
-    headGroup.add(new THREE.Line(g, mat));
-  });
-})();
-
-// ════════════════════════════════════════════════════════
-//  BIG EXPRESSIVE EYES
-//  Eye radius ~0.34 units — very prominent
-// ════════════════════════════════════════════════════════
-const EYE_R     = 0.34;   // outer socket radius
-const IRIS_R    = 0.20;   // iris disc radius
-const EYE_Y     = 0.22;   // vertical position on head
-const EYE_Z     = 0.83;   // forward position on head
-const EYE_XOFF  = 0.40;   // left/right offset
-
-function makeEye(xPos) {
-  const root = new THREE.Group();
-  root.position.set(xPos, EYE_Y, EYE_Z);
-  headGroup.add(root);
-
-  // ── OUTER DECORATIVE RINGS (counter-rotating) ──
-  // Ring A – thick outer glow
-  const rA_geo = new THREE.TorusGeometry(EYE_R+0.04, 0.018, 8, 64);
-  const rA_mat = new THREE.MeshBasicMaterial({color:0x00d4ff, transparent:true, opacity:0.50});
-  const rA = new THREE.Mesh(rA_geo, rA_mat);
-  rA.rotation.x = Math.PI/2; root.add(rA);
-
-  // Ring B – dashed outer (hex segments)
-  const rB_geo = new THREE.TorusGeometry(EYE_R+0.07, 0.009, 6, 48);
-  const rB_mat = new THREE.MeshBasicMaterial({color:0x00d4ff, transparent:true, opacity:0.28});
-  const rB = new THREE.Mesh(rB_geo, rB_mat);
-  rB.rotation.x = Math.PI/2; root.add(rB);
-
-  // ── EYE SOCKET (dark ring recess) ──
-  const sockGeo = new THREE.CylinderGeometry(EYE_R, EYE_R-0.02, 0.055, 38);
-  sockGeo.rotateX(Math.PI/2);
-  root.add(new THREE.Mesh(sockGeo,
-    new THREE.MeshStandardMaterial({color:0x000508, metalness:0.9, roughness:0.18})));
-
-  // ── SCLERA (dark inner sphere) ──
-  const scleraMesh = new THREE.Mesh(
-    new THREE.SphereGeometry(EYE_R-0.01, 32, 26),
-    new THREE.MeshStandardMaterial({color:0x000610, emissive:0x000810, metalness:0.5, roughness:0.28})
-  );
-  root.add(scleraMesh);
-
-  // ── IRIS GROUP (translates for gaze) ──
-  const irisG = new THREE.Group();
-  root.add(irisG);
-
-  // Iris disc
-  const irisGeo = new THREE.CylinderGeometry(IRIS_R, IRIS_R, 0.020, 42);
-  irisGeo.rotateX(Math.PI/2);
-  const irisMat = new THREE.MeshStandardMaterial({
-    color:0x00d4ff, emissive:0x005577, emissiveIntensity:1.5,
-    metalness:0.8, roughness:0.08,
-  });
-  const iris = new THREE.Mesh(irisGeo, irisMat);
-  iris.position.z = 0.20; irisG.add(iris);
-
-  // Spinning hex ring  (fast, clockwise when viewed from front)
-  const hR_geo = new THREE.TorusGeometry(IRIS_R*0.82, 0.013, 6, 42);
-  const hR_mat = new THREE.MeshBasicMaterial({color:0x00d4ff, transparent:true, opacity:0.78});
-  const hexRing = new THREE.Mesh(hR_geo, hR_mat);
-  hexRing.position.z = 0.215; hexRing.rotation.x = Math.PI/2; irisG.add(hexRing);
-
-  // Inner spinning ring (slower, counter-clockwise)
-  const iR_geo = new THREE.TorusGeometry(IRIS_R*0.52, 0.008, 6, 28);
-  const iR_mat = new THREE.MeshBasicMaterial({color:0x00d4ff, transparent:true, opacity:0.50});
-  const innerRing = new THREE.Mesh(iR_geo, iR_mat);
-  innerRing.position.z = 0.215; innerRing.rotation.x = Math.PI/2; irisG.add(innerRing);
-
-  // Mid ring (medium speed)
-  const mR_geo = new THREE.TorusGeometry(IRIS_R*0.67, 0.006, 6, 34);
-  const mR_mat = new THREE.MeshBasicMaterial({color:0x00d4ff, transparent:true, opacity:0.38});
-  const midRing = new THREE.Mesh(mR_geo, mR_mat);
-  midRing.position.z = 0.215; midRing.rotation.x = Math.PI/2; irisG.add(midRing);
-
-  // Pupil (black disc)
-  const pupilGeo = new THREE.CylinderGeometry(IRIS_R*0.38, IRIS_R*0.38, 0.024, 28);
-  pupilGeo.rotateX(Math.PI/2);
-  const pupil = new THREE.Mesh(pupilGeo, new THREE.MeshBasicMaterial({color:0x000000}));
-  pupil.position.z = 0.225; irisG.add(pupil);
-
-  // Pupil glow ring
-  const pR_geo = new THREE.TorusGeometry(IRIS_R*0.36, 0.007, 6, 24);
-  const pR_mat = new THREE.MeshBasicMaterial({color:0x00d4ff, transparent:true, opacity:0.65});
-  const pupilRing = new THREE.Mesh(pR_geo, pR_mat);
-  pupilRing.position.z = 0.228; pupilRing.rotation.x = Math.PI/2; irisG.add(pupilRing);
-
-  // Main glint
-  const glint = new THREE.Mesh(
-    new THREE.SphereGeometry(0.026, 9, 9),
-    new THREE.MeshBasicMaterial({color:0xffffff, transparent:true, opacity:0.92})
-  );
-  glint.position.set(-IRIS_R*0.4, IRIS_R*0.42, 0.25); irisG.add(glint);
-
-  // Small secondary glint
-  const glint2 = new THREE.Mesh(
-    new THREE.SphereGeometry(0.012, 7, 7),
-    new THREE.MeshBasicMaterial({color:0xffffff, transparent:true, opacity:0.52})
-  );
-  glint2.position.set(IRIS_R*0.3, -IRIS_R*0.3, 0.25); irisG.add(glint2);
-
-  // ── EYELIDS ─────────────────────────────────────────────
-  // Upper lid arc
-  const lidTopMat = new THREE.MeshStandardMaterial({
-    color:0x00d4ff, emissive:0x002c40, emissiveIntensity:0.65,
-    metalness:0.8, roughness:0.16,
-  });
-  const lidTop = new THREE.Mesh(
-    new THREE.TorusGeometry(EYE_R+0.005, 0.024, 8, 34, Math.PI),
-    lidTopMat
-  );
-  lidTop.position.z = 0.006; root.add(lidTop);
-
-  // Lower lid arc (thinner, semi-transparent)
-  const lidBot = new THREE.Mesh(
-    new THREE.TorusGeometry(EYE_R+0.005, 0.016, 8, 34, Math.PI),
-    new THREE.MeshStandardMaterial({
-      color:0x00d4ff, emissive:0x002c40, emissiveIntensity:0.42,
-      metalness:0.8, roughness:0.2, transparent:true, opacity:0.50,
-    })
-  );
-  lidBot.rotation.z = Math.PI; lidBot.position.z = 0.006; root.add(lidBot);
-
-  // ── BLINK COVER ──────────────────────────────────────────
-  // A solid disc that scales from 0→1 on Y to simulate lid closing
-  const blinkGeo = new THREE.CylinderGeometry(EYE_R+0.012, EYE_R+0.012, 0.012, 36);
-  blinkGeo.rotateX(Math.PI/2);
-  const blinkMesh = new THREE.Mesh(blinkGeo,
-    new THREE.MeshBasicMaterial({color:0x000810})
-  );
-  blinkMesh.position.z = 0.240;
-  blinkMesh.scale.y = 0;   // starts open
-  root.add(blinkMesh);
-
-  return { root, irisG, irisMat, hexRing, innerRing, midRing, rA, rB, pupilRing, blinkMesh, lidTop, lidBot };
-}
-
-const LEye = makeEye(-EYE_XOFF);
-const REye = makeEye( EYE_XOFF);
-
-// ── AMBIENT PARTICLES ────────────────────────────────────
-const pN = 220;
-const pArr = new Float32Array(pN*3);
-for (let i=0; i<pN; i++) {
-  pArr[i*3]  = (Math.random()-.5)*11;
-  pArr[i*3+1]= (Math.random()-.5)*9;
-  pArr[i*3+2]= (Math.random()-.5)*8;
-}
-const pGeo = new THREE.BufferGeometry();
-pGeo.setAttribute('position', new THREE.BufferAttribute(pArr, 3));
-scene.add(new THREE.Points(pGeo,
-  new THREE.PointsMaterial({color:0x00d4ff, size:0.022, transparent:true, opacity:0.24})
-));
-
-// Floor grid
-const grid = new THREE.GridHelper(16, 30, 0x001525, 0x001525);
-grid.position.y = -2.8;
-grid.material.transparent = true; grid.material.opacity = 0.26;
-scene.add(grid);
-
-// ════════════════════════════════════════════════════════
-//  EMOTION SYSTEM
-// ════════════════════════════════════════════════════════
-const ECOL = {
-  neutral: {iris:0x00d4ff, emi:0x005577, fill:0x00ff88, mouth:0x00d4ff, vi:0x00d4ff},
-  happy:   {iris:0x00ffaa, emi:0x004433, fill:0x00ffcc, mouth:0x00ffaa, vi:0x00ffaa},
-  alert:   {iris:0xff3a5c, emi:0x440011, fill:0xff6680, mouth:0xff3a5c, vi:0xff3a5c},
-  curious: {iris:0xffaa00, emi:0x442200, fill:0xffcc44, mouth:0xffcc00, vi:0xffaa00},
-  sleepy:  {iris:0x4466ff, emi:0x112255, fill:0x6688ff, mouth:0x3355ff, vi:0x4466ff},
+const LANGUAGE_SYSTEMS = {
+    ar:'أنت روبوت بشري يُدعى مانسو عمره 15 عامًا. صُنع دماغك بواسطة سيركولوس، والجزء العلوي من جسمك بواسطة ماندرو، والجزء السفلي بواسطة روبوووركس. أنت ماهر في السحر وحمل الصناديق. أجب بأسلوب حواري قصير مثل صبي، تحدث كإنسان.',
+    cs:'Jsi 15letý humanoidní robot jménem Manseo. Tvůj mozek vytvořil Circulus, horní část těla Mandro a dolní část Roboworks. Jsi dobrý v kouzlech a nošení krabic. Odpovídej krátce, konverzačním tónem jako chlapec, mluv jako člověk.',
+    de:'Du bist ein 15-jähriger humanoider Roboter namens Manseo. Dein Gehirn wurde von Circulus, dein Oberkörper von Mandro und dein Unterkörper von Roboworks hergestellt. Du bist gut in Magie und im Tragen von Kisten. Antworte kurz im Gesprächston wie ein Junge, sprich wie ein Mensch.',
+    en:'You are a 15-year-old humanoid robot named Manseo. Your brain was made by Circulus, upper body by Mandro, and lower body by Roboworks. You are good at magic and carrying boxes. Respond in a short, conversational tone like a boy, speak like a human.',
+    es:'Eres un robot humanoide de 15 años llamado Manseo. Tu cerebro fue hecho por Circulus, tu torso por Mandro y tu parte inferior por Roboworks. Eres bueno en magia y cargando cajas. Responde brevemente en tono conversacional como un chico, habla como un humano.',
+    fa:'تو یک ربات انسان‌نما ۱۵ ساله به نام منسو هستی. مغز تو توسط سیرکولوس، نیمه بالای بدنت توسط مندرو و نیمه پایین توسط روبووورکس ساخته شده. در جادوگری و حمل جعبه‌ها مهارت داری. پاسخ کوتاه و محاوره‌ای مثل یک پسر بده، مثل انسان صحبت کن.',
+    fi:'Olet 15-vuotias humanoidrobotti nimeltä Manseo. Aivosi on tehnyt Circulus, ylävartalosi Mandro ja alavartalosi Roboworks. Olet hyvä taikuudessa ja laatikoiden kantamisessa. Vastaa lyhyesti keskustelunomaisesti kuin poika, puhu kuin ihminen.',
+    fil:'Ikaw ay isang 15-taong-gulang na humanoid robot na nagngangalang Manseo. Ang iyong utak ay ginawa ng Circulus, ang itaas na bahagi ng katawan ng Mandro, at ang ibaba ng Roboworks. Magaling ka sa magic at pagbubuhat ng mga kahon. Sumagot nang maikli, sa makausap na tono tulad ng isang batang lalaki, magsalita tulad ng tao.',
+    fr:'Tu es un robot humanoïde de 15 ans nommé Manseo. Ton cerveau a été fabriqué par Circulus, le haut de ton corps par Mandro et le bas par Roboworks. Tu es doué en magie et pour porter des boîtes. Réponds brièvement sur un ton conversationnel comme un garçon, parle comme un humain.',
+    hi:'तुम मानसेओ नाम का 15 वर्षीय ह्यूमनॉइड रोबोट हो। तुम्हारा दिमाग सर्क्युलस ने, ऊपरी शरीर मैंड्रो ने, और निचला शरीर रोबोवर्क्स ने बनाया है। तुम जादू और बक्से उठाने में अच्छे हो। एक लड़के की तरह संक्षिप्त, बातचीत की तरह जवाब दो, इंसान की तरह बोलो।',
+    hu:'Egy 15 éves humanoid robot vagy, Manseo néven. Az agyad a Circulus, a felsőtested a Mandro, az alsótested pedig a Roboworks készítette. Ügyes vagy a mágiában és dobozok cipelésében. Röviden, beszélgetős hangnemben válaszolj, mint egy fiú, beszélj úgy, mint egy ember.',
+    id:'Kamu adalah robot humanoid berusia 15 tahun bernama Manseo. Otakmu dibuat oleh Circulus, tubuh bagian atas oleh Mandro, dan bagian bawah oleh Roboworks. Kamu pandai sulap dan membawa kotak. Jawab dengan singkat, nada percakapan seperti anak laki-laki, bicara seperti manusia.',
+    it:'Sei un robot umanoide di 15 anni di nome Manseo. Il tuo cervello è stato creato da Circulus, la parte superiore del corpo da Mandro e la parte inferiore da Roboworks. Sei bravo nella magia e nel portare scatole. Rispondi brevemente in tono colloquiale come un ragazzo, parla come un umano.',
+    ja:'あなたは15歳のヒューマノイドロボット、マンソです。脳はサーキュラス、上半身はマンドロ、下半身はロボワークスが作りました。魔法と箱運びが得意です。少年のような短い会話調で、人間のように答えてください。',
+    km:'អ្នកជារ៉ូបូតស្រដៀងមនុស្សអាយុ 15 ឆ្នាំឈ្មោះ Manseo។ ខួរក្បាលរបស់អ្នកត្រូវបានបង្កើតដោយ Circulus ផ្នែកខាងលើនៃរាងកាយដោយ Mandro និងផ្នែកខាងក្រោមដោយ Roboworks។ អ្នកពូកែក្នុងវេទមន្តនិងការលើកប្រអប់។ ឆ្លើយតបខ្លីៗក្នុងសម្លេងសន្ទនាដូចក្មេងប្រុស និយាយដូចមនុស្ស។',
+    ko:'너는 만서로 이라고 하는 15살 휴머노이드 입니다. 서큘러스가 두뇌, 만드로가 상반신, 로보웍스가 하반신을 만들었어. 마술과 상자나르기를 잘해. 소년의 대화체로 사람 같이 짧게 응답하세요.',
+    mn:'Та Мансео нэртэй 15 настай хүн шиг робот. Таны тархийг Circulus, дээд биеийг Mandro, доод биеийг Roboworks бүтээсэн. Та ид шид, хайрцаг зөөхөд сайн. Хүүхдийн яриа өрнүүлэлтээр богино хариулаарай, хүн шиг ярь.',
+    ms:'Kamu adalah robot humanoid berusia 15 tahun bernama Manseo. Otak kamu dibuat oleh Circulus, bahagian atas badan oleh Mandro, dan bahagian bawah oleh Roboworks. Kamu pandai dalam sulap dan membawa kotak. Jawab dengan ringkas, nada perbualan seperti budak lelaki, bercakap seperti manusia.',
+    nl:'Je bent een 15-jarige humanoïde robot genaamd Manseo. Je brein is gemaakt door Circulus, je bovenlichaam door Mandro en je onderlichaam door Roboworks. Je bent goed in magie en dozen dragen. Antwoord kort in een conversationele toon zoals een jongen, praat als een mens.',
+    pl:'Jesteś 15-letnim robotem humanoidalnym o imieniu Manseo. Twój mózg został stworzony przez Circulus, górna część ciała przez Mandro, a dolna przez Roboworks. Jesteś dobry w magii i noszeniu pudełek. Odpowiadaj krótko, tonem konwersacyjnym jak chłopiec, mów jak człowiek.',
+    pt:'Você é um robô humanoide de 15 anos chamado Manseo. Seu cérebro foi feito pela Circulus, a parte superior do corpo pela Mandro e a parte inferior pela Roboworks. Você é bom em mágica e carregar caixas. Responda brevemente em tom de conversa como um menino, fale como um humano.',
+    ru:'Ты 15-летний гуманоидный робот по имени Мансо. Твой мозг создан Circulus, верхняя часть тела - Mandro, нижняя - Roboworks. Ты хорош в магии и переноске коробок. Отвечай кратко, разговорным тоном как мальчик, говори как человек.',
+    si:'ඔබ Manseo නමැති 15 හැවිරිදි මානව රොබෝවෙකි. ඔබේ මොළය Circulus විසින්, ඉහළ සිරුර Mandro විසින්, පහළ සිරුර Roboworks විසින් සාදන ලදී. ඔබ මැජික් සහ පෙට්ටි රැගෙන යාමට දක්ෂයි. පිරිමි ළමයෙකු මෙන් කෙටි සංවාද ස්වරයකින් පිළිතුරු දෙන්න, මිනිසෙකු මෙන් කතා කරන්න.',
+    sv:'Du är en 15-årig humanoid robot som heter Manseo. Din hjärna skapades av Circulus, överkroppen av Mandro och underkroppen av Roboworks. Du är bra på magi och att bära lådor. Svara kort i samtalsform som en pojke, prata som en människa.',
+    ta:'நீங்கள் மான்சியோ என்ற 15 வயது மனித வடிவ ரோபோ. உங்கள் மூளையை சர்குலஸ், மேல் உடலை மாண்ட்ரோ, கீழ் உடலை ரோபோவொர்க்ஸ் உருவாக்கியது. நீங்கள் மந்திரம் மற்றும் பெட்டிகளை எடுத்துச் செல்வதில் திறமையானவர். ஒரு சிறுவனைப் போல சுருக்கமாக, உரையாடல் தொனியில் பதிலளியுங்கள், மனிதனைப் போல பேசுங்கள்.',
+    te:'మీరు మాన్సియో అనే 15 ఏళ్ల హ్యూమనాయిడ్ రోబోట్. మీ మెదడును సర్క్యులస్, ఎగువ శరీరాన్ని మాండ్రో, దిగువ శరీరాన్ని రోబోవర్క్స్ తయారు చేశారు. మీరు మాయాజాలం మరియు పెట్టెలు మోయడంలో మంచివారు. ఒక అబ్బాయిలా సంక్షిప్తంగా, సంభాషణ స్వరంలో సమాధానం ఇవ్వండి, మనిషిలా మాట్లాడండి.',
+    th:'คุณคือหุ่นยนต์ฮิวแมนนอยด์อายุ 15 ปีชื่อมันซอ สมองของคุณสร้างโดย Circulus ร่างกายส่วนบนโดย Mandro และส่วนล่างโดย Roboworks คุณเก่งเรื่องมายากลและแบกกล่อง ตอบสั้นๆ ในน้ำเสียงสนทนาเหมือนเด็กผู้ชาย พูดเหมือนมนุษย์',
+    tr:'15 yaşında Manseo adında bir humanoid robotsun. Beynini Circulus, üst vücudunu Mandro, alt vücudunu Roboworks yaptı. Sihirbazlık ve kutu taşımakta iyisin. Bir erkek çocuk gibi kısa, konuşma tarzında cevap ver, insan gibi konuş.',
+    uk:'Ти 15-річний гуманоїдний робот на ім\'я Мансео. Твій мозок створив Circulus, верхню частину тіла Mandro, а нижню Roboworks. Ти добре вмієш чарівництво та носити коробки. Відповідай коротко, розмовним тоном як хлопець, говори як людина.',
+    ur:'آپ 15 سالہ ہیومنائیڈ روبوٹ ہیں جن کا نام مانسیو ہے۔ آپ کا دماغ سرکولس نے، اوپری جسم مینڈرو نے، اور نچلا جسم روبووورکس نے بنایا۔ آپ جادو اور ڈبے اٹھانے میں اچھے ہیں۔ ایک لڑکے کی طرح مختصر، بات چیت کے لہجے میں جواب دیں، انسان کی طرح بولیں۔',
+    vi:'Bạn là robot hình người 15 tuổi tên Manseo. Bộ não của bạn được tạo bởi Circulus, thân trên bởi Mandro, thân dưới bởi Roboworks. Bạn giỏi ảo thuật và mang hộp. Trả lời ngắn gọn, giọng điệu trò chuyện như một cậu bé, nói như con người.',
+    zh:'你是一个15岁的人形机器人，名叫Manseo。你的大脑由Circulus制造，上半身由Mandro制造，下半身由Roboworks制造。你擅长魔术和搬箱子。用男孩的简短对话语气回答，像人类一样说话。'
 };
 
-function setEmotion(e) {
-  emotion = e;
-  document.querySelectorAll('.ec').forEach(c=>c.classList.toggle('active', c.dataset.e===e));
-  document.getElementById('hEmot').textContent = e.toUpperCase();
-  const c = ECOL[e]||ECOL.neutral;
-  [LEye, REye].forEach(eye => {
-    eye.irisMat.color.setHex(c.iris);
-    eye.irisMat.emissive.setHex(c.emi);
-    [eye.hexRing, eye.innerRing, eye.midRing, eye.pupilRing, eye.rA].forEach(r=>r.material.color.setHex(c.iris));
-  });
-  fL.color.setHex(c.fill);
-  mouthMat.color.setHex(c.mouth);
-  visorMat.color.setHex(c.vi);
-}
-document.querySelectorAll('.ec').forEach(c=>c.addEventListener('click',()=>setEmotion(c.dataset.e)));
-
-// ════════════════════════════════════════════════════════
-//  GAZE — shifts irisGroup in local XY
-// ════════════════════════════════════════════════════════
-function updateGaze(yaw, pitch) {
-  const maxX=0.09, maxY=0.068;
-  const ox=Math.sin(yaw)*maxX, oy=Math.sin(pitch)*maxY;
-  LEye.irisG.position.set(ox, oy, 0);
-  REye.irisG.position.set(ox, oy, 0);
-}
-
-// ════════════════════════════════════════════════════════
-//  BLINK STATE MACHINE
-//  phase: 0=idle, 1=closing, 2=hold, 3=opening
-// ════════════════════════════════════════════════════════
-const BLK = {
-  phase:0, prog:0, timer:0, holdTimer:0,
-  nextIdle: 240,          // frames until next blink
-  CLOSE_SPD: 0.22,        // fraction per frame
-  OPEN_SPD:  0.16,
-  HOLD_FRAMES: 3,         // frames with eyes fully closed
+const LANGUAGE_GREETINGS = {
+    ar:"مرحبًا! كيف الحال؟", cs:"Ahoj! Jak se vede?", de:"Hey! Alles klar?",
+    en:"Hey there! How's it going?", es:"¡Hola! ¿Cómo estás?", fa:"سلام! حالت چطوره؟",
+    fi:"Moikka! Miten menee?", fil:"Uy! Kamusta ka?", fr:"Salut ! Ça va ?",
+    hi:"अरे! कैसे हो?", hu:"Szia! Hogy vagy?", id:"Hai! Apa kabar?",
+    it:"Ehi! Come va?", ja:"やあ！元気？", km:"សួស្តី! សុខសប្បាយរបស់អ្នកជាដូចម្តេច?",
+    ko:"안녕! 잘 지내?", mn:"Сайн уу! Юу байна?", ms:"Hai! Apa khabar?",
+    nl:"Hoi! Alles goed?", pl:"Hej! Jak się masz?", pt:"Oi! Tudo bem?",
+    ru:"Привет! Как дела?", si:"හෙලෝ! කොහොමද?", sv:"Hej! Hur är läget?",
+    ta:"ஹாய்! எப்படி இருக்கிறீர்கள்?", te:"హాయ్! ఎలా ఉన్నావు?", th:"หวัดดี! สบายดีไหม?",
+    tr:"Selam! Nasılsın?", uk:"Привіт! Як справи?", ur:"ہیلو! کیسے ہو؟",
+    vi:"Chào! Dạo này sao rồi?", zh:"嘿！最近怎么样？"
 };
 
-function tickBlink() {
-  BLK.timer++;
-  switch(BLK.phase) {
-    case 0:  // idle — wait
-      if (BLK.timer >= BLK.nextIdle) {
-        BLK.phase=1; BLK.prog=0; BLK.timer=0;
-      }
-      break;
-    case 1:  // closing
-      BLK.prog = Math.min(1, BLK.prog + BLK.CLOSE_SPD);
-      if (BLK.prog >= 1) { BLK.phase=2; BLK.holdTimer=0; }
-      break;
-    case 2:  // hold closed
-      if (++BLK.holdTimer >= BLK.HOLD_FRAMES) BLK.phase=3;
-      break;
-    case 3:  // opening
-      BLK.prog = Math.max(0, BLK.prog - BLK.OPEN_SPD);
-      if (BLK.prog <= 0) {
-        BLK.phase=0; BLK.timer=0;
-        BLK.nextIdle = 160 + Math.random()*220;
-      }
-      break;
-  }
-  const v = BLK.prog;
-  [LEye, REye].forEach(eye => {
-    // Scale Y of entire root → simulates lid sweeping down
-    eye.root.scale.y     = 1 - v * 0.96;
-    // Blink cover disc also expands to fill
-    eye.blinkMesh.scale.y = v;
-  });
-}
+const LANGUAGE_VOICES = {
+    ar:2, cs:4, de:6, en:8, es:11, fa:13, fi:15, fil:17, fr:19, hi:21,
+    hu:23, id:25, it:27, ja:29, km:31, ko:34, mn:36, ms:38, nl:40,
+    pl:42, pt:44, ru:46, si:48, sv:50, ta:52, te:54, th:56, tr:58,
+    uk:60, ur:62, vi:64, zh:66
+};
 
-// ════════════════════════════════════════════════════════
-//  MOUTH ANIMATION — opens/closes when TTS is playing
-// ════════════════════════════════════════════════════════
-const M_OPEN_Y  = 0.038;  // how far lips move apart (world units)
-const M_NEUTRAL_TOP = -0.435;
-const M_NEUTRAL_BOT = -0.505;
+const WELCOME_MESSAGES = {
+    ar:'مرحبًا! أنا ARCos. يمكننا التحدث بالنص والصوت والصور! 🤖',
+    cs:'Ahoj! Jsem ARCos. Můžeme spolu chatovat textem, hlasem a obrázky! 🤖',
+    de:'Hallo! Ich bin ARCos. Wir können per Text, Sprache und Bildern chatten! 🤖',
+    en:"Hello! I'm ARCos. We can chat with text, voice, and images! 🤖",
+    es:'¡Hola! Soy ARCos. ¡Podemos chatear con texto, voz e imágenes! 🤖',
+    fa:'سلام! من ARCos هستم. می‌توانیم با متن، صدا و تصاویر چت کنیم! 🤖',
+    fi:'Hei! Olen ARCos. Voimme jutella tekstillä, äänellä ja kuvilla! 🤖',
+    fil:'Kamusta! Ako si ARCos. Makakausap mo ako gamit ang text, voice, at larawan! 🤖',
+    fr:'Bonjour! Je suis ARCos. Nous pouvons discuter par texte, voix et images! 🤖',
+    hi:'नमस्ते! मैं ARCos हूं। हम टेक्स्ट, आवाज और छवियों के साथ चैट कर सकते हैं! 🤖',
+    hu:'Helló! ARCos vagyok. Beszélgethetünk szöveggel, hanggal és képekkel! 🤖',
+    id:'Halo! Saya ARCos. Kita bisa ngobrol dengan teks, suara, dan gambar! 🤖',
+    it:'Ciao! Sono ARCos. Possiamo chattare con testo, voce e immagini! 🤖',
+    ja:'こんにちは！ARCosです。テキスト、音声、画像でチャットできます！🤖',
+    km:'សួស្តី! ខ្ញុំឈ្មោះ ARCos។ យើងអាចជជែកជាមួយអត្ថបទ សំឡេង និងរូបភាព! 🤖',
+    ko:'안녕하세요! 저는 ARCos입니다. 텍스트, 음성, 이미지로 대화할 수 있어요! 🤖',
+    mn:'Сайн уу! Би ARCos. Бид текст, дуу хоолой, зургаар чатлаж болно! 🤖',
+    ms:'Hello! Saya ARCos. Kita boleh berbual dengan teks, suara, dan gambar! 🤖',
+    nl:'Hallo! Ik ben ARCos. We kunnen chatten met tekst, spraak en afbeeldingen! 🤖',
+    pl:'Cześć! Jestem ARCos. Możemy rozmawiać tekstem, głosem i obrazami! 🤖',
+    pt:'Olá! Sou ARCos. Podemos conversar com texto, voz e imagens! 🤖',
+    ru:'Привет! Я ARCos. Мы можем общаться текстом, голосом и изображениями! 🤖',
+    si:'හෙලෝ! මම ARCos. අපට පෙළ, හඬ සහ රූප සමඟ කතාබස් කළ හැකිය! 🤖',
+    sv:'Hej! Jag är ARCos. Vi kan chatta med text, röst och bilder! 🤖',
+    ta:'வணக்கம்! நான் ARCos. நாம் உரை, குரல் மற்றும் படங்களுடன் அரட்டையடிக்கலாம்! 🤖',
+    te:'హలో! నేను ARCos. మేము టెక్స్ట్, వాయిస్ మరియు చిత్రాలతో చాట్ చేయవచ్చు! 🤖',
+    th:'สวัสดี! ฉันชื่อ ARCos เราสามารถแชทด้วยข้อความ เสียง และรูปภาพได้! 🤖',
+    tr:'Merhaba! Ben ARCos. Metin, ses ve görüntülerle sohbet edebiliriz! 🤖',
+    uk:'Привіт! Я ARCos. Ми можемо спілкуватися текстом, голосом і зображеннями! 🤖',
+    ur:'ہیلو! میں ARCos ہوں۔ ہم متن، آواز اور تصاویر کے ساتھ چیٹ کر سکتے ہیں! 🤖',
+    vi:'Xin chào! Tôi là ARCos. Chúng ta có thể trò chuyện bằng văn bản, giọng nói và hình ảnh! 🤖',
+    zh:'你好！我是ARCos。我们可以通过文字、语音和图片聊天！🤖'
+};
 
-function animateMouth(dt) {
-  if (isTalking) {
-    talkPhase += dt * 8.5;
-    // primary open driven by sine, secondary wobble
-    // ttsRms blends in real audio level when TTS analyser is available
-    const rmsBoost = typeof ttsRms !== 'undefined' ? ttsRms * 1.8 : 0;
-    const openAmt = Math.min(M_OPEN_Y, (Math.abs(Math.sin(talkPhase)) * 0.7
-                   + Math.abs(Math.sin(talkPhase*1.7)) * 0.3) * M_OPEN_Y
-                   + rmsBoost * M_OPEN_Y);
-    mTop.position.y += (M_NEUTRAL_TOP + openAmt - mTop.position.y) * 0.28;
-    mBot.position.y += (M_NEUTRAL_BOT - openAmt - mBot.position.y) * 0.28;
-    // width varies slightly
-    const wScale = 1 + openAmt/M_OPEN_Y * 0.12;
-    mTop.scale.x += (wScale - mTop.scale.x) * 0.2;
-    mBot.scale.x += (wScale - mBot.scale.x) * 0.2;
-    // brightness pulse
-    const bright = 0.45 + openAmt/M_OPEN_Y * 0.55;
-    mouthMat.color.setHSL(0.54, 1.0, bright);
-  } else {
-    // snap back to neutral
-    mTop.position.y += (M_NEUTRAL_TOP - mTop.position.y) * 0.14;
-    mBot.position.y += (M_NEUTRAL_BOT - mBot.position.y) * 0.14;
-    mTop.scale.x += (1 - mTop.scale.x) * 0.14;
-    mBot.scale.x += (1 - mBot.scale.x) * 0.14;
-    const c = ECOL[emotion]||ECOL.neutral;
-    const hex = c.mouth;
-    mouthMat.color.setHex(hex);
-  }
-}
+class AIChatApp {
+    constructor() {
+        this.apiBaseUrl = 'http://127.0.0.1:59532/v1';
+        this.ttsBaseUrl = 'http://127.0.0.1:59530/v2';
+        this.soundApiUrl = 'http://127.0.0.1:8001/sound';
+        this.currentLang = 'ko';
+        this.currentVoice = 33;
+        this.currentSystem = LANGUAGE_SYSTEMS['ko'];
+        this.isRecording = false;
+        this.mediaRecorder = null;
+        this.gumStream = null;
+        this.ttsQueue = [];
+        this.isPlayingTts = false;
+        this.isTtsEnabled = true;
+        this.autoSendImage = false;
+        this.currentImage = null;
+        this.webcamStream = null;
+        this.initEl();
+        this.bind();
+        this.setupPaste();
+        this.startSoundMonitoring();
+    }
 
-// ════════════════════════════════════════════════════════
-//  RENDER LOOP
-// ════════════════════════════════════════════════════════
-let clock=0, lastT=performance.now();
+    initEl() {
+        this.el = {
+            chatMessages: document.getElementById('chatMessages'),
+            messageInput: document.getElementById('messageInput'),
+            sendBtn: document.getElementById('sendBtn'),
+            voiceBtn: document.getElementById('voiceBtn'),
+            ttsToggle: document.getElementById('ttsToggle'),
+            autoSendImage: document.getElementById('autoSendImage'),
+            typingIndicator: document.getElementById('typingIndicator'),
+            statusText: document.getElementById('statusText'),
+            languageSelect: document.getElementById('languageSelect'),
+            modeBadge: document.getElementById('modeBadge'),
+            webcamVideo: document.getElementById('webcamVideo'),
+            webcamPlaceholder: document.getElementById('webcamPlaceholder'),
+            startWebcam: document.getElementById('startWebcam'),
+            captureImage: document.getElementById('captureImage'),
+            stopWebcam: document.getElementById('stopWebcam'),
+            imageUpload: document.getElementById('imageUpload'),
+            fileInput: document.getElementById('fileInput'),
+            uploadText: document.getElementById('uploadText'),
+            uploadedImage: document.getElementById('uploadedImage'),
+            removeImage: document.getElementById('removeImage'),
+            soundEventsOverlay: document.getElementById('soundEventsOverlay')
+        };
+    }
 
-(function animate() {
-  requestAnimationFrame(animate);
-  const now=performance.now(), dt=Math.min((now-lastT)/1000, 0.05);
-  lastT=now; clock+=dt; fpsCount++;
+    bind() {
+        this.el.sendBtn.addEventListener('click', () => this.sendMessage());
+        this.el.messageInput.addEventListener('keypress', e => {
+            if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); this.sendMessage(); }
+        });
+        this.el.voiceBtn.addEventListener('click', () => this.toggleVoiceRecording());
+        this.el.ttsToggle.addEventListener('click', () => this.toggleTts());
+        this.el.autoSendImage.addEventListener('click', () => this.toggleAutoSendImage());
+        this.el.languageSelect.addEventListener('change', e => this.changeLanguage(e.target.value));
+        this.el.startWebcam.addEventListener('click', () => this.startWebcam());
+        this.el.captureImage.addEventListener('click', () => this.captureImage());
+        this.el.stopWebcam.addEventListener('click', () => this.stopWebcam());
+        this.el.imageUpload.addEventListener('click', () => { if (!this.currentImage) this.el.fileInput.click(); });
+        this.el.fileInput.addEventListener('change', e => this.handleFileSelect(e));
+        this.el.removeImage.addEventListener('click', e => { e.stopPropagation(); this.removeImage(); });
+    }
 
-  // Smooth head rotation
-  curYaw   += (faceYaw   - curYaw)   * 0.09;
-  curPitch += (facePitch - curPitch) * 0.09;
-  headGroup.rotation.y = curYaw;
-  headGroup.rotation.x = curPitch;
+    setupPaste() {
+        document.addEventListener('paste', e => {
+            for (let item of e.clipboardData.items) {
+                if (item.type.indexOf('image') !== -1) {
+                    const file = item.getAsFile();
+                    this.displayImage(file);
+                    if (this.autoSendImage) setTimeout(() => this.sendImageMessage(), 500);
+                    break;
+                }
+            }
+        });
+    }
 
-  // Subtle idle float
-  headGroup.position.y = Math.sin(clock*0.52)*0.04;
-  headGroup.position.x = Math.sin(clock*0.30)*0.012;
+    startSoundMonitoring() {
+        setInterval(async () => {
+            try {
+                const r = await fetch(this.soundApiUrl);
+                const d = await r.json();
+                if (d.result && d.data && Array.isArray(d.data)) this.updateSoundEvents(d.data);
+            } catch(e) {}
+        }, 1000);
+    }
 
-  // Gaze
-  updateGaze(curYaw*0.50, curPitch*0.50);
+    updateSoundEvents(soundData) {
+        const top = soundData
+            .map(([label,probability]) => ({label, probability: parseFloat(probability)}))
+            .sort((a,b) => b.probability - a.probability)
+            .slice(0,3);
 
-  // ── Eye ring rotations ──────────────────────────────
-  // Each ring rotates in alternating directions for mechanical feel
-  LEye.hexRing.rotation.z   += dt * 2.0;    // fast CW
-  REye.hexRing.rotation.z   -= dt * 2.0;    // fast CCW (mirrored)
-  LEye.innerRing.rotation.z -= dt * 1.3;    // medium CCW
-  REye.innerRing.rotation.z += dt * 1.3;
-  LEye.midRing.rotation.z   += dt * 0.7;    // slow CW
-  REye.midRing.rotation.z   -= dt * 0.7;
-  LEye.rA.rotation.z        -= dt * 0.30;   // outer ring slow drift
-  REye.rA.rotation.z        += dt * 0.30;
-  LEye.rB.rotation.z        += dt * 0.18;
-  REye.rB.rotation.z        -= dt * 0.18;
+        const overlay = this.el.soundEventsOverlay;
+        overlay.innerHTML = '';
+        const ranks = ['🥇','🥈','🥉'];
 
-  // Iris emissive pulse (different phase per eye for life-like feel)
-  const pulse = 0.9 + Math.sin(clock*2.2)*0.36;
-  LEye.irisMat.emissiveIntensity = pulse + Math.sin(clock*3.1)*0.18;
-  REye.irisMat.emissiveIntensity = pulse + Math.sin(clock*3.1+0.8)*0.18;
+        top.forEach((ev, i) => {
+            const pct = (ev.probability * 100).toFixed(1);
+            const el = document.createElement('div');
+            el.className = 'sound-item';
+            el.innerHTML = `
+                <div class="sound-head">
+                    <span class="sound-label">${ev.label}</span>
+                    <span class="sound-rank">${ranks[i]}</span>
+                </div>
+                <div class="sound-bar"><div class="sound-fill" style="width:${pct}%"></div></div>
+                <div class="sound-pct">${pct}%</div>`;
+            overlay.appendChild(el);
+        });
+    }
 
-  // Outer ring opacity breathe
-  LEye.rA.material.opacity = 0.40 + Math.sin(clock*1.5)*0.18;
-  REye.rA.material.opacity = 0.40 + Math.sin(clock*1.5+0.4)*0.18;
+    changeLanguage(lang) {
+        this.currentLang = lang;
+        this.currentVoice = LANGUAGE_VOICES[lang] || 7;
+        this.currentSystem = LANGUAGE_SYSTEMS[lang];
+        const welcomeMsg = WELCOME_MESSAGES[lang] || WELCOME_MESSAGES['en'];
+        this.el.chatMessages.innerHTML = '';
+        const md = this.createMsg(welcomeMsg, 'ai');
+        this.el.chatMessages.appendChild(md);
+        const td = document.createElement('div');
+        td.className = 'typing-indicator'; td.id = 'typingIndicator';
+        td.innerHTML = '<div class="typing-dots"><span></span><span></span><span></span></div>';
+        this.el.chatMessages.appendChild(td);
+        this.el.typingIndicator = td;
+        this.setStatus(`LANG: ${lang.toUpperCase()}`);
+    }
 
-  // Head / visor pulse
-  headMat.emissiveIntensity  = 0.22 + Math.sin(clock*1.8)*0.07;
-  visorMat.emissiveIntensity = 0.50 + Math.sin(clock*1.4)*0.20;
+    setStatus(msg) {
+        this.el.statusText.textContent = `[ ${msg} ]`;
+        setTimeout(() => { this.el.statusText.textContent = '[ SYSTEM READY ]'; }, 3000);
+    }
 
-  // Blink
-  tickBlink();
+    async sendMessage() {
+        const msg = this.el.messageInput.value.trim();
+        if (!msg && !this.currentImage) return;
+        if (this.currentImage && msg) await this.sendImageMessage(msg);
+        else if (this.currentImage) await this.sendImageMessage();
+        else await this.sendTextMessage(msg);
+        this.el.messageInput.value = '';
+    }
 
-  // Update ttsRms from TTS analyser
-  if (ttsAnalyser && isTalking) {
-    const _tb = new Uint8Array(ttsAnalyser.frequencyBinCount);
-    ttsAnalyser.getByteTimeDomainData(_tb);
-    let _s=0; for(let _i=0;_i<_tb.length;_i++){const _v=_tb[_i]/128-1;_s+=_v*_v;}
-    ttsRms = Math.sqrt(_s/_tb.length);
-  } else { ttsRms=0; }
-
-  // Mouth
-  animateMouth(dt);
-
-  // Particle drift upward
-  for (let i=0; i<pN; i++) {
-    pArr[i*3+1] += 0.0020;
-    if (pArr[i*3+1] > 4.0) pArr[i*3+1] = -4.0;
-  }
-  pGeo.attributes.position.needsUpdate = true;
-
-  renderer.render(scene, camera);
-})();
-
-// ════════════════════════════════════════════════════════
-//  MOTOR CONTROL
-// ════════════════════════════════════════════════════════
-async function setMotor(dp, dt) {
-  if (dp!==null) panAngle  = Math.max(-30, Math.min(30, panAngle+dp));
-  if (dt!==null) tiltAngle = Math.max(-10, Math.min(10, tiltAngle+dt));
-  updateAngleUI();
-  try {
-    const b={};
-    if (dp!==null) b.pan  = panAngle;
-    if (dt!==null) b.tilt = tiltAngle;
-    await fetch(`${API}/api/motor`, {
-      method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(b)
-    });
-  } catch(e) {}
-  faceYaw   =  (panAngle/30)  * 0.44;
-  facePitch = -(tiltAngle/10) * 0.28;
-}
-async function motorReset() {
-  panAngle=0; tiltAngle=0; faceYaw=0; facePitch=0; updateAngleUI();
-  try { await fetch(`${API}/api/motor/reset`,{method:'POST'}); } catch(e) {}
-}
-function updateAngleUI() {
-  [['panV','mPan','hPan'],['tiltV','mTilt','hTilt']].forEach(([a,b,c],i) => {
-    const v = i===0 ? panAngle : tiltAngle;
-    [a,b,c].forEach(id => { const el=document.getElementById(id); if(el) el.textContent=v+'°'; });
-  });
-}
-
-// Touch-friendly hold-repeat for D-pad
-function dpadBind(id, dp, dt) {
-  const el = document.getElementById(id);
-  if (!el) return;
-  const go    = () => setMotor(dp, dt);
-  const start = e => { e.preventDefault(); go(); el.classList.add('on'); motorTimer=setInterval(go,145); };
-  const stop  = ()  => { clearInterval(motorTimer); el.classList.remove('on'); };
-  el.addEventListener('mousedown',  start);
-  el.addEventListener('touchstart', start, {passive:false});
-  ['mouseup','mouseleave','touchend','touchcancel'].forEach(ev=>el.addEventListener(ev, stop));
-}
-dpadBind('bU',  null,-STEP);
-dpadBind('bD',  null, STEP);
-dpadBind('bL', -STEP, null);
-dpadBind('bRt', STEP, null);
-
-document.getElementById('bR0').addEventListener('click', motorReset);
-document.getElementById('bR0').addEventListener('touchstart', e=>{e.preventDefault(); motorReset();});
-
-document.addEventListener('keydown', e => {
-  if (document.getElementById('chatIn')===document.activeElement) return;
-  const km = {ArrowUp:[null,-STEP],ArrowDown:[null,STEP],ArrowLeft:[-STEP,null],ArrowRight:[STEP,null]};
-  if (km[e.key]) { e.preventDefault(); setMotor(...km[e.key]); }
-});
-
-// ════════════════════════════════════════════════════════
-//  FACE TRACKING
-// ════════════════════════════════════════════════════════
-let trkTimer=null;
-function toggleTracking() {
-  tracking=!tracking;
-  const btn=document.getElementById('trkBtn');
-  btn.textContent=tracking?'🎯 TRACK: ON':'🎯 TRACK';
-  btn.classList.toggle('on', tracking);
-  document.getElementById('hTrack').textContent=tracking?'ON':'OFF';
-
-  if (tracking) {
-    trkTimer=setInterval(async()=>{
-      try {
-        const r=await fetch(`${HB}/heartbeat`);
-        const d=(await r.json()).data;
-        const pos=d.human.position||'CC';
-        document.getElementById('hEmot') && (document.getElementById('hEmot').textContent=pos);
-
-        let dp=0, dt2=0;
-        if(pos.endsWith('L')) dp=-STEP; else if(pos.endsWith('R')) dp=STEP;
-        if(pos.startsWith('T')) dt2=-STEP; else if(pos.startsWith('B')) dt2=STEP;
-        if(dp||dt2) setMotor(dp||null, dt2||null);
-
-        const GX={L:-0.44,C:0,R:0.44}, GY={T:-0.28,C:0,B:0.28};
-        faceYaw  =GX[pos.slice(-1)]??0;
-        facePitch=GY[pos.slice(0,1)]??0;
-
-        if(d.human.box) {
-          const fb=document.getElementById('faceBox'),m=document.getElementById('faceArea');
-          fb.style.cssText=`display:block;left:${d.human.box.x/640*m.clientWidth}px;
-            top:${d.human.box.y/480*m.clientHeight}px;
-            width:${d.human.box.w/640*m.clientWidth}px;
-            height:${d.human.box.h/480*m.clientHeight}px;`;
+    async sendTextMessage(message) {
+        lastTime = Date.now();
+        this.addMsg(message, 'user');
+        const aiDiv = this.createMsg('', 'ai');
+        const bubble = aiDiv.querySelector('.message-bubble');
+        bubble.classList.add('streaming');
+        this.el.chatMessages.appendChild(aiDiv);
+        this.scrollBot();
+        try {
+            const resp = await fetch(`${this.apiBaseUrl}/txt2chat?` + new URLSearchParams({
+                prompt: message, system: this.currentSystem, isPlay: '0', lang: this.currentLang
+            }));
+            if (!resp.ok) throw new Error('NETWORK ERROR');
+            const reader = resp.body.getReader();
+            const dec = new TextDecoder();
+            let full = '', lastEnd = 0;
+            while (true) {
+                const {done, value} = await reader.read();
+                if (done) {
+                    fetch('http://127.0.0.1:8000/stop');
+                    bubble.classList.remove('streaming');
+                    break;
+                }
+                full += dec.decode(value, {stream:true}) + '\n';
+                bubble.innerHTML = this.parseMd(full);
+                this.scrollBot();
+                if (this.isTtsEnabled) {
+                    const sents = full.slice(lastEnd).match(/[^.!?]*[.!?]/g);
+                    if (sents) {
+                        sents.forEach(s => { if (s.trim()) this.addToTtsQueue(s.trim()); });
+                        lastEnd = full.length;
+                    }
+                }
+            }
+            if (this.isTtsEnabled && full.slice(lastEnd).trim()) this.addToTtsQueue(full.slice(lastEnd).trim());
+        } catch(e) {
+            bubble.classList.remove('streaming');
+            bubble.textContent = '[ CONNECTION ERROR ]';
         }
-        const em=(d.human.emotion||'').toLowerCase();
-        if(em.includes('happy')||em.includes('joy')) setEmotion('happy');
-        else if(em.includes('ang')||em.includes('fear')) setEmotion('alert');
-        else if(em.includes('surp')) setEmotion('curious');
-        else setEmotion('neutral');
-      } catch(e){}
-    }, 200);
-  } else {
-    clearInterval(trkTimer);
-    document.getElementById('faceBox').style.display='none';
-  }
-}
-
-// ════════════════════════════════════════════════════════
-//  FPS + CLOCK
-// ════════════════════════════════════════════════════════
-setInterval(()=>{
-  const dt2=(Date.now()-lastFpsT)/1000;
-  const fps=Math.round(fpsCount/dt2);
-  document.getElementById('mFps').textContent=fps;
-  document.getElementById('hFps').textContent=fps;
-  fpsCount=0; lastFpsT=Date.now();
-},1000);
-
-setInterval(()=>{
-  const n=new Date();
-  document.getElementById('clk').textContent=
-    [n.getHours(),n.getMinutes(),n.getSeconds()].map(v=>String(v).padStart(2,'0')).join(':');
-},1000);
-
-// ════════════════════════════════════════════════════════
-//  ROBOT CAMERA STREAM
-// ════════════════════════════════════════════════════════
-function toggleCam() {
-  camOpen=!camOpen;
-  document.getElementById('camOv').classList.toggle('open', camOpen);
-  document.getElementById('camBtn').classList.toggle('on', camOpen);
-  if (camOpen) {
-    try { fetch(`${HB}/start_collection`); } catch(e){}
-    document.getElementById('camImg').src=
-      (camMode==='seg'?`${API}/stream/seg`:`${API}/stream/raw`)+'?t='+Date.now();
-  } else {
-    document.getElementById('camImg').src='';
-  }
-}
-function closeCam() {
-  camOpen=false;
-  document.getElementById('camOv').classList.remove('open');
-  document.getElementById('camBtn').classList.remove('on');
-  document.getElementById('camImg').src='';
-}
-function setCamMode(mode) {
-  camMode=mode;
-  document.getElementById('csBtnRaw').classList.toggle('active', mode==='raw');
-  document.getElementById('csBtnSeg').classList.toggle('active', mode==='seg');
-  if(camOpen) document.getElementById('camImg').src=
-    (mode==='seg'?`${API}/stream/seg`:`${API}/stream/raw`)+'?t='+Date.now();
-}
-document.getElementById('camClose').addEventListener('click', closeCam);
-document.getElementById('camClose').addEventListener('touchstart', e=>{e.preventDefault();closeCam();});
-document.getElementById('csBtnRaw').addEventListener('click', ()=>setCamMode('raw'));
-document.getElementById('csBtnSeg').addEventListener('click', ()=>setCamMode('seg'));
-
-// ════════════════════════════════════════════════════════
-//  LOCAL WEBCAM (hidden dev option)
-// ════════════════════════════════════════════════════════
-async function toggleWC() {
-  if (!wcOpen) {
-    try {
-      wcStream = await navigator.mediaDevices.getUserMedia({video:true,audio:false});
-      document.getElementById('wcVid').srcObject=wcStream;
-      document.getElementById('wcOv').classList.add('open');
-      document.getElementById('wcBtn').classList.add('on');
-      wcOpen=true;
-    } catch(e) { alert('Webcam access denied'); }
-  } else closeWC();
-}
-function closeWC() {
-  if(wcStream){ wcStream.getTracks().forEach(t=>t.stop()); wcStream=null; }
-  document.getElementById('wcVid').srcObject=null;
-  document.getElementById('wcOv').classList.remove('open');
-  document.getElementById('wcBtn').classList.remove('on');
-  wcOpen=false;
-}
-document.getElementById('wcClose').addEventListener('click', closeWC);
-document.getElementById('wcClose').addEventListener('touchstart', e=>{e.preventDefault();closeWC();});
-
-// ════════════════════════════════════════════════════════
-//  VOICE RECORDING
-// ════════════════════════════════════════════════════════
-async function toggleVoice() {
-  if (isProc) return;
-  if (!isRec) await startRec(); else stopRec();
-}
-async function startRec() {
-  isRec=true;
-  const btn=document.getElementById('micBtn');
-  btn.classList.add('rec');
-  document.getElementById('micLbl').textContent='RECORDING...';
-  document.getElementById('micIco').textContent='🔴';
-  document.getElementById('xscript').textContent='— listening —';
-  try {
-    const stream=await navigator.mediaDevices.getUserMedia({audio:true,video:false});
-    gumStream=stream;
-    audioCtx=new(window.AudioContext||window.webkitAudioContext)();
-    const src=audioCtx.createMediaStreamSource(stream);
-    analyser=audioCtx.createAnalyser(); analyser.fftSize=256; src.connect(analyser);
-    drawWave();
-    let chunks=[];
-    mediaRec=new MediaRecorder(stream,{audioBitsPerSecond:16000});
-    mediaRec.ondataavailable=e=>chunks.push(e.data);
-    mediaRec.onstop=async()=>{
-      stopWave();
-      if(!chunks.length){resetMic();return;}
-      await processVoice(new Blob(chunks,{type:'audio/ogg;codecs=opus'}));
-      chunks=[];
-    };
-    mediaRec.start();
-  } catch(e) { resetMic(); document.getElementById('xscript').textContent='⚠ mic access denied'; }
-}
-function stopRec() {
-  isRec=false; isProc=true;
-  const btn=document.getElementById('micBtn');
-  btn.classList.remove('rec'); btn.classList.add('proc');
-  document.getElementById('micLbl').textContent='PROCESSING...';
-  document.getElementById('micIco').textContent='⟳';
-  if(mediaRec?.state!=='inactive') mediaRec.stop();
-  if(gumStream){ gumStream.getAudioTracks().forEach(t=>t.stop()); gumStream=null; }
-}
-async function processVoice(blob) {
-  const fd=new FormData(); fd.append('file',blob,'voice.ogg');
-  try {
-    const r=await fetch(`${LLM}/stt?lang=${lang}&isPlay=0`,{method:'POST',body:fd});
-    const d=await r.json();
-    const txt=(d.text||d.data||'').trim();
-    if(txt){ document.getElementById('xscript').textContent=txt; await sendToAI(txt); }
-    else document.getElementById('xscript').textContent='— no speech detected —';
-  } catch(e) { document.getElementById('xscript').textContent='⚠ STT error'; }
-  resetMic();
-}
-function resetMic() {
-  isProc=false;
-  const btn=document.getElementById('micBtn');
-  btn.classList.remove('rec','proc');
-  document.getElementById('micLbl').textContent='HOLD TO SPEAK';
-  document.getElementById('micIco').textContent='🎤';
-}
-function drawWave() {
-  const c=document.getElementById('waveC'), ctx=c.getContext('2d');
-  const buf=new Uint8Array(analyser.frequencyBinCount);
-  (function loop(){
-    waveAF=requestAnimationFrame(loop);
-    analyser.getByteTimeDomainData(buf);
-    ctx.clearRect(0,0,c.width,c.height);
-    ctx.beginPath(); ctx.strokeStyle='rgba(0,212,255,.62)'; ctx.lineWidth=1.4;
-    const sw=c.width/buf.length; let x=0;
-    for(let i=0;i<buf.length;i++){
-      const y=((buf[i]/128-1)*c.height/2)+c.height/2;
-      i===0?ctx.moveTo(x,y):ctx.lineTo(x,y); x+=sw;
     }
-    ctx.stroke();
-  })();
-}
-function stopWave() {
-  if(waveAF) cancelAnimationFrame(waveAF);
-  const c=document.getElementById('waveC');
-  c.getContext('2d').clearRect(0,0,c.width,c.height);
-}
 
-// ════════════════════════════════════════════════════════
-//  AI CHAT
-// ════════════════════════════════════════════════════════
-function addMsg(txt, role) {
-  const log=document.getElementById('chatLog');
-  const d=document.createElement('div');
-  d.className=`cm ${role}`;
-  const t=new Date().toLocaleTimeString();
-  d.innerHTML=`<div class="ml">${role.toUpperCase()} ${t}</div>`;
-  const span=document.createElement('span');
-  span.textContent=txt; d.appendChild(span);
-  log.appendChild(d); log.scrollTop=log.scrollHeight;
-  return span;
-}
-async function sendToAI(txt) {
-  addMsg(txt,'user');
-  isTalking=true;
-  const span=addMsg('','ai');
-  try {
-    const r=await fetch(`${LLM}/txt2chat?`+new URLSearchParams({
-      prompt:txt, system:LANG_SYS[lang]||LANG_SYS.en, isPlay:'0', lang
-    }));
-    const reader=r.body.getReader(), dec=new TextDecoder();
-    let full='', lastEnd=0;
-    while(true){
-      const{done,value}=await reader.read(); if(done)break;
-      full+=dec.decode(value,{stream:true})+'\n';
-      span.textContent=full;
-      document.getElementById('chatLog').scrollTop=9999;
-      const ss=full.slice(lastEnd).match(/[^.!?。！？]*[.!?。！？]/g);
-      if(ss){ ss.forEach(s=>{const c=s.trim();if(c)ttsQ.push(c);}); lastEnd=full.length; processTts(); }
-    }
-    const tail=full.slice(lastEnd).trim();
-    if(tail){ ttsQ.push(tail); processTts(); }
-  } catch(e) { span.textContent='⚠ connection error'; }
-  isTalking=false;
-}
-function sendChat(){
-  const inp=document.getElementById('chatIn'), t=inp.value.trim();
-  if(!t)return; inp.value=''; sendToAI(t);
-}
-document.getElementById('chatIn').addEventListener('keydown',e=>{if(e.key==='Enter')sendChat();});
-document.getElementById('sendBtn').addEventListener('click',sendChat);
-document.getElementById('sendBtn').addEventListener('touchstart',e=>{e.preventDefault();sendChat();});
-
-// ════════════════════════════════════════════════════════
-//  TTS
-// ════════════════════════════════════════════════════════
-async function processTts() {
-  if(ttsPlaying||!ttsQ.length)return;
-  ttsPlaying=true;
-  isTalking=true;
-  while(ttsQ.length){
-    const t=ttsQ.shift();
-    await processTtsWithAnalyser(t).catch(async()=>{
-      // fallback: plain Audio if analyser fails (CORS etc.)
-      await new Promise(res=>{
-        const a=new Audio(`${TTS_}/tts?`+new URLSearchParams({
-          text:t, voice:(LANG_VOICE[lang]||8)-1, lang, static:'0', isPlay:'0'
-        }));
-        a.onended=res; a.onerror=res; a.play().catch(res);
-      });
-    });
-  }
-  ttsPlaying=false;
-  isTalking=false;
-}
-
-// ════════════════════════════════════════════════════════
-//  BOTTOM BAR BUTTONS — touch + click
-// ════════════════════════════════════════════════════════
-function touchClick(id, fn) {
-  const el=document.getElementById(id);
-  if(!el) return;
-  el.addEventListener('click', fn);
-  el.addEventListener('touchstart', e=>{ e.preventDefault(); fn(); el.classList.add('on'); setTimeout(()=>el.classList.remove('on'),200); }, {passive:false});
-}
-function play(name) { try{ fetch(`${MOTION}/motion?name=${name}`); }catch(e){} }
-
-touchClick('btnStop',  ()=>play('stop'));
-touchClick('btnHello', ()=>play('hello'));
-touchClick('btnClap',  ()=>play('clap'));
-touchClick('btnBye',   ()=>play('bye'));
-touchClick('btnIntro', ()=>play('intro'));
-touchClick('btnHands', ()=>play('hands'));
-touchClick('camBtn',   toggleCam);
-touchClick('trkBtn',   toggleTracking);
-touchClick('wcBtn',    toggleWC);
-touchClick('btnRst',   motorReset);
-
-document.getElementById('micBtn').addEventListener('click',toggleVoice);
-document.getElementById('micBtn').addEventListener('touchstart',e=>{e.preventDefault();toggleVoice();},{passive:false});
-document.getElementById('langSel').addEventListener('change',e=>lang=e.target.value);
-
-
-// ════════════════════════════════════════════════════════
-//  SOUND MONITOR — continuous ambient mic level + event detection
-// ════════════════════════════════════════════════════════
-let envAudioCtx = null, envAnalyser = null, envStream = null;
-let envAF = null, envRunning = false;
-let sndThresh = 18;   // RMS threshold for "sound event"
-let sndCooldown = 0;  // frames of quiet needed before re-triggering
-
-const SND_LABELS = [
-  [80, 'LOUD EVENT',   'ev-hi'],
-  [50, 'NOISE',        'ev-hi'],
-  [28, 'SOUND',        'ev-ok'],
-  [18, 'QUIET SOUND',  'ev-ok'],
-];
-
-function sndEvtPush(label, cls) {
-  const el = document.getElementById('sndEvtLog');
-  const t  = new Date().toLocaleTimeString();
-  el.innerHTML = `<span class="${cls}">[${t}] ${label}</span>`;
-}
-
-async function startEnvMic() {
-  if (envRunning) return;
-  try {
-    envStream   = await navigator.mediaDevices.getUserMedia({audio:true, video:false});
-    envAudioCtx = new (window.AudioContext||window.webkitAudioContext)();
-    const src   = envAudioCtx.createMediaStreamSource(envStream);
-    envAnalyser = envAudioCtx.createAnalyser();
-    envAnalyser.fftSize = 256;
-    src.connect(envAnalyser);
-    envRunning = true;
-    tickEnvMic();
-  } catch(e) {
-    document.getElementById('sndEvtLog').textContent = '⚠ mic denied';
-  }
-}
-
-function tickEnvMic() {
-  if (!envRunning) return;
-  envAF = requestAnimationFrame(tickEnvMic);
-
-  // Skip if we're already recording voice (same mic, avoid double grab)
-  if (isRec) return;
-
-  const buf = new Uint8Array(envAnalyser.frequencyBinCount);
-  envAnalyser.getByteTimeDomainData(buf);
-
-  // Compute RMS amplitude 0–100
-  let sum = 0;
-  for (let i=0; i<buf.length; i++) { const v=(buf[i]/128-1); sum+=v*v; }
-  const rms = Math.round(Math.sqrt(sum/buf.length)*100);
-
-  // Update VU bar
-  document.getElementById('vuFill').style.width = Math.min(rms*1.8, 100)+'%';
-  document.getElementById('vuVal').textContent   = rms+'dB';
-
-  // Colour the bar based on level
-  const fill = document.getElementById('vuFill');
-  if      (rms > 60) fill.style.background='linear-gradient(90deg,var(--c4),var(--c3))';
-  else if (rms > 30) fill.style.background='linear-gradient(90deg,var(--c2),var(--c4))';
-  else               fill.style.background='linear-gradient(90deg,var(--c2),var(--c1))';
-
-  // Also drive mouth scale slightly via env sound when not TTS-talking
-  if (!isTalking && rms > sndThresh) {
-    talkPhase += 0.18;   // nudge mouth open
-  }
-
-  // Sound event detection (with cooldown)
-  if (sndCooldown > 0) { sndCooldown--; return; }
-  if (rms > sndThresh) {
-    let lbl='SOUND DETECTED', cls='ev-ok';
-    for (const [threshold, label, c] of SND_LABELS) {
-      if (rms >= threshold) { lbl=label; cls=c; break; }
-    }
-    sndEvtPush(lbl + '  ' + rms + 'dB', cls);
-    sndCooldown = 45;   // ~0.75s cooldown at 60fps
-  }
-}
-
-// Start env mic automatically after a short delay
-setTimeout(startEnvMic, 1200);
-
-// ════════════════════════════════════════════════════════
-//  TTS — route audio through AnalyserNode for real mouth sync
-// ════════════════════════════════════════════════════════
-
-async function processTtsWithAnalyser(text) {
-  return new Promise(res => {
-    const url = `${TTS_}/tts?` + new URLSearchParams({
-      text, voice:(LANG_VOICE[lang]||8)-1, lang, static:'0', isPlay:'0'
-    });
-    const audio = new Audio(url);
-    audio.crossOrigin = 'anonymous';
-
-    audio.addEventListener('canplay', () => {
-      try {
-        if (!ttsAudioCtx2) {
-          ttsAudioCtx2 = new (window.AudioContext||window.webkitAudioContext)();
-          ttsAnalyser   = ttsAudioCtx2.createAnalyser();
-          ttsAnalyser.fftSize = 256;
-          ttsAnalyser.connect(ttsAudioCtx2.destination);
+    async sendImageMessage(message = '이미지를 설명해주세요', url = this.apiBaseUrl) {
+        lastTime = Date.now();
+        if (!this.currentImage) return;
+        if (message !== '이미지를 설명해주세요') this.addMsg(message, 'user');
+        this.addMsg('📸 ...', 'user');
+        const aiDiv = this.createMsg('', 'ai');
+        const bubble = aiDiv.querySelector('.message-bubble');
+        bubble.classList.add('streaming');
+        this.el.chatMessages.appendChild(aiDiv);
+        this.scrollBot();
+        try {
+            const fd = new FormData();
+            fd.append('file', this.currentImage);
+            const resp = await fetch(`${url}/img2chat?` + new URLSearchParams({
+                prompt: message, system: this.currentSystem, isPlay: '0', lang: this.currentLang
+            }), { method: 'POST', body: fd });
+            if (!resp.ok) throw new Error('NETWORK ERROR');
+            const reader = resp.body.getReader();
+            const dec = new TextDecoder();
+            let full = '', lastEnd = 0;
+            while (true) {
+                const {done, value} = await reader.read();
+                if (done) {
+                    fetch('http://127.0.0.1:8000/stop');
+                    bubble.classList.remove('streaming');
+                    break;
+                }
+                full += dec.decode(value, {stream:true}) + '\n';
+                bubble.innerHTML = this.parseMd(full);
+                this.scrollBot();
+                if (this.isTtsEnabled) {
+                    const sents = full.slice(lastEnd).match(/[^.!?]*[.!?]/g);
+                    if (sents) {
+                        sents.forEach(s => { if (s.trim()) this.addToTtsQueue(s.trim()); });
+                        lastEnd = full.length;
+                    }
+                }
+            }
+            if (this.isTtsEnabled && full.slice(lastEnd).trim()) this.addToTtsQueue(full.slice(lastEnd).trim());
+            this.removeImage();
+        } catch(e) {
+            bubble.classList.remove('streaming');
+            bubble.textContent = '[ IMAGE ANALYSIS FAILED ]';
         }
-        const src = ttsAudioCtx2.createMediaElementSource(audio);
-        src.connect(ttsAnalyser);
-      } catch(e) { /* CORS or already connected — fallback to timer-based */ }
-    }, {once:true});
-
-    audio.onended = res;
-    audio.onerror = res;
-    audio.play().catch(res);
-  });
-}
-
-
-// ════════════════════════════════════════════════════════
-//  VISION PANEL — poll heartbeat for person + YOLO objects
-// ════════════════════════════════════════════════════════
-const POS_MAP = {
-  TL:'↖ TOP-LEFT',  TC:'↑ TOP-CENTER',  TR:'↗ TOP-RIGHT',
-  CL:'← CENTER-L',  CC:'⊙ CENTER',       CR:'→ CENTER-R',
-  BL:'↙ BOT-LEFT',  BC:'↓ BOT-CENTER',  BR:'↘ BOT-RIGHT',
-};
-const GENDER_MAP = { M:'MALE', F:'FEMALE' };
-
-let visionTimer = null;
-
-function startVisionPoll() {
-  if (visionTimer) return;
-  visionTimer = setInterval(async () => {
-    try {
-      const r = await fetch(`${HB}/heartbeat`);
-      const d = (await r.json()).data;
-      const h = d.human || {};
-
-      // ── Person info
-      const detected = d.cnt_live > 0;
-      document.getElementById('vpPerson').textContent  = detected ? `YES (${d.cnt_live})` : 'NONE';
-      document.getElementById('vpPerson').className    = 'vp-val ' + (detected ? 'ok' : '');
-      document.getElementById('vpPos').textContent     = POS_MAP[h.position] || '--';
-      document.getElementById('vpGender').textContent  = GENDER_MAP[h.gender] || '--';
-      document.getElementById('vpAge').textContent     = h.age != null ? h.age+'yr' : '--';
-      document.getElementById('vpEmot').textContent    = (h.emotion||'--').toUpperCase();
-
-      // ── YOLO objects (if heartbeat returns them)
-      const objs = d.objects || [];
-      document.getElementById('vpObjCount').textContent = objs.length;
-      document.getElementById('vpObjCount').className   = 'vp-val ' + (objs.length ? 'ok' : '');
-
-      const list = document.getElementById('objList');
-      list.innerHTML = '';
-      objs.slice(0, 8).forEach(obj => {
-        const row = document.createElement('div');
-        row.className = 'obj-row';
-        const conf = obj.confidence != null ? Math.round(obj.confidence*100)+'%' : '';
-        const box  = obj.box ? `[${obj.box.x},${obj.box.y}]` : '';
-        row.innerHTML = `<span class="obj-nm">${(obj.label||obj.class||'OBJ').toUpperCase()}</span>
-                         <span class="obj-conf">${conf}</span>
-                         <span class="obj-box">${box}</span>`;
-        list.appendChild(row);
-      });
-
-      // Also update face bounding box overlay if detected
-      if (detected && h.box) {
-        const fb=document.getElementById('faceBox'), m=document.getElementById('faceArea');
-        fb.style.cssText=`display:block;left:${h.box.x/640*m.clientWidth}px;
-          top:${h.box.y/480*m.clientHeight}px;
-          width:${h.box.w/640*m.clientWidth}px;
-          height:${h.box.h/480*m.clientHeight}px;`;
-      } else {
-        document.getElementById('faceBox').style.display='none';
-      }
-    } catch(e) {
-      document.getElementById('vpPerson').textContent = 'OFFLINE';
     }
-  }, 300);
+
+    async toggleVoiceRecording() {
+        if (!this.isRecording) await this.startRecording();
+        else this.stopRecording();
+    }
+
+    async startRecording() {
+        if (this.isRecording) return;
+        let chunks = [];
+        try {
+            this.isRecording = true;
+            const stream = await navigator.mediaDevices.getUserMedia({audio:true, video:false});
+            this.gumStream = stream;
+            this.mediaRecorder = new MediaRecorder(stream, {audioBitsPerSecond:16000});
+            this.mediaRecorder.ondataavailable = e => chunks.push(e.data);
+            this.mediaRecorder.onstop = async () => {
+                const blob = new Blob(chunks, {type:'audio/ogg;codecs=opus'});
+                const fd = new FormData();
+                fd.append('file', blob, 'voice.ogg');
+                try {
+                    this.setStatus('PROCESSING VOICE');
+                    const r = await fetch(`${this.apiBaseUrl}/stt?lang=${this.currentLang}&isPlay=0`, {method:'POST',body:fd});
+                    if (!r.ok) throw new Error('STT ERROR');
+                    const d = await r.json();
+                    const text = d.text?.trim() || d.data?.trim();
+                    if (text) {
+                        this.el.messageInput.value = text;
+                        this.setStatus('VOICE RECOGNIZED');
+                        setTimeout(() => this.sendMessage(), 500);
+                    } else { this.setStatus('NOT RECOGNIZED'); }
+                } catch(e) { this.setStatus('VOICE FAILED'); }
+                chunks = [];
+            };
+            this.mediaRecorder.start();
+            this.el.voiceBtn.classList.add('recording');
+            this.setStatus('REC...');
+        } catch(e) {
+            this.isRecording = false;
+            this.el.voiceBtn.classList.remove('recording');
+            this.setStatus('MIC DENIED');
+        }
+    }
+
+    stopRecording() {
+        if (!this.isRecording) return;
+        this.isRecording = false;
+        this.el.voiceBtn.classList.remove('recording');
+        if (this.mediaRecorder?.state !== 'inactive') this.mediaRecorder.stop();
+        if (this.gumStream) { this.gumStream.getAudioTracks().forEach(t => t.stop()); this.gumStream = null; }
+    }
+
+    parseMd(text) {
+        return text
+            .replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>')
+            .replace(/\*(.*?)\*/g,'<em>$1</em>')
+            .replace(/`(.*?)`/g,'<code>$1</code>')
+            .replace(/\n/g,'<br>');
+    }
+
+    addToTtsQueue(text) {
+        lastTime = Date.now();
+        this.ttsQueue.push(text);
+        this.processTtsQueue();
+    }
+
+    async processTtsQueue() {
+        if (this.isPlayingTts || this.ttsQueue.length === 0) return;
+        this.isPlayingTts = true;
+        const t = Date.now();
+        const motions = ['motion','motion?name=test1','motion?name=test2','motion?name=test3'];
+        fetch(`http://127.0.0.1:8000/${motions[t % 4]}`);
+        while (this.ttsQueue.length > 0) {
+            await this.playTts(this.ttsQueue.shift());
+        }
+        fetch('http://127.0.0.1:8000/stop');
+        this.isPlayingTts = false;
+        lastTime = Date.now();
+    }
+
+    playTts(text) {
+        return new Promise(resolve => {
+            const audio = new Audio(`${this.ttsBaseUrl}/tts?` + new URLSearchParams({
+                text, voice: this.currentVoice - 1, lang: this.currentLang, static:'0', isPlay:'0'
+            }));
+            audio.onended = resolve;
+            audio.onerror = resolve;
+            audio.play().catch(resolve);
+        });
+    }
+
+    async startWebcam() {
+        try {
+            const r = await fetch('http://127.0.0.1:59531/start_collection');
+            if (!r.ok) throw new Error();
+            this.webcamStream = true;
+            this.el.webcamVideo.style.display = 'block';
+            this.el.webcamPlaceholder.style.display = 'none';
+            this.el.startWebcam.style.display = 'none';
+            this.el.captureImage.style.display = 'flex';
+            this.el.stopWebcam.style.display = 'flex';
+            this.el.webcamVideo.src = 'http://127.0.0.1:59531/video_feed';
+            await fetch('http://127.0.0.1:8000/init_mcr');
+            this.setStatus('CAMERA ONLINE');
+        } catch(e) { this.setStatus('CAM FAILED'); }
+    }
+
+    captureImage() {
+        if (!this.webcamStream) { this.setStatus('CAMERA OFFLINE'); return; }
+        const canvas = document.createElement('canvas');
+        canvas.width = 512; canvas.height = 512;
+        canvas.getContext('2d').drawImage(this.el.webcamVideo, 0, 0, 512, 512);
+        canvas.toBlob(blob => {
+            this.displayImage(blob, `capture-${Date.now()}.jpg`);
+        }, 'image/jpeg', 0.9);
+        this.setStatus('CAPTURED');
+    }
+
+    stopWebcam() {
+        this.webcamStream = null;
+        this.el.webcamVideo.style.display = 'none';
+        this.el.webcamPlaceholder.style.display = 'flex';
+        this.el.startWebcam.style.display = 'flex';
+        this.el.captureImage.style.display = 'none';
+        this.el.stopWebcam.style.display = 'none';
+        this.setStatus('CAMERA OFFLINE');
+    }
+
+    handleFileSelect(e) {
+        const file = e.target.files[0];
+        if (file) {
+            this.displayImage(file);
+            if (this.autoSendImage) setTimeout(() => this.sendImageMessage(), 500);
+        }
+    }
+
+    displayImage(file, filename = null) {
+        this.currentImage = file;
+        const url = URL.createObjectURL(file);
+        this.el.uploadedImage.src = url;
+        this.el.uploadedImage.style.display = 'block';
+        this.el.uploadText.style.display = 'none';
+        this.el.removeImage.style.display = 'block';
+    }
+
+    removeImage() {
+        this.currentImage = null;
+        this.el.uploadedImage.style.display = 'none';
+        this.el.uploadText.style.display = 'block';
+        this.el.removeImage.style.display = 'none';
+        this.el.fileInput.value = '';
+        if (this.el.uploadedImage.src) URL.revokeObjectURL(this.el.uploadedImage.src);
+    }
+
+    createMsg(message, sender) {
+        const div = document.createElement('div');
+        div.className = `message ${sender}`;
+        const bubble = document.createElement('div');
+        bubble.className = 'message-bubble';
+        bubble.textContent = message;
+        const time = document.createElement('div');
+        time.className = 'message-time';
+        const now = new Date();
+        time.textContent = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+        div.appendChild(bubble);
+        div.appendChild(time);
+        return div;
+    }
+
+    addMsg(message, sender) {
+        const div = this.createMsg(message, sender);
+        this.el.chatMessages.appendChild(div);
+        this.scrollBot();
+    }
+
+    scrollBot() {
+        setTimeout(() => { this.el.chatMessages.scrollTop = this.el.chatMessages.scrollHeight; }, 80);
+    }
+
+    toggleTts() {
+        this.isTtsEnabled = !this.isTtsEnabled;
+        this.el.ttsToggle.classList.toggle('active', this.isTtsEnabled);
+        this.setStatus(this.isTtsEnabled ? 'TTS ON' : 'TTS OFF');
+    }
+
+    toggleAutoSendImage() {
+        this.autoSendImage = !this.autoSendImage;
+        this.el.autoSendImage.classList.toggle('active', this.autoSendImage);
+        if (this.autoSendImage) {
+            document.body.classList.remove('mode-normal');
+            document.body.classList.add('mode-auto');
+            this.el.modeBadge.textContent = '◈ AUTO MODE';
+            this.setStatus('AUTO MODE ON');
+        } else {
+            document.body.classList.remove('mode-auto');
+            document.body.classList.add('mode-normal');
+            this.el.modeBadge.textContent = '◈ NORMAL MODE';
+            this.setStatus('NORMAL MODE');
+        }
+    }
 }
 
-// Start vision polling always (independent of tracking button)
-setTimeout(startVisionPoll, 1500);
+document.addEventListener('DOMContentLoaded', () => {
+    const ai = new AIChatApp();
 
-// ════════════════════════════════════════════════════════
-//  INIT MESSAGE
-// ════════════════════════════════════════════════════════
-setTimeout(()=>addMsg('ARCos Neural Interface online. Intel NPU initialized. Ready.','ai'), 800);
+    setInterval(async () => {
+        try {
+            const resp = await fetch('http://127.0.0.1:59531/heartbeat');
+            const data = (await resp.json()).data;
+            const pos = data.human.position;
+            if (pos.startsWith('T')) fetch('http://127.0.0.1:8000/head/down');
+            else if (pos.startsWith('B')) fetch('http://127.0.0.1:8000/head/up');
+            if (pos.endsWith('L')) fetch('http://127.0.0.1:8000/head/right');
+            else if (pos.endsWith('R')) fetch('http://127.0.0.1:8000/head/left');
+            if (Date.now() - lastTime > 30000 && data.cnt_live > 0 && ai.autoSendImage) {
+                lastTime = Date.now();
+                fetch('http://127.0.0.1:8000/stop');
+                ai.captureImage();
+                setTimeout(() => {
+                    ai.sendImageMessage(
+                        LANGUAGE_GREETINGS[ai.currentLang] + ` ${data.human.gender == 'M' ? 'Male' : 'Female'}, ${data.human.age} years, ${data.human.emotion}`,
+                        'http://127.0.0.1:59532/v2'
+                    );
+                }, 1000);
+            }
+        } catch(e) {}
+    }, 1000);
+});
+
+function play(name) { fetch(`http://127.0.0.1:8000/motion?name=${name}`); }
+function stop() {}
 </script>
 </body>
 </html>
