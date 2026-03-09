@@ -89,6 +89,7 @@
             background: rgba(0,0,0,.92);
             position: relative;
             box-shadow: 4px 0 30px var(--pg);
+            min-height: 0; overflow: hidden;
         }
 
         /* Header */
@@ -128,6 +129,7 @@
             flex: 1; overflow-y: auto; overflow-x: hidden;
             padding: 12px;
             scrollbar-width: thin; scrollbar-color: var(--pc) transparent;
+            min-height: 0;
         }
         .chat-messages::-webkit-scrollbar { width: 4px; }
         .chat-messages::-webkit-scrollbar-thumb { background: var(--pc); }
@@ -1007,7 +1009,10 @@ class AIChatApp {
     }
 
     scrollBot() {
-        setTimeout(() => { this.el.chatMessages.scrollTop = this.el.chatMessages.scrollHeight; }, 80);
+        const el = this.el.chatMessages;
+        requestAnimationFrame(() => {
+            el.scrollTop = el.scrollHeight;
+        });
     }
 
     toggleTts() {
@@ -1036,15 +1041,40 @@ class AIChatApp {
 document.addEventListener('DOMContentLoaded', () => {
     const ai = new AIChatApp();
 
+    const MOTOR_URL = 'http://192.168.137.143:8080/api/motor';
+    const MOTOR_STEP = 10; // 한 번에 움직일 각도
+    let motorPan = 0, motorTilt = 0;
+
+    function sendMotor(pan, tilt) {
+        fetch(MOTOR_URL, {
+            method: 'POST',
+            headers: { 'accept': 'application/json', 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pan, tilt })
+        }).catch(() => {});
+    }
+
     setInterval(async () => {
         try {
             const resp = await fetch('http://127.0.0.1:59531/heartbeat');
             const data = (await resp.json()).data;
             const pos = data.human.position;
-            if (pos.startsWith('T')) fetch('http://127.0.0.1:8000/head/down');
-            else if (pos.startsWith('B')) fetch('http://127.0.0.1:8000/head/up');
-            if (pos.endsWith('L')) fetch('http://127.0.0.1:8000/head/right');
-            else if (pos.endsWith('R')) fetch('http://127.0.0.1:8000/head/left');
+
+            // 사람이 감지된 경우에만 트래킹
+            if (data.cnt_live > 0 && pos && pos !== 'C') {
+                let panDelta = 0, tiltDelta = 0;
+
+                // 상하 (Tilt)
+                if (pos.startsWith('T'))      tiltDelta = -MOTOR_STEP;  // 위에 있으면 위로
+                else if (pos.startsWith('B')) tiltDelta = +MOTOR_STEP;  // 아래에 있으면 아래로
+
+                // 좌우 (Pan)
+                if (pos.endsWith('L'))      panDelta = -MOTOR_STEP;  // 왼쪽에 있으면 왼쪽으로
+                else if (pos.endsWith('R')) panDelta = +MOTOR_STEP;  // 오른쪽에 있으면 오른쪽으로
+
+                if (panDelta !== 0 || tiltDelta !== 0) {
+                    sendMotor(panDelta, tiltDelta);
+                }
+            }
             if (Date.now() - lastTime > 30000 && data.cnt_live > 0 && ai.autoSendImage) {
                 lastTime = Date.now();
                 fetch('http://127.0.0.1:8000/stop');
