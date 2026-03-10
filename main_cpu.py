@@ -30,6 +30,10 @@ def play_sound(file_path):
     subprocess.run(["play", file_path])
 
 
+def set_volume(val):
+    subprocess.run(["wpctl", "set-volume",58,val])
+
+
 def getHash(text):
   hash_func = hashlib.new('md5')
   hash_func.update(text.encode('utf-8'))
@@ -70,12 +74,18 @@ conf_tts = utils.get_hparams_from_file(hf_hub_download(repo_id="rippertnt/on-vit
 def main():
   return { "result" : True, "data" : "AI-CPU-V2", "ip" : _IP, "port" : _PORT }      
 
-
 @app.get("/heartbeat")
 async def heartbeat():
   global state
   print(state)
   return { "result" : True, "data" : state }        
+
+@app.get("/volume")
+async def volume(vol : float=0.5):
+  global vol
+  print(vol)
+  set_volume(vol)
+  return { "result" : True, "data" : vol }        
 
 @app.get("/monitor")
 def monitor():
