@@ -809,7 +809,7 @@ class VolumeController {
 
     async _sendToServer(vol) {
         try {
-            const url = `${this.ttsBaseUrl}/volume?vol=${vol.toFixed(2)}`;
+            const url = `http://127.0.0.1:59530/volume?vol=${vol.toFixed(2)}`;
             const r   = await fetch(url);
             if (r.ok) this.onStatus(`VOL ${(vol * 100).toFixed(0)}%`);
             else       this.onStatus('VOL ERR');
