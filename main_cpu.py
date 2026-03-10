@@ -64,7 +64,7 @@ app.add_middleware(
 )
 
 
-vol = 0.5
+_VOL = 0.5
 
 core = Core()
 path_tts = snapshot_download(repo_id="rippertnt/on-vits2-multi-tts-v1", allow_patterns="*ov*")
@@ -84,10 +84,10 @@ async def heartbeat():
 
 @app.get("/volume")
 async def volume(vol : float=0.5):
-  global vol
-  print(vol)
-  set_volume(vol)
-  return { "result" : True, "data" : vol }        
+  global _VOL
+  print(_VOL)
+  set_volume(_VOL)
+  return { "result" : True, "data" : _VOL }        
 
 @app.get("/monitor")
 def monitor():
