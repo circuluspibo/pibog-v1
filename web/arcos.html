@@ -377,9 +377,9 @@
                 <!-- 모터 가로 일렬 배치: ◀ ▼ ◉ ▲ ▶ -->
                 <div class="motor-row">
                     <button class="dp"     onclick="motorStep(-10,0)"  title="좌">◀</button>
-                    <button class="dp"     onclick="motorStep(0,-10)"  title="아래">▼</button>
+                    <button class="dp"     onclick="motorStep(0,10)"  title="아래">▼</button>
                     <button class="dp dp-c" onclick="motorStep(0,0)"   title="원점정지">◉</button>
-                    <button class="dp"     onclick="motorStep(0,10)"   title="위">▲</button>
+                    <button class="dp"     onclick="motorStep(0,-10)"   title="위">▲</button>
                     <button class="dp"     onclick="motorStep(10,0)"   title="우">▶</button>
                 </div>
             </div>
@@ -874,8 +874,8 @@ document.addEventListener('DOMContentLoaded', () => {
             if (data.cnt_live > 0 && pos && pos !== 'C') {
                 let pan = 0, tilt = 0;
                 // Tilt: T(위) → +, B(아래) → -
-                if      (pos.startsWith('T')) tilt = +10;
-                else if (pos.startsWith('B')) tilt = -10;
+                if      (pos.startsWith('T')) tilt = -10;
+                else if (pos.startsWith('B')) tilt = 10;
                 // Pan: L(좌) → +, R(우) → -
                 if      (pos.endsWith('L')) pan = +10;
                 else if (pos.endsWith('R')) pan = -10;
