@@ -31,7 +31,7 @@ def play_sound(file_path):
 
 
 def set_volume(val):
-    subprocess.run(["wpctl", "set-volume",58,val])
+    subprocess.run(["wpctl", "set-volume","58",val])
 
 
 def getHash(text):
@@ -83,8 +83,9 @@ async def heartbeat():
   return { "result" : True, "data" : state }        
 
 @app.get("/volume")
-async def volume(vol : float=0.5):
+async def volume(vol):
   global _VOL
+  _VOL = vol
   print(_VOL)
   set_volume(_VOL)
   return { "result" : True, "data" : _VOL }        
