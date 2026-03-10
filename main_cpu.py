@@ -31,7 +31,7 @@ def play_sound(file_path):
 
 
 def set_volume(val):
-    subprocess.run(["wpctl", "set-volume","58",val])
+    subprocess.run(["wpctl", "set-volume","58",f"{val}"])
 
 
 def getHash(text):
@@ -198,7 +198,7 @@ def tts2(text = "", voice=6, lang='ko', static=0):
 
     print(t.time() - start)
     write(data=audio, rate=conf_tts.data.sampling_rate, filename=f"output/{filename}.wav")
-    play_sound(f"output/{filename}.wav")
+    #play_sound(f"output/{filename}.wav")
     
     return f"output/{filename}.wav"
 
