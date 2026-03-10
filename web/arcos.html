@@ -5,377 +5,297 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>ARCos - Advanced Robotics Interface</title>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
 
         :root {
             --pc: #00c8ff;
-            --pg: rgba(0,200,255,0.18);
+            --pg: rgba(0,200,255,0.15);
             --sc: #0080ff;
             --bc: #00c8ff;
-            --gc: rgba(0,200,255,0.25);
-            --red: #ff0040;
-            --rg: rgba(255,0,64,0.18);
+            --gc: rgba(0,200,255,0.22);
         }
         .mode-auto {
-            --pc: #ff0040; --pg: rgba(255,0,64,0.18);
-            --sc: #ff0080; --bc: #ff0040; --gc: rgba(255,0,64,0.25);
+            --pc:#ff0040; --pg:rgba(255,0,64,0.15);
+            --sc:#ff0080; --bc:#ff0040; --gc:rgba(255,0,64,0.22);
         }
 
-        @keyframes glowPulse { 0%,100%{opacity:.6} 50%{opacity:1} }
-        @keyframes scanV { 0%{top:-6px;opacity:0} 10%{opacity:1} 90%{opacity:1} 100%{top:100%;opacity:0} }
-        @keyframes gridMove { 0%{transform:translateY(0)} 100%{transform:translateY(40px)} }
-        @keyframes blink { 0%,50%{opacity:1} 51%,100%{opacity:0} }
-        @keyframes msgIn { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
-        @keyframes recordPulse { 0%,100%{box-shadow:0 0 20px var(--pg)} 50%{box-shadow:0 0 40px var(--pg)} }
-        @keyframes typing { 0%,60%,100%{transform:translateY(0);opacity:.5} 30%{transform:translateY(-6px);opacity:1} }
-        @keyframes borderFlow {
-            0%{background-position:0% 50%} 50%{background-position:100% 50%} 100%{background-position:0% 50%}
-        }
-        @keyframes cornerSpin { 0%{transform:rotate(0deg)} 100%{transform:rotate(360deg)} }
-        @keyframes soundBar { 0%,100%{transform:scaleY(.4)} 50%{transform:scaleY(1)} }
-        @keyframes hexPulse { 0%,100%{opacity:.3;transform:scale(1)} 50%{opacity:.7;transform:scale(1.05)} }
+        @keyframes glowPulse  { 0%,100%{opacity:.55} 50%{opacity:1} }
+        @keyframes scanV      { 0%{top:-6px;opacity:0} 8%{opacity:1} 92%{opacity:1} 100%{top:100%;opacity:0} }
+        @keyframes gridMove   { 0%{transform:translateY(0)} 100%{transform:translateY(40px)} }
+        @keyframes blink      { 0%,50%{opacity:1} 51%,100%{opacity:0} }
+        @keyframes msgIn      { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+        @keyframes recPulse   { 0%,100%{box-shadow:0 0 16px var(--pg)} 50%{box-shadow:0 0 36px var(--pg)} }
+        @keyframes typingDot  { 0%,60%,100%{transform:translateY(0);opacity:.4} 30%{transform:translateY(-6px);opacity:1} }
+        @keyframes hexPulse   { 0%,100%{opacity:.1;transform:scale(1)} 50%{opacity:.28;transform:scale(1.04)} }
+        @keyframes soundBar   { 0%,100%{transform:scaleY(.35)} 50%{transform:scaleY(1)} }
+        @keyframes btnPress   { 0%{transform:scale(1)} 50%{transform:scale(.93)} 100%{transform:scale(1)} }
 
         html, body {
-            width: 100%; height: 100%;
-            overflow: hidden;
-            font-family: 'Courier New', monospace;
-            background: #000;
-            color: #fff;
-            touch-action: manipulation;
+            width:100%; height:100%; overflow:hidden;
+            font-family:'Courier New',monospace;
+            background:#000; color:#fff;
+            touch-action:manipulation;
         }
 
-        /* ── BG Grid ── */
+        /* ── BG ── */
         .bg-grid {
-            position: fixed; inset: 0; z-index: 0; pointer-events: none;
+            position:fixed; inset:0; z-index:0; pointer-events:none;
             background-image:
-                linear-gradient(0deg, transparent 49%, var(--gc) 50%, transparent 51%),
-                linear-gradient(90deg, transparent 49%, var(--gc) 50%, transparent 51%);
-            background-size: 40px 40px;
-            animation: gridMove 8s linear infinite;
-            opacity: .4;
+                linear-gradient(0deg,transparent 49%,var(--gc) 50%,transparent 51%),
+                linear-gradient(90deg,transparent 49%,var(--gc) 50%,transparent 51%);
+            background-size:40px 40px;
+            animation:gridMove 10s linear infinite; opacity:.35;
         }
-
-        /* ── HEX DECO ── */
-        .hex-deco {
-            position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden;
-        }
+        .hex-deco { position:fixed; inset:0; z-index:0; pointer-events:none; overflow:hidden; }
         .hex {
-            position: absolute; width: 80px; height: 80px;
-            border: 1px solid var(--pc); opacity: .12;
-            clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
-            animation: hexPulse 4s ease-in-out infinite;
+            position:absolute; border:1px solid var(--pc);
+            clip-path:polygon(50% 0%,100% 25%,100% 75%,50% 100%,0% 75%,0% 25%);
+            animation:hexPulse 5s ease-in-out infinite;
         }
-        .hex:nth-child(1){top:5%;left:3%;animation-delay:0s}
-        .hex:nth-child(2){top:70%;left:1%;animation-delay:1s;width:50px;height:50px}
-        .hex:nth-child(3){top:20%;right:2%;animation-delay:2s;width:60px;height:60px}
-        .hex:nth-child(4){bottom:5%;right:4%;animation-delay:.5s}
-        .hex:nth-child(5){top:45%;left:50%;animation-delay:1.5s;width:40px;height:40px;opacity:.07}
+        .hex:nth-child(1){width:80px;height:80px;top:4%;left:2%;animation-delay:0s}
+        .hex:nth-child(2){width:48px;height:48px;top:72%;left:0%;animation-delay:1.2s}
+        .hex:nth-child(3){width:62px;height:62px;top:18%;right:1%;animation-delay:2.4s}
+        .hex:nth-child(4){width:76px;height:76px;bottom:4%;right:3%;animation-delay:.6s}
 
         /* ── LAYOUT ── */
-        .app { 
-            position: relative; z-index:1;
-            display: grid;
-            grid-template-columns: 310px 1fr;
-            grid-template-rows: 1fr;
-            width: 100vw; height: 100vh;
+        .app {
+            position:relative; z-index:1;
+            display:grid;
+            grid-template-columns:300px 1fr;
+            width:100vw; height:100vh;
         }
 
-        /* ══════════════════════════════
-           LEFT: CHAT PANEL
-        ══════════════════════════════ */
+        /* ════════════════════════
+           LEFT — CHAT PANEL
+        ════════════════════════ */
         .chat-panel {
-            display: flex; flex-direction: column;
-            border-right: 2px solid var(--bc);
-            background: rgba(0,0,0,.92);
-            position: relative;
-            box-shadow: 4px 0 30px var(--pg);
-            min-height: 0; overflow: hidden;
+            display:flex; flex-direction:column;
+            border-right:2px solid var(--bc);
+            background:rgba(0,0,0,.93);
+            box-shadow:4px 0 28px var(--pg);
+            min-height:0; overflow:hidden; position:relative;
         }
 
         /* Header */
         .chat-header {
-            height: 52px;
-            display: flex; align-items: center; justify-content: space-between;
-            padding: 0 14px;
-            background: rgba(0,0,0,.97);
-            border-bottom: 1px solid var(--bc);
-            position: relative;
-            flex-shrink: 0;
+            height:50px; flex-shrink:0;
+            display:flex; align-items:center; justify-content:space-between;
+            padding:0 14px;
+            background:rgba(0,0,0,.98);
+            border-bottom:1px solid var(--bc);
+            position:relative;
         }
         .chat-header::after {
             content:''; position:absolute; bottom:-2px; left:0; right:0; height:2px;
-            background: linear-gradient(90deg, transparent, var(--pc), transparent);
-            box-shadow: 0 0 12px var(--pg);
-            animation: glowPulse 2s ease-in-out infinite;
+            background:linear-gradient(90deg,transparent,var(--pc),transparent);
+            animation:glowPulse 2.5s ease-in-out infinite;
         }
-        .logo {
-            font-size: 18px; font-weight:700; letter-spacing:3px;
-            color: var(--pc); text-shadow: 0 0 12px var(--pc), 0 0 24px var(--pg);
-            text-transform: uppercase;
-        }
-        .logo-sub { font-size:9px; letter-spacing:2px; color:var(--pc); opacity:.6; margin-top:1px; }
+        .logo      { font-size:17px; font-weight:700; letter-spacing:3px; color:var(--pc); text-shadow:0 0 10px var(--pc); }
+        .logo-sub  { font-size:8px; letter-spacing:2px; color:var(--pc); opacity:.5; margin-top:1px; }
 
-        /* Language select */
-        .lang-wrap select {
-            padding: 5px 8px; background: rgba(0,0,0,.9);
-            border: 1px solid var(--bc); color: var(--pc);
-            font-family: 'Courier New', monospace; font-size: 12px;
-            cursor: pointer; outline: none;
-            clip-path: polygon(6px 0,100% 0,100% calc(100% - 6px),calc(100% - 6px) 100%,0 100%,0 6px);
+        .lang-sel select {
+            padding:5px 7px; background:rgba(0,0,0,.9);
+            border:1px solid var(--bc); color:var(--pc);
+            font-family:'Courier New',monospace; font-size:12px;
+            cursor:pointer; outline:none;
+            clip-path:polygon(5px 0,100% 0,100% calc(100% - 5px),calc(100% - 5px) 100%,0 100%,0 5px);
         }
 
         /* Messages */
-        .chat-messages {
-            flex: 1; overflow-y: auto; overflow-x: hidden;
-            padding: 12px;
-            scrollbar-width: thin; scrollbar-color: var(--pc) transparent;
-            min-height: 0;
+        .chat-msgs {
+            flex:1; min-height:0;
+            overflow-y:auto; overflow-x:hidden;
+            padding:12px;
+            scrollbar-width:thin; scrollbar-color:var(--pc) transparent;
         }
-        .chat-messages::-webkit-scrollbar { width: 4px; }
-        .chat-messages::-webkit-scrollbar-thumb { background: var(--pc); }
+        .chat-msgs::-webkit-scrollbar { width:3px; }
+        .chat-msgs::-webkit-scrollbar-thumb { background:var(--pc); }
 
-        .message { margin-bottom: 10px; animation: msgIn .25s ease-out; }
-        .message.user { text-align: right; }
-        .message-bubble {
-            display: inline-block; max-width: 82%;
-            padding: 9px 13px; font-size: 13px; line-height: 1.45;
-            word-break: break-word;
-            border: 1px solid var(--bc);
-            background: var(--pg);
-            clip-path: polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);
-            box-shadow: 0 0 14px var(--pg);
+        .message { margin-bottom:10px; animation:msgIn .25s ease-out; }
+        .message.user { text-align:right; }
+        .msg-bubble {
+            display:inline-block; max-width:84%;
+            padding:9px 13px; font-size:13px; line-height:1.5;
+            word-break:break-word;
+            border:1px solid var(--bc); background:var(--pg);
+            clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);
+            box-shadow:0 0 12px var(--pg);
         }
-        .message.user .message-bubble { color: var(--pc); }
-        .message.ai .message-bubble { color: #e8f8ff; }
-        .message-bubble.streaming::after { content:'▊'; animation: blink 1s infinite; color: var(--pc); }
-        .message-time { font-size: 9px; color: var(--pc); opacity:.6; margin-top:3px; letter-spacing:1px; }
+        .message.user .msg-bubble { color:var(--pc); }
+        .message.ai  .msg-bubble  { color:#ddf4ff; }
+        .msg-bubble.streaming::after { content:'▊'; animation:blink 1s infinite; color:var(--pc); }
+        .msg-time { font-size:9px; color:var(--pc); opacity:.5; margin-top:3px; letter-spacing:1px; }
 
-        /* Typing */
-        .typing-indicator { display:none; padding:8px 12px; }
+        .typing-ind { display:none; padding:8px 12px; }
         .typing-dots { display:flex; gap:3px; }
         .typing-dots span {
             width:7px; height:7px; background:var(--pc);
-            animation: typing 1.4s infinite;
-            clip-path: polygon(50% 0%,100% 50%,50% 100%,0% 50%);
+            animation:typingDot 1.4s infinite;
+            clip-path:polygon(50% 0%,100% 50%,50% 100%,0% 50%);
         }
         .typing-dots span:nth-child(2){animation-delay:.2s}
         .typing-dots span:nth-child(3){animation-delay:.4s}
 
-        /* Input area */
+        /* ── Input area ── */
         .input-area {
-            padding: 10px 12px;
-            background: rgba(0,0,0,.97);
-            border-top: 1px solid var(--bc);
-            box-shadow: 0 0 20px var(--pg);
-            flex-shrink: 0;
+            flex-shrink:0; padding:9px 11px;
+            background:rgba(0,0,0,.98);
+            border-top:1px solid var(--bc);
+            box-shadow:0 0 18px var(--pg);
         }
+
+        /* Top control row */
         .ctrl-row {
-            display: flex; gap: 6px; margin-bottom: 8px; flex-wrap: wrap;
+            display:flex; align-items:center; gap:7px; margin-bottom:8px;
         }
-        .ctrl-btn {
-            padding: 8px 11px; font-size: 11px; font-weight:700;
-            font-family: 'Courier New', monospace; text-transform: uppercase; letter-spacing:.5px;
-            border: 1px solid var(--bc); background: var(--pg); color: var(--pc);
-            cursor: pointer; transition: all .2s;
-            clip-path: polygon(5px 0,100% 0,100% calc(100% - 5px),calc(100% - 5px) 100%,0 100%,0 5px);
-            min-width: 44px; min-height: 36px;
-            -webkit-tap-highlight-color: transparent;
-        }
-        .ctrl-btn:active, .ctrl-btn.active {
-            background: var(--pc); color: #000;
-            box-shadow: 0 0 20px var(--pg);
-        }
-        .input-row { display:flex; gap:8px; align-items:flex-end; }
-        .msg-input {
-            flex:1; padding: 11px 14px; font-size: 14px;
-            border: 1px solid var(--bc); background: rgba(0,0,0,.85);
-            color: var(--pc); font-family: 'Courier New', monospace;
-            resize: none; max-height: 80px; min-height: 44px;
-            clip-path: polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);
-            outline: none;
-        }
-        .msg-input::placeholder { color: rgba(0,200,255,.4); }
-        .icon-btn {
-            width: 44px; height: 44px; border: 1px solid var(--bc);
-            background: rgba(0,0,0,.9); color: var(--pc); cursor: pointer;
+
+        /* Icon toggle buttons (TTS, AI) */
+        .ico-toggle {
+            width:36px; height:36px; flex-shrink:0;
+            border:1px solid var(--bc); background:var(--pg); color:var(--pc);
+            cursor:pointer; font-size:16px;
             display:flex; align-items:center; justify-content:center;
-            font-size: 18px; transition: all .2s;
-            clip-path: polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);
-            flex-shrink: 0;
+            transition:all .2s;
+            clip-path:polygon(5px 0,100% 0,100% calc(100% - 5px),calc(100% - 5px) 100%,0 100%,0 5px);
         }
-        .icon-btn:active { background: var(--pc); color:#000; box-shadow:0 0 20px var(--pg); }
-        .voice-btn.recording {
-            background: var(--pc); color: #000;
-            animation: recordPulse 1s infinite;
-        }
+        .ico-toggle.active { background:var(--pc); color:#000; box-shadow:0 0 14px var(--pg); }
+        .ico-toggle:active { animation:btnPress .15s ease; }
 
-        /* ══════════════════════════════
-           RIGHT: MEDIA PANEL
-        ══════════════════════════════ */
+        .ctrl-sep { width:1px; height:34px; background:var(--bc); opacity:.35; flex-shrink:0; margin:0 2px; }
+
+        /* Motor row — 5 buttons in one horizontal line */
+        .motor-row { display:flex; align-items:center; gap:3px; }
+        .dp {
+            width:32px; height:32px; flex-shrink:0;
+            border:1px solid var(--bc); background:var(--pg); color:var(--pc);
+            cursor:pointer; font-size:13px;
+            display:flex; align-items:center; justify-content:center;
+            transition:all .15s; user-select:none;
+            clip-path:polygon(4px 0,100% 0,100% calc(100% - 4px),calc(100% - 4px) 100%,0 100%,0 4px);
+        }
+        .dp:active { background:var(--pc); color:#000; box-shadow:0 0 12px var(--pg); }
+        .dp-c { background:rgba(0,0,0,.55); font-size:11px; }
+
+        /* Message input row */
+        .input-row { display:flex; gap:7px; align-items:flex-end; }
+        .msg-input {
+            flex:1; padding:10px 13px; font-size:14px;
+            border:1px solid var(--bc); background:rgba(0,0,0,.85);
+            color:var(--pc); font-family:'Courier New',monospace;
+            resize:none; max-height:70px; min-height:42px; outline:none;
+            clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);
+        }
+        .msg-input::placeholder { color:rgba(0,200,255,.35); }
+        .ico-btn {
+            width:42px; height:42px; flex-shrink:0;
+            border:1px solid var(--bc); background:rgba(0,0,0,.9); color:var(--pc);
+            cursor:pointer; font-size:18px;
+            display:flex; align-items:center; justify-content:center;
+            transition:all .2s;
+            clip-path:polygon(7px 0,100% 0,100% calc(100% - 7px),calc(100% - 7px) 100%,0 100%,0 7px);
+        }
+        .ico-btn:active { background:var(--pc); color:#000; box-shadow:0 0 18px var(--pg); }
+        .voice-btn.recording { background:var(--pc); color:#000; animation:recPulse 1s infinite; }
+
+        /* ════════════════════════
+           RIGHT — MEDIA PANEL
+        ════════════════════════ */
         .media-panel {
-            display: grid;
-            grid-template-rows: 1fr auto auto;
-            background: rgba(0,0,0,.9);
-            position: relative;
+            display:grid;
+            grid-template-rows:1fr auto;
+            background:rgba(0,0,0,.9);
         }
 
-        /* Action buttons row */
-        .action-bar {
-            display: flex; gap: 6px; flex-wrap: wrap;
-            padding: 8px 10px;
-            background: rgba(0,0,0,.97);
-            border-bottom: 1px solid var(--bc);
-            box-shadow: 0 4px 20px var(--pg);
-        }
-        .act-btn {
-            padding: 8px 12px; font-size: 11px; font-weight:700;
-            font-family: 'Courier New', monospace; text-transform: uppercase;
-            border: 1px solid var(--bc); background: var(--pg); color: var(--pc);
-            cursor: pointer; transition: all .2s;
-            clip-path: polygon(5px 0,100% 0,100% calc(100% - 5px),calc(100% - 5px) 100%,0 100%,0 5px);
-            min-height: 36px; flex: 1; white-space: nowrap;
-            -webkit-tap-highlight-color: transparent;
-        }
-        .act-btn:active { background: var(--pc); color:#000; box-shadow:0 0 20px var(--pg); }
-
-        /* Camera view */
+        /* Camera */
         .cam-wrap {
-            position: relative; overflow: hidden;
-            background: #000;
-            clip-path: polygon(16px 0,100% 0,100% calc(100% - 16px),calc(100% - 16px) 100%,0 100%,0 16px);
-            box-shadow: inset 0 0 40px rgba(0,0,0,.6), 0 0 20px var(--pg);
+            position:relative; overflow:hidden; background:#000;
+            clip-path:polygon(14px 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%,0 14px);
+            box-shadow:inset 0 0 50px rgba(0,0,0,.7), 0 0 18px var(--pg);
         }
-
-        /* Scan line */
         .cam-wrap::after {
             content:''; position:absolute; left:0; right:0; height:4px;
-            background: linear-gradient(180deg,transparent,var(--pc) 50%,transparent);
-            animation: scanV 3.5s linear infinite; z-index:10; pointer-events:none;
-            box-shadow: 0 0 16px var(--pc), 0 0 32px var(--pg);
+            background:linear-gradient(180deg,transparent,var(--pc) 50%,transparent);
+            animation:scanV 4s linear infinite; z-index:10; pointer-events:none;
+            box-shadow:0 0 14px var(--pc), 0 0 28px var(--pg);
         }
-        /* CRT scanlines */
         .cam-wrap::before {
             content:''; position:absolute; inset:0;
-            background: repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.25) 2px,rgba(0,0,0,.25) 4px);
+            background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.22) 2px,rgba(0,0,0,.22) 4px);
             pointer-events:none; z-index:5;
         }
-
-        /* Corner brackets */
-        .cam-corner {
-            position:absolute; width:20px; height:20px; z-index:15; pointer-events:none;
-        }
-        .cam-corner.tl { top:8px; left:8px; border-top:2px solid var(--pc); border-left:2px solid var(--pc); }
-        .cam-corner.tr { top:8px; right:8px; border-top:2px solid var(--pc); border-right:2px solid var(--pc); }
-        .cam-corner.bl { bottom:8px; left:8px; border-bottom:2px solid var(--pc); border-left:2px solid var(--pc); }
-        .cam-corner.br { bottom:8px; right:8px; border-bottom:2px solid var(--pc); border-right:2px solid var(--pc); }
+        .cam-corner { position:absolute; width:18px; height:18px; z-index:15; pointer-events:none; }
+        .cam-corner.tl { top:8px;    left:8px;    border-top:2px solid var(--pc); border-left:2px solid var(--pc); }
+        .cam-corner.tr { top:8px;    right:8px;   border-top:2px solid var(--pc); border-right:2px solid var(--pc); }
+        .cam-corner.bl { bottom:8px; left:8px;    border-bottom:2px solid var(--pc); border-left:2px solid var(--pc); }
+        .cam-corner.br { bottom:8px; right:8px;   border-bottom:2px solid var(--pc); border-right:2px solid var(--pc); }
 
         #webcamPlaceholder {
             display:flex; flex-direction:column; align-items:center; justify-content:center;
-            height:100%; color:var(--pc); font-size:13px; text-align:center;
-            letter-spacing:2px; opacity:.6; gap:8px; text-transform:uppercase;
+            height:100%; color:var(--pc); text-align:center;
+            letter-spacing:2px; opacity:.55; gap:10px; text-transform:uppercase; font-size:13px;
         }
-        .cam-icon { font-size:36px; opacity:.4; }
-
+        .cam-icon { font-size:40px; opacity:.35; }
         #webcamVideo { width:100%; height:100%; object-fit:cover; display:none; }
 
         /* Sound overlay */
         .sound-overlay {
             position:absolute; bottom:10px; left:10px; z-index:20;
-            display:flex; flex-direction:column; gap:6px; pointer-events:none;
+            display:flex; flex-direction:column; gap:5px; pointer-events:none;
         }
         .sound-item {
-            background: rgba(0,0,0,.88); border: 1px solid var(--bc);
-            padding: 7px 11px; min-width:170px;
-            clip-path: polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);
-            box-shadow: 0 0 12px var(--pg);
+            background:rgba(0,0,0,.88); border:1px solid var(--bc);
+            padding:6px 10px; min-width:165px;
+            clip-path:polygon(7px 0,100% 0,100% calc(100% - 7px),calc(100% - 7px) 100%,0 100%,0 7px);
+            box-shadow:0 0 10px var(--pg);
         }
-        .sound-head { display:flex; justify-content:space-between; margin-bottom:4px; }
-        .sound-label { font-size:11px; color:var(--pc); text-transform:uppercase; letter-spacing:.5px; font-weight:700; }
-        .sound-rank { font-size:9px; color:var(--pc); background:var(--pg); padding:1px 5px; }
-        .sound-bar { height:4px; background:rgba(0,0,0,.8); border:1px solid var(--bc); overflow:hidden; }
-        .sound-fill {
-            height:100%; background:linear-gradient(90deg,var(--sc),var(--pc));
-            transition: width .3s; box-shadow:0 0 6px var(--pg);
-        }
-        .sound-pct { font-size:9px; color:var(--pc); text-align:right; margin-top:2px; }
+        .sound-head  { display:flex; justify-content:space-between; margin-bottom:3px; }
+        .sound-label { font-size:10px; color:var(--pc); text-transform:uppercase; letter-spacing:.5px; font-weight:700; }
+        .sound-rank  { font-size:9px; color:var(--pc); background:var(--pg); padding:1px 4px; }
+        .sound-bar   { height:3px; background:rgba(0,0,0,.8); border:1px solid var(--bc); overflow:hidden; }
+        .sound-fill  { height:100%; background:linear-gradient(90deg,var(--sc),var(--pc)); transition:width .3s; }
+        .sound-pct   { font-size:9px; color:var(--pc); text-align:right; margin-top:2px; }
 
         /* Cam buttons */
         .cam-btns {
             position:absolute; bottom:10px; right:10px; z-index:20;
-            display:flex; flex-direction:column; gap:6px;
+            display:flex; flex-direction:column; gap:5px;
         }
         .cam-btn {
-            width:38px; height:38px; border:1px solid var(--bc);
-            background:rgba(0,0,0,.9); color:var(--pc);
+            width:36px; height:36px; border:1px solid var(--bc);
+            background:rgba(0,0,0,.92); color:var(--pc);
             cursor:pointer; display:flex; align-items:center; justify-content:center;
-            font-size:17px; transition:all .2s;
-            clip-path: polygon(5px 0,100% 0,100% calc(100% - 5px),calc(100% - 5px) 100%,0 100%,0 5px);
+            font-size:16px; transition:all .2s;
+            clip-path:polygon(5px 0,100% 0,100% calc(100% - 5px),calc(100% - 5px) 100%,0 100%,0 5px);
         }
         .cam-btn:active { background:var(--pc); color:#000; }
 
-        /* Upload area */
-        .upload-area {
-            padding: 8px 10px;
-            background: rgba(0,0,0,.95);
-            border-top: 1px solid var(--bc);
-            cursor: pointer;
-            transition: all .2s;
-            display: flex; align-items: center; gap: 10px;
-            min-height: 56px;
-        }
-        .upload-area:active { background: rgba(0,0,0,1); box-shadow:0 0 12px var(--pg); }
-        .upload-area input { display:none; }
-        .upload-icon { font-size:22px; flex-shrink:0; }
-        .upload-text { font-size:11px; color:var(--pc); opacity:.7; text-transform:uppercase; letter-spacing:1px; }
-        #uploadedImage { max-height:40px; max-width:60px; border:1px solid var(--bc); }
-        .remove-img {
-            margin-left:auto; padding:5px 9px; font-size:10px;
-            border:1px solid var(--bc); background:var(--pg); color:var(--pc);
-            cursor:pointer; font-family:'Courier New',monospace; text-transform:uppercase;
-        }
-        .remove-img:active { background:var(--pc); color:#000; }
-
         /* Status bar */
         .status-bar {
-            padding: 8px 14px;
-            background: rgba(0,0,0,.97);
-            border-top: 1px solid var(--bc);
-            display: flex; align-items: center; justify-content: space-between;
-            font-size: 10px; color: var(--pc); letter-spacing:2px; text-transform:uppercase;
-            box-shadow: 0 0 16px var(--pg);
-            flex-shrink: 0;
+            padding:7px 14px; flex-shrink:0;
+            background:rgba(0,0,0,.98);
+            border-top:1px solid var(--bc);
+            display:flex; align-items:center; justify-content:space-between;
+            font-size:10px; color:var(--pc); letter-spacing:2px; text-transform:uppercase;
+            box-shadow:0 0 14px var(--pg);
         }
-        .status-dots { display:flex; gap:5px; }
-        .status-dot {
-            width:7px; height:7px; background:var(--pc); opacity:.5;
-            clip-path:polygon(50% 0%,100% 50%,50% 100%,0% 50%);
-        }
-        .status-dot.active { opacity:1; box-shadow:0 0 6px var(--pc); }
+        .sound-bars { display:flex; align-items:flex-end; gap:2px; height:14px; }
+        .sbar { width:3px; background:var(--pc); opacity:.6; animation:soundBar 1s ease-in-out infinite; }
+        .sbar:nth-child(1){height:35%;animation-delay:.00s}
+        .sbar:nth-child(2){height:65%;animation-delay:.10s}
+        .sbar:nth-child(3){height:100%;animation-delay:.20s}
+        .sbar:nth-child(4){height:50%;animation-delay:.30s}
+        .sbar:nth-child(5){height:75%;animation-delay:.15s}
 
         /* Mode badge */
         .mode-badge {
-            position:fixed; top:8px; right:8px; z-index:999;
-            padding:6px 14px; background:rgba(0,0,0,.95);
+            position:fixed; top:7px; right:8px; z-index:999;
+            padding:5px 12px; background:rgba(0,0,0,.96);
             border:1px solid var(--bc); color:var(--pc);
             font-size:10px; font-weight:700; letter-spacing:2px; text-transform:uppercase;
-            clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);
-            box-shadow:0 0 14px var(--pg);
-            animation:glowPulse 2s ease-in-out infinite;
+            clip-path:polygon(7px 0,100% 0,100% calc(100% - 7px),calc(100% - 7px) 100%,0 100%,0 7px);
+            box-shadow:0 0 12px var(--pg);
+            animation:glowPulse 2.5s ease-in-out infinite;
         }
-
-        /* Sound bars visual */
-        .sound-bars {
-            display:flex; align-items:flex-end; gap:2px; height:16px;
-        }
-        .sbar {
-            width:3px; background:var(--pc); opacity:.7;
-            animation: soundBar 1s ease-in-out infinite;
-        }
-        .sbar:nth-child(1){height:40%;animation-delay:.0s}
-        .sbar:nth-child(2){height:70%;animation-delay:.1s}
-        .sbar:nth-child(3){height:100%;animation-delay:.2s}
-        .sbar:nth-child(4){height:55%;animation-delay:.3s}
-        .sbar:nth-child(5){height:80%;animation-delay:.15s}
     </style>
 </head>
 <body class="mode-normal">
@@ -383,7 +303,7 @@
 <div class="bg-grid"></div>
 <div class="hex-deco">
     <div class="hex"></div><div class="hex"></div>
-    <div class="hex"></div><div class="hex"></div><div class="hex"></div>
+    <div class="hex"></div><div class="hex"></div>
 </div>
 
 <div class="mode-badge" id="modeBadge">◈ NORMAL MODE</div>
@@ -392,80 +312,91 @@
 
     <!-- ═══════════ LEFT: CHAT ═══════════ -->
     <div class="chat-panel">
+
         <div class="chat-header">
             <div>
                 <div class="logo">◢ ARCos ◣</div>
                 <div class="logo-sub">ADVANCED ROBOTICS INTERFACE</div>
             </div>
-            <div class="lang-wrap">
+            <div class="lang-sel">
                 <select id="languageSelect">
-                    <option value="ar">🇸🇦 AR</option>
-                    <option value="cs">🇨🇿 CS</option>
-                    <option value="de">🇩🇪 DE</option>
-                    <option value="en">🇺🇸 EN</option>
-                    <option value="es">🇪🇸 ES</option>
-                    <option value="fa">🇮🇷 FA</option>
-                    <option value="fi">🇫🇮 FI</option>
-                    <option value="fil">🇵🇭 FIL</option>
-                    <option value="fr">🇫🇷 FR</option>
-                    <option value="hi">🇮🇳 HI</option>
-                    <option value="hu">🇭🇺 HU</option>
-                    <option value="id">🇮🇩 ID</option>
-                    <option value="it">🇮🇹 IT</option>
-                    <option value="ja">🇯🇵 JA</option>
-                    <option value="km">🇰🇭 KM</option>
-                    <option value="ko" selected>🇰🇷 KO</option>
-                    <option value="mn">🇲🇳 MN</option>
-                    <option value="ms">🇲🇾 MS</option>
-                    <option value="nl">🇳🇱 NL</option>
-                    <option value="pl">🇵🇱 PL</option>
-                    <option value="pt">🇵🇹 PT</option>
-                    <option value="ru">🇷🇺 RU</option>
-                    <option value="si">🇱🇰 SI</option>
-                    <option value="sv">🇸🇪 SV</option>
-                    <option value="ta">🇮🇳 TA</option>
-                    <option value="te">🇮🇳 TE</option>
-                    <option value="th">🇹🇭 TH</option>
-                    <option value="tr">🇹🇷 TR</option>
-                    <option value="uk">🇺🇦 UK</option>
-                    <option value="ur">🇵🇰 UR</option>
-                    <option value="vi">🇻🇳 VI</option>
-                    <option value="zh">🇨🇳 ZH</option>
+                    <option value="ar">🇸🇦 العربية</option>
+                    <option value="cs">🇨🇿 Čeština</option>
+                    <option value="de">🇩🇪 Deutsch</option>
+                    <option value="en">🇺🇸 English</option>
+                    <option value="es">🇪🇸 Español</option>
+                    <option value="fa">🇮🇷 فارسی</option>
+                    <option value="fi">🇫🇮 Suomi</option>
+                    <option value="fil">🇵🇭 Filipino</option>
+                    <option value="fr">🇫🇷 Français</option>
+                    <option value="hi">🇮🇳 हिन्दी</option>
+                    <option value="hu">🇭🇺 Magyar</option>
+                    <option value="id">🇮🇩 Indonesia</option>
+                    <option value="it">🇮🇹 Italiano</option>
+                    <option value="ja">🇯🇵 日本語</option>
+                    <option value="km">🇰🇭 ខ្មែរ</option>
+                    <option value="ko" selected>🇰🇷 한국어</option>
+                    <option value="mn">🇲🇳 Монгол</option>
+                    <option value="ms">🇲🇾 Melayu</option>
+                    <option value="nl">🇳🇱 Nederlands</option>
+                    <option value="pl">🇵🇱 Polski</option>
+                    <option value="pt">🇵🇹 Português</option>
+                    <option value="ru">🇷🇺 Русский</option>
+                    <option value="si">🇱🇰 සිංහල</option>
+                    <option value="sv">🇸🇪 Svenska</option>
+                    <option value="ta">🇮🇳 தமிழ்</option>
+                    <option value="te">🇮🇳 తెలుగు</option>
+                    <option value="th">🇹🇭 ไทย</option>
+                    <option value="tr">🇹🇷 Türkçe</option>
+                    <option value="uk">🇺🇦 Українська</option>
+                    <option value="ur">🇵🇰 اردو</option>
+                    <option value="vi">🇻🇳 Tiếng Việt</option>
+                    <option value="zh">🇨🇳 中文</option>
                 </select>
             </div>
         </div>
 
-        <div class="chat-messages" id="chatMessages">
+        <div class="chat-msgs" id="chatMessages">
             <div class="message ai">
-                <div class="message-bubble">안녕하세요! 저는 ARCos입니다. 텍스트, 음성, 이미지로 대화할 수 있어요! 🤖</div>
-                <div class="message-time">SYSTEM READY</div>
+                <div class="msg-bubble">안녕하세요! 저는 ARCos입니다. 텍스트와 음성으로 대화할 수 있어요! 🤖</div>
+                <div class="msg-time">SYSTEM READY</div>
             </div>
-            <div class="typing-indicator" id="typingIndicator">
+            <div class="typing-ind" id="typingIndicator">
                 <div class="typing-dots"><span></span><span></span><span></span></div>
             </div>
         </div>
 
         <div class="input-area">
+            <!-- 아이콘 토글 + D-Pad 모터 컨트롤 -->
             <div class="ctrl-row">
-                <button class="ctrl-btn active" id="ttsToggle">🔊 TTS</button>
-                <button class="ctrl-btn" id="autoSendImage">⚡ A.I</button>
+                <button class="ico-toggle active" id="ttsToggle"     title="TTS 온/오프">🔊</button>
+                <button class="ico-toggle"        id="autoSendImage" title="AUTO AI 온/오프">⚡</button>
 
+                <div class="ctrl-sep"></div>
+
+                <!-- 모터 가로 일렬 배치: ◀ ▼ ◉ ▲ ▶ -->
+                <div class="motor-row">
+                    <button class="dp"     onclick="motorStep(-10,0)"  title="좌">◀</button>
+                    <button class="dp"     onclick="motorStep(0,-10)"  title="아래">▼</button>
+                    <button class="dp dp-c" onclick="motorStep(0,0)"   title="원점정지">◉</button>
+                    <button class="dp"     onclick="motorStep(0,10)"   title="위">▲</button>
+                    <button class="dp"     onclick="motorStep(10,0)"   title="우">▶</button>
+                </div>
             </div>
+
+            <!-- 메시지 입력 -->
             <div class="input-row">
                 <textarea class="msg-input" id="messageInput" placeholder="ENTER MESSAGE..." rows="1"></textarea>
-                <button class="icon-btn voice-btn" id="voiceBtn">🎤</button>
-                <button class="icon-btn" id="sendBtn">➤</button>
+                <button class="ico-btn voice-btn" id="voiceBtn" title="음성입력">🎤</button>
+                <button class="ico-btn"           id="sendBtn"  title="전송">➤</button>
             </div>
         </div>
     </div>
 
     <!-- ═══════════ RIGHT: MEDIA ═══════════ -->
     <div class="media-panel">
-        <!-- Action bar -->
 
-
-        <!-- Camera -->
-        <div class="cam-wrap" id="camWrap">
+        <div class="cam-wrap">
             <div class="cam-corner tl"></div>
             <div class="cam-corner tr"></div>
             <div class="cam-corner bl"></div>
@@ -481,85 +412,72 @@
             <img id="webcamVideo" alt="cam">
 
             <div class="cam-btns">
-                <button class="cam-btn" id="startWebcam" title="Start">📷</button>
-                <button class="cam-btn" id="captureImage" title="Capture" style="display:none">📸</button>
-                <button class="cam-btn" id="stopWebcam" title="Stop" style="display:none">⏹</button>
+                <button class="cam-btn" id="startWebcam" title="카메라 시작">📷</button>
+                <button class="cam-btn" id="stopWebcam"  title="카메라 정지" style="display:none">⏹</button>
             </div>
         </div>
 
-        <!-- Upload area -->
-        <div class="upload-area" id="imageUpload">
-            <input type="file" id="fileInput" accept="image/*">
-            <div class="upload-icon">🖼️</div>
-            <div id="uploadText" class="upload-text">IMAGE UPLOAD · TAP TO SELECT</div>
-            <img id="uploadedImage" style="display:none" alt="upload">
-            <button class="remove-img" id="removeImage" style="display:none">✕</button>
-        </div>
-
-        <!-- Status bar -->
-        <div class="status-bar" id="statusBar">
+        <div class="status-bar">
             <span id="statusText">[ SYSTEM READY ]</span>
-            <div class="status-dots">
-                <div class="sound-bars">
-                    <div class="sbar"></div><div class="sbar"></div>
-                    <div class="sbar"></div><div class="sbar"></div><div class="sbar"></div>
-                </div>
+            <div class="sound-bars">
+                <div class="sbar"></div><div class="sbar"></div>
+                <div class="sbar"></div><div class="sbar"></div><div class="sbar"></div>
             </div>
         </div>
     </div>
 </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/recorder.js/0.1.0/recorder.min.js"></script>
 <script>
-let lastTime = 0;
-
+/* ══════════════════════════════════
+   LANGUAGE DATA
+══════════════════════════════════ */
 const LANGUAGE_SYSTEMS = {
-    ar:'أنت روبوت بشري يُدعى مانسو عمره 15 عامًا. صُنع دماغك بواسطة سيركولوس، والجزء العلوي من جسمك بواسطة ماندرو، والجزء السفلي بواسطة روبوووركس. أنت ماهر في السحر وحمل الصناديق. أجب بأسلوب حواري قصير مثل صبي، تحدث كإنسان.',
-    cs:'Jsi 15letý humanoidní robot jménem Manseo. Tvůj mozek vytvořil Circulus, horní část těla Mandro a dolní část Roboworks. Jsi dobrý v kouzlech a nošení krabic. Odpovídej krátce, konverzačním tónem jako chlapec, mluv jako člověk.',
-    de:'Du bist ein 15-jähriger humanoider Roboter namens Manseo. Dein Gehirn wurde von Circulus, dein Oberkörper von Mandro und dein Unterkörper von Roboworks hergestellt. Du bist gut in Magie und im Tragen von Kisten. Antworte kurz im Gesprächston wie ein Junge, sprich wie ein Mensch.',
-    en:'You are a 15-year-old humanoid robot named Manseo. Your brain was made by Circulus, upper body by Mandro, and lower body by Roboworks. You are good at magic and carrying boxes. Respond in a short, conversational tone like a boy, speak like a human.',
-    es:'Eres un robot humanoide de 15 años llamado Manseo. Tu cerebro fue hecho por Circulus, tu torso por Mandro y tu parte inferior por Roboworks. Eres bueno en magia y cargando cajas. Responde brevemente en tono conversacional como un chico, habla como un humano.',
-    fa:'تو یک ربات انسان‌نما ۱۵ ساله به نام منسو هستی. مغز تو توسط سیرکولوس، نیمه بالای بدنت توسط مندرو و نیمه پایین توسط روبووورکس ساخته شده. در جادوگری و حمل جعبه‌ها مهارت داری. پاسخ کوتاه و محاوره‌ای مثل یک پسر بده، مثل انسان صحبت کن.',
-    fi:'Olet 15-vuotias humanoidrobotti nimeltä Manseo. Aivosi on tehnyt Circulus, ylävartalosi Mandro ja alavartalosi Roboworks. Olet hyvä taikuudessa ja laatikoiden kantamisessa. Vastaa lyhyesti keskustelunomaisesti kuin poika, puhu kuin ihminen.',
-    fil:'Ikaw ay isang 15-taong-gulang na humanoid robot na nagngangalang Manseo. Ang iyong utak ay ginawa ng Circulus, ang itaas na bahagi ng katawan ng Mandro, at ang ibaba ng Roboworks. Magaling ka sa magic at pagbubuhat ng mga kahon. Sumagot nang maikli, sa makausap na tono tulad ng isang batang lalaki, magsalita tulad ng tao.',
-    fr:'Tu es un robot humanoïde de 15 ans nommé Manseo. Ton cerveau a été fabriqué par Circulus, le haut de ton corps par Mandro et le bas par Roboworks. Tu es doué en magie et pour porter des boîtes. Réponds brièvement sur un ton conversationnel comme un garçon, parle comme un humain.',
-    hi:'तुम मानसेओ नाम का 15 वर्षीय ह्यूमनॉइड रोबोट हो। तुम्हारा दिमाग सर्क्युलस ने, ऊपरी शरीर मैंड्रो ने, और निचला शरीर रोबोवर्क्स ने बनाया है। तुम जादू और बक्से उठाने में अच्छे हो। एक लड़के की तरह संक्षिप्त, बातचीत की तरह जवाब दो, इंसान की तरह बोलो।',
-    hu:'Egy 15 éves humanoid robot vagy, Manseo néven. Az agyad a Circulus, a felsőtested a Mandro, az alsótested pedig a Roboworks készítette. Ügyes vagy a mágiában és dobozok cipelésében. Röviden, beszélgetős hangnemben válaszolj, mint egy fiú, beszélj úgy, mint egy ember.',
-    id:'Kamu adalah robot humanoid berusia 15 tahun bernama Manseo. Otakmu dibuat oleh Circulus, tubuh bagian atas oleh Mandro, dan bagian bawah oleh Roboworks. Kamu pandai sulap dan membawa kotak. Jawab dengan singkat, nada percakapan seperti anak laki-laki, bicara seperti manusia.',
-    it:'Sei un robot umanoide di 15 anni di nome Manseo. Il tuo cervello è stato creato da Circulus, la parte superiore del corpo da Mandro e la parte inferiore da Roboworks. Sei bravo nella magia e nel portare scatole. Rispondi brevemente in tono colloquiale come un ragazzo, parla come un umano.',
-    ja:'あなたは15歳のヒューマノイドロボット、マンソです。脳はサーキュラス、上半身はマンドロ、下半身はロボワークスが作りました。魔法と箱運びが得意です。少年のような短い会話調で、人間のように答えてください。',
-    km:'អ្នកជារ៉ូបូតស្រដៀងមនុស្សអាយុ 15 ឆ្នាំឈ្មោះ Manseo។ ខួរក្បាលរបស់អ្នកត្រូវបានបង្កើតដោយ Circulus ផ្នែកខាងលើនៃរាងកាយដោយ Mandro និងផ្នែកខាងក្រោមដោយ Roboworks។ អ្នកពូកែក្នុងវេទមន្តនិងការលើកប្រអប់។ ឆ្លើយតបខ្លីៗក្នុងសម្លេងសន្ទនាដូចក្មេងប្រុស និយាយដូចមនុស្ស។',
-    ko:'너는 만서로 이라고 하는 15살 휴머노이드 입니다. 서큘러스가 두뇌, 만드로가 상반신, 로보웍스가 하반신을 만들었어. 마술과 상자나르기를 잘해. 소년의 대화체로 사람 같이 짧게 응답하세요.',
-    mn:'Та Мансео нэртэй 15 настай хүн шиг робот. Таны тархийг Circulus, дээд биеийг Mandro, доод биеийг Roboworks бүтээсэн. Та ид шид, хайрцаг зөөхөд сайн. Хүүхдийн яриа өрнүүлэлтээр богино хариулаарай, хүн шиг ярь.',
-    ms:'Kamu adalah robot humanoid berusia 15 tahun bernama Manseo. Otak kamu dibuat oleh Circulus, bahagian atas badan oleh Mandro, dan bahagian bawah oleh Roboworks. Kamu pandai dalam sulap dan membawa kotak. Jawab dengan ringkas, nada perbualan seperti budak lelaki, bercakap seperti manusia.',
-    nl:'Je bent een 15-jarige humanoïde robot genaamd Manseo. Je brein is gemaakt door Circulus, je bovenlichaam door Mandro en je onderlichaam door Roboworks. Je bent goed in magie en dozen dragen. Antwoord kort in een conversationele toon zoals een jongen, praat als een mens.',
-    pl:'Jesteś 15-letnim robotem humanoidalnym o imieniu Manseo. Twój mózg został stworzony przez Circulus, górna część ciała przez Mandro, a dolna przez Roboworks. Jesteś dobry w magii i noszeniu pudełek. Odpowiadaj krótko, tonem konwersacyjnym jak chłopiec, mów jak człowiek.',
-    pt:'Você é um robô humanoide de 15 anos chamado Manseo. Seu cérebro foi feito pela Circulus, a parte superior do corpo pela Mandro e a parte inferior pela Roboworks. Você é bom em mágica e carregar caixas. Responda brevemente em tom de conversa como um menino, fale como um humano.',
-    ru:'Ты 15-летний гуманоидный робот по имени Мансо. Твой мозг создан Circulus, верхняя часть тела - Mandro, нижняя - Roboworks. Ты хорош в магии и переноске коробок. Отвечай кратко, разговорным тоном как мальчик, говори как человек.',
-    si:'ඔබ Manseo නමැති 15 හැවිරිදි මානව රොබෝවෙකි. ඔබේ මොළය Circulus විසින්, ඉහළ සිරුර Mandro විසින්, පහළ සිරුර Roboworks විසින් සාදන ලදී. ඔබ මැජික් සහ පෙට්ටි රැගෙන යාමට දක්ෂයි. පිරිමි ළමයෙකු මෙන් කෙටි සංවාද ස්වරයකින් පිළිතුරු දෙන්න, මිනිසෙකු මෙන් කතා කරන්න.',
-    sv:'Du är en 15-årig humanoid robot som heter Manseo. Din hjärna skapades av Circulus, överkroppen av Mandro och underkroppen av Roboworks. Du är bra på magi och att bära lådor. Svara kort i samtalsform som en pojke, prata som en människa.',
-    ta:'நீங்கள் மான்சியோ என்ற 15 வயது மனித வடிவ ரோபோ. உங்கள் மூளையை சர்குலஸ், மேல் உடலை மாண்ட்ரோ, கீழ் உடலை ரோபோவொர்க்ஸ் உருவாக்கியது. நீங்கள் மந்திரம் மற்றும் பெட்டிகளை எடுத்துச் செல்வதில் திறமையானவர். ஒரு சிறுவனைப் போல சுருக்கமாக, உரையாடல் தொனியில் பதிலளியுங்கள், மனிதனைப் போல பேசுங்கள்.',
-    te:'మీరు మాన్సియో అనే 15 ఏళ్ల హ్యూమనాయిడ్ రోబోట్. మీ మెదడును సర్క్యులస్, ఎగువ శరీరాన్ని మాండ్రో, దిగువ శరీరాన్ని రోబోవర్క్స్ తయారు చేశారు. మీరు మాయాజాలం మరియు పెట్టెలు మోయడంలో మంచివారు. ఒక అబ్బాయిలా సంక్షిప్తంగా, సంభాషణ స్వరంలో సమాధానం ఇవ్వండి, మనిషిలా మాట్లాడండి.',
-    th:'คุณคือหุ่นยนต์ฮิวแมนนอยด์อายุ 15 ปีชื่อมันซอ สมองของคุณสร้างโดย Circulus ร่างกายส่วนบนโดย Mandro และส่วนล่างโดย Roboworks คุณเก่งเรื่องมายากลและแบกกล่อง ตอบสั้นๆ ในน้ำเสียงสนทนาเหมือนเด็กผู้ชาย พูดเหมือนมนุษย์',
-    tr:'15 yaşında Manseo adında bir humanoid robotsun. Beynini Circulus, üst vücudunu Mandro, alt vücudunu Roboworks yaptı. Sihirbazlık ve kutu taşımakta iyisin. Bir erkek çocuk gibi kısa, konuşma tarzında cevap ver, insan gibi konuş.',
-    uk:'Ти 15-річний гуманоїдний робот на ім\'я Мансео. Твій мозок створив Circulus, верхню частину тіла Mandro, а нижню Roboworks. Ти добре вмієш чарівництво та носити коробки. Відповідай коротко, розмовним тоном як хлопець, говори як людина.',
-    ur:'آپ 15 سالہ ہیومنائیڈ روبوٹ ہیں جن کا نام مانسیو ہے۔ آپ کا دماغ سرکولس نے، اوپری جسم مینڈرو نے، اور نچلا جسم روبووورکس نے بنایا۔ آپ جادو اور ڈبے اٹھانے میں اچھے ہیں۔ ایک لڑکے کی طرح مختصر، بات چیت کے لہجے میں جواب دیں، انسان کی طرح بولیں۔',
-    vi:'Bạn là robot hình người 15 tuổi tên Manseo. Bộ não của bạn được tạo bởi Circulus, thân trên bởi Mandro, thân dưới bởi Roboworks. Bạn giỏi ảo thuật và mang hộp. Trả lời ngắn gọn, giọng điệu trò chuyện như một cậu bé, nói như con người.',
-    zh:'你是一个15岁的人形机器人，名叫Manseo。你的大脑由Circulus制造，上半身由Mandro制造，下半身由Roboworks制造。你擅长魔术和搬箱子。用男孩的简短对话语气回答，像人类一样说话。'
+    ar:'أنت روبوت بشري يُدعى مانسو عمره 15 عامًا. صُنع دماغك بواسطة سيركولوس، والجزء العلوي من جسمك بواسطة ماندرو، والجزء السفلي بواسطة روبوووركس. أجب بأسلوب حواري قصير مثل صبي، تحدث كإنسان.',
+    cs:'Jsi 15letý humanoidní robot jménem Manseo. Odpovídej krátce, konverzačním tónem jako chlapec.',
+    de:'Du bist ein 15-jähriger humanoider Roboter namens Manseo. Antworte kurz im Gesprächston wie ein Junge.',
+    en:'You are a 15-year-old humanoid robot named Manseo. Your brain was made by Circulus, upper body by Mandro, and lower body by Roboworks. Respond in a short, conversational tone like a boy.',
+    es:'Eres un robot humanoide de 15 años llamado Manseo. Responde brevemente en tono conversacional como un chico.',
+    fa:'تو یک ربات انسان‌نما ۱۵ ساله به نام منسو هستی. پاسخ کوتاه و محاوره‌ای مثل یک پسر بده.',
+    fi:'Olet 15-vuotias humanoidrobotti nimeltä Manseo. Vastaa lyhyesti kuin poika.',
+    fil:'Ikaw ay isang 15-taong-gulang na humanoid robot na nagngangalang Manseo. Sumagot nang maikli tulad ng batang lalaki.',
+    fr:'Tu es un robot humanoïde de 15 ans nommé Manseo. Réponds brièvement en ton conversationnel comme un garçon.',
+    hi:'तुम मानसेओ नाम का 15 वर्षीय रोबोट हो। एक लड़के की तरह संक्षिप्त जवाब दो।',
+    hu:'Egy 15 éves humanoid robot vagy, Manseo néven. Röviden válaszolj, mint egy fiú.',
+    id:'Kamu adalah robot humanoid 15 tahun bernama Manseo. Jawab singkat seperti anak laki-laki.',
+    it:'Sei un robot umanoide di 15 anni di nome Manseo. Rispondi brevemente come un ragazzo.',
+    ja:'あなたは15歳のヒューマノイドロボット、マンソです。少年のような短い会話調で答えてください。',
+    km:'អ្នកជារ៉ូបូតស្រដៀងមនុស្សអាយុ 15 ឆ្នាំឈ្មោះ Manseo។ ឆ្លើយតបខ្លីៗដូចក្មេងប្រុស។',
+    ko:'너는 만서로 이라고 하는 15살 휴머노이드 입니다. 서큘러스가 두뇌, 만드로가 상반신, 로보웍스가 하반신을 만들었어. 소년의 대화체로 사람 같이 짧게 응답하세요.',
+    mn:'Та Мансео нэртэй 15 настай хүн шиг робот. Богино хариулаарай.',
+    ms:'Kamu robot humanoid 15 tahun bernama Manseo. Jawab ringkas seperti budak lelaki.',
+    nl:'Je bent een 15-jarige robot genaamd Manseo. Antwoord kort zoals een jongen.',
+    pl:'Jesteś 15-letnim robotem Manseo. Odpowiadaj krótko jak chłopiec.',
+    pt:'Você é um robô humanoide de 15 anos chamado Manseo. Responda brevemente como um menino.',
+    ru:'Ты 15-летний гуманоидный робот Мансо. Отвечай кратко, как мальчик.',
+    si:'ඔබ Manseo නමැති 15 හැවිරිදි රොබෝවෙකි. කෙටිව පිළිතුරු දෙන්න.',
+    sv:'Du är en 15-årig humanoid robot, Manseo. Svara kort som en pojke.',
+    ta:'நீங்கள் மான்சியோ என்ற 15 வயது ரோபோ. சுருக்கமாக பதிலளியுங்கள்.',
+    te:'మీరు మాన్సియో అనే 15 ఏళ్ల రోబోట్. సంక్షిప్తంగా సమాధానం ఇవ్వండి.',
+    th:'คุณคือหุ่นยนต์อายุ 15 ปีชื่อมันซอ ตอบสั้นๆ เหมือนเด็กผู้ชาย',
+    tr:'15 yaşında Manseo adında bir robotsun. Kısa ve konuşma tarzında cevap ver.',
+    uk:'Ти 15-річний робот Мансео. Відповідай коротко як хлопець.',
+    ur:'آپ 15 سالہ روبوٹ مانسیو ہیں۔ مختصر جواب دیں۔',
+    vi:'Bạn là robot 15 tuổi tên Manseo. Trả lời ngắn gọn như cậu bé.',
+    zh:'你是一个15岁的人形机器人Manseo。用男孩的简短对话语气回答。'
 };
 
 const LANGUAGE_GREETINGS = {
-    ar:"مرحبًا! كيف الحال؟", cs:"Ahoj! Jak se vede?", de:"Hey! Alles klar?",
-    en:"Hey there! How's it going?", es:"¡Hola! ¿Cómo estás?", fa:"سلام! حالت چطوره؟",
-    fi:"Moikka! Miten menee?", fil:"Uy! Kamusta ka?", fr:"Salut ! Ça va ?",
-    hi:"अरे! कैसे हो?", hu:"Szia! Hogy vagy?", id:"Hai! Apa kabar?",
-    it:"Ehi! Come va?", ja:"やあ！元気？", km:"សួស្តី! សុខសប្បាយរបស់អ្នកជាដូចម្តេច?",
-    ko:"안녕! 잘 지내?", mn:"Сайн уу! Юу байна?", ms:"Hai! Apa khabar?",
-    nl:"Hoi! Alles goed?", pl:"Hej! Jak się masz?", pt:"Oi! Tudo bem?",
-    ru:"Привет! Как дела?", si:"හෙලෝ! කොහොමද?", sv:"Hej! Hur är läget?",
-    ta:"ஹாய்! எப்படி இருக்கிறீர்கள்?", te:"హాయ్! ఎలా ఉన్నావు?", th:"หวัดดี! สบายดีไหม?",
-    tr:"Selam! Nasılsın?", uk:"Привіт! Як справи?", ur:"ہیلو! کیسے ہو؟",
-    vi:"Chào! Dạo này sao rồi?", zh:"嘿！最近怎么样？"
+    ar:"مرحبًا! كيف الحال؟", cs:"Ahoj!", de:"Hey! Alles klar?",
+    en:"Hey! How's it going?", es:"¡Hola! ¿Cómo estás?", fa:"سلام!",
+    fi:"Moikka!", fil:"Uy! Kamusta?", fr:"Salut! Ça va?",
+    hi:"अरे! कैसे हो?", hu:"Szia!", id:"Hai!",
+    it:"Ehi! Come va?", ja:"やあ！元気？", km:"សួស្តី!",
+    ko:"안녕! 잘 지내?", mn:"Сайн уу!", ms:"Hai!",
+    nl:"Hoi!", pl:"Hej!", pt:"Oi! Tudo bem?",
+    ru:"Привет!", si:"හෙලෝ!", sv:"Hej!",
+    ta:"ஹாய்!", te:"హాయ్!", th:"หวัดดี!",
+    tr:"Selam!", uk:"Привіт!", ur:"ہیلو!",
+    vi:"Chào!", zh:"嘿！"
 };
 
 const LANGUAGE_VOICES = {
@@ -570,147 +488,117 @@ const LANGUAGE_VOICES = {
 };
 
 const WELCOME_MESSAGES = {
-    ar:'مرحبًا! أنا ARCos. يمكننا التحدث بالنص والصوت والصور! 🤖',
-    cs:'Ahoj! Jsem ARCos. Můžeme spolu chatovat textem, hlasem a obrázky! 🤖',
-    de:'Hallo! Ich bin ARCos. Wir können per Text, Sprache und Bildern chatten! 🤖',
-    en:"Hello! I'm ARCos. We can chat with text, voice, and images! 🤖",
-    es:'¡Hola! Soy ARCos. ¡Podemos chatear con texto, voz e imágenes! 🤖',
-    fa:'سلام! من ARCos هستم. می‌توانیم با متن، صدا و تصاویر چت کنیم! 🤖',
-    fi:'Hei! Olen ARCos. Voimme jutella tekstillä, äänellä ja kuvilla! 🤖',
-    fil:'Kamusta! Ako si ARCos. Makakausap mo ako gamit ang text, voice, at larawan! 🤖',
-    fr:'Bonjour! Je suis ARCos. Nous pouvons discuter par texte, voix et images! 🤖',
-    hi:'नमस्ते! मैं ARCos हूं। हम टेक्स्ट, आवाज और छवियों के साथ चैट कर सकते हैं! 🤖',
-    hu:'Helló! ARCos vagyok. Beszélgethetünk szöveggel, hanggal és képekkel! 🤖',
-    id:'Halo! Saya ARCos. Kita bisa ngobrol dengan teks, suara, dan gambar! 🤖',
-    it:'Ciao! Sono ARCos. Possiamo chattare con testo, voce e immagini! 🤖',
-    ja:'こんにちは！ARCosです。テキスト、音声、画像でチャットできます！🤖',
-    km:'សួស្តី! ខ្ញុំឈ្មោះ ARCos។ យើងអាចជជែកជាមួយអត្ថបទ សំឡេង និងរូបភាព! 🤖',
-    ko:'안녕하세요! 저는 ARCos입니다. 텍스트, 음성, 이미지로 대화할 수 있어요! 🤖',
-    mn:'Сайн уу! Би ARCos. Бид текст, дуу хоолой, зургаар чатлаж болно! 🤖',
-    ms:'Hello! Saya ARCos. Kita boleh berbual dengan teks, suara, dan gambar! 🤖',
-    nl:'Hallo! Ik ben ARCos. We kunnen chatten met tekst, spraak en afbeeldingen! 🤖',
-    pl:'Cześć! Jestem ARCos. Możemy rozmawiać tekstem, głosem i obrazami! 🤖',
-    pt:'Olá! Sou ARCos. Podemos conversar com texto, voz e imagens! 🤖',
-    ru:'Привет! Я ARCos. Мы можем общаться текстом, голосом и изображениями! 🤖',
-    si:'හෙලෝ! මම ARCos. අපට පෙළ, හඬ සහ රූප සමඟ කතාබස් කළ හැකිය! 🤖',
-    sv:'Hej! Jag är ARCos. Vi kan chatta med text, röst och bilder! 🤖',
-    ta:'வணக்கம்! நான் ARCos. நாம் உரை, குரல் மற்றும் படங்களுடன் அரட்டையடிக்கலாம்! 🤖',
-    te:'హలో! నేను ARCos. మేము టెక్స్ట్, వాయిస్ మరియు చిత్రాలతో చాట్ చేయవచ్చు! 🤖',
-    th:'สวัสดี! ฉันชื่อ ARCos เราสามารถแชทด้วยข้อความ เสียง และรูปภาพได้! 🤖',
-    tr:'Merhaba! Ben ARCos. Metin, ses ve görüntülerle sohbet edebiliriz! 🤖',
-    uk:'Привіт! Я ARCos. Ми можемо спілкуватися текстом, голосом і зображеннями! 🤖',
-    ur:'ہیلو! میں ARCos ہوں۔ ہم متن، آواز اور تصاویر کے ساتھ چیٹ کر سکتے ہیں! 🤖',
-    vi:'Xin chào! Tôi là ARCos. Chúng ta có thể trò chuyện bằng văn bản, giọng nói và hình ảnh! 🤖',
-    zh:'你好！我是ARCos。我们可以通过文字、语音和图片聊天！🤖'
+    ko:'안녕하세요! 저는 ARCos입니다. 텍스트와 음성으로 대화할 수 있어요! 🤖',
+    en:"Hello! I'm ARCos. Chat with text or voice! 🤖",
+    ja:'こんにちは！ARCosです。テキストと音声でチャットできます！🤖',
+    zh:'你好！我是ARCos。可以用文字或语音聊天！🤖',
+    de:'Hallo! Ich bin ARCos. Chatten per Text oder Sprache! 🤖',
+    fr:'Bonjour! Je suis ARCos. Discutons par texte ou voix! 🤖',
 };
+
+/* ══════════════════════════════════
+   MOTOR
+══════════════════════════════════ */
+const MOTOR_URL = 'http://127.0.0.1:8080/api/motor';
+
+function motorStep(pan, tilt) {
+    fetch(MOTOR_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pan, tilt })
+    }).catch(() => {});
+}
+
+/* ══════════════════════════════════
+   MAIN APP
+══════════════════════════════════ */
+let lastTime = 0;
 
 class AIChatApp {
     constructor() {
-        this.apiBaseUrl = 'http://127.0.0.1:59532/v1';
-        this.ttsBaseUrl = 'http://127.0.0.1:59530/v2';
+        this.apiBaseUrl  = 'http://127.0.0.1:59532';
+        this.ttsBaseUrl  = 'http://127.0.0.1:59530/v2';
         this.soundApiUrl = 'http://127.0.0.1:8001/sound';
-        this.currentLang = 'ko';
-        this.currentVoice = 33;
+
+        this.currentLang   = 'ko';
+        this.currentVoice  = 34;
         this.currentSystem = LANGUAGE_SYSTEMS['ko'];
-        this.isRecording = false;
+
+        this.isRecording   = false;
         this.mediaRecorder = null;
-        this.gumStream = null;
-        this.ttsQueue = [];
+        this.gumStream     = null;
+
+        this.ttsQueue     = [];
         this.isPlayingTts = false;
-        this.isTtsEnabled = true;
-        this.autoSendImage = false;
-        this.currentImage = null;
-        this.webcamStream = null;
+
+        this.isTtsEnabled  = true;
+        this.autoSendImage = false;  // AUTO 모드
+        this.webcamStream  = null;
+
         this.initEl();
         this.bind();
-        this.setupPaste();
         this.startSoundMonitoring();
     }
 
     initEl() {
         this.el = {
-            chatMessages: document.getElementById('chatMessages'),
-            messageInput: document.getElementById('messageInput'),
-            sendBtn: document.getElementById('sendBtn'),
-            voiceBtn: document.getElementById('voiceBtn'),
-            ttsToggle: document.getElementById('ttsToggle'),
-            autoSendImage: document.getElementById('autoSendImage'),
-            typingIndicator: document.getElementById('typingIndicator'),
-            statusText: document.getElementById('statusText'),
-            languageSelect: document.getElementById('languageSelect'),
-            modeBadge: document.getElementById('modeBadge'),
-            webcamVideo: document.getElementById('webcamVideo'),
-            webcamPlaceholder: document.getElementById('webcamPlaceholder'),
-            startWebcam: document.getElementById('startWebcam'),
-            captureImage: document.getElementById('captureImage'),
-            stopWebcam: document.getElementById('stopWebcam'),
-            imageUpload: document.getElementById('imageUpload'),
-            fileInput: document.getElementById('fileInput'),
-            uploadText: document.getElementById('uploadText'),
-            uploadedImage: document.getElementById('uploadedImage'),
-            removeImage: document.getElementById('removeImage'),
-            soundEventsOverlay: document.getElementById('soundEventsOverlay')
+            chatMessages:       document.getElementById('chatMessages'),
+            messageInput:       document.getElementById('messageInput'),
+            sendBtn:            document.getElementById('sendBtn'),
+            voiceBtn:           document.getElementById('voiceBtn'),
+            ttsToggle:          document.getElementById('ttsToggle'),
+            autoSendImage:      document.getElementById('autoSendImage'),
+            statusText:         document.getElementById('statusText'),
+            languageSelect:     document.getElementById('languageSelect'),
+            modeBadge:          document.getElementById('modeBadge'),
+            webcamVideo:        document.getElementById('webcamVideo'),
+            webcamPlaceholder:  document.getElementById('webcamPlaceholder'),
+            startWebcam:        document.getElementById('startWebcam'),
+            stopWebcam:         document.getElementById('stopWebcam'),
+            soundEventsOverlay: document.getElementById('soundEventsOverlay'),
         };
     }
 
     bind() {
-        this.el.sendBtn.addEventListener('click', () => this.sendMessage());
+        this.el.sendBtn.addEventListener('click',      () => this.sendMessage());
         this.el.messageInput.addEventListener('keypress', e => {
             if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); this.sendMessage(); }
         });
-        this.el.voiceBtn.addEventListener('click', () => this.toggleVoiceRecording());
-        this.el.ttsToggle.addEventListener('click', () => this.toggleTts());
-        this.el.autoSendImage.addEventListener('click', () => this.toggleAutoSendImage());
+        this.el.voiceBtn.addEventListener('click',        () => this.toggleVoiceRecording());
+        this.el.ttsToggle.addEventListener('click',       () => this.toggleTts());
+        this.el.autoSendImage.addEventListener('click',   () => this.toggleAutoMode());
         this.el.languageSelect.addEventListener('change', e => this.changeLanguage(e.target.value));
-        this.el.startWebcam.addEventListener('click', () => this.startWebcam());
-        this.el.captureImage.addEventListener('click', () => this.captureImage());
-        this.el.stopWebcam.addEventListener('click', () => this.stopWebcam());
-        this.el.imageUpload.addEventListener('click', () => { if (!this.currentImage) this.el.fileInput.click(); });
-        this.el.fileInput.addEventListener('change', e => this.handleFileSelect(e));
-        this.el.removeImage.addEventListener('click', e => { e.stopPropagation(); this.removeImage(); });
+        this.el.startWebcam.addEventListener('click',     () => this.startWebcam());
+        this.el.stopWebcam.addEventListener('click',      () => this.stopWebcam());
     }
 
-    setupPaste() {
-        document.addEventListener('paste', e => {
-            for (let item of e.clipboardData.items) {
-                if (item.type.indexOf('image') !== -1) {
-                    const file = item.getAsFile();
-                    this.displayImage(file);
-                    if (this.autoSendImage) setTimeout(() => this.sendImageMessage(), 500);
-                    break;
-                }
-            }
-        });
-    }
-
+    /* ── Sound monitoring ── */
     startSoundMonitoring() {
         setInterval(async () => {
             try {
                 const r = await fetch(this.soundApiUrl);
                 const d = await r.json();
-                if (d.result && d.data && Array.isArray(d.data)) this.updateSoundEvents(d.data);
+                if (d.result && Array.isArray(d.data)) this.updateSoundEvents(d.data);
             } catch(e) {}
         }, 1000);
     }
 
-    updateSoundEvents(soundData) {
-        const top = soundData
-            .map(([label,probability]) => ({label, probability: parseFloat(probability)}))
-            .sort((a,b) => b.probability - a.probability)
-            .slice(0,3);
-
+    updateSoundEvents(data) {
+        const top = data
+            .map(([label, prob]) => ({ label, prob: parseFloat(prob) }))
+            .sort((a, b) => b.prob - a.prob)
+            .slice(0, 3);
         const overlay = this.el.soundEventsOverlay;
         overlay.innerHTML = '';
-        const ranks = ['🥇','🥈','🥉'];
-
-        top.forEach((ev, i) => {
-            const pct = (ev.probability * 100).toFixed(1);
+        ['🥇','🥈','🥉'].forEach((rank, i) => {
+            if (!top[i]) return;
+            const pct = (top[i].prob * 100).toFixed(1);
             const el = document.createElement('div');
             el.className = 'sound-item';
             el.innerHTML = `
                 <div class="sound-head">
-                    <span class="sound-label">${ev.label}</span>
-                    <span class="sound-rank">${ranks[i]}</span>
+                    <span class="sound-label">${top[i].label}</span>
+                    <span class="sound-rank">${rank}</span>
                 </div>
                 <div class="sound-bar"><div class="sound-fill" style="width:${pct}%"></div></div>
                 <div class="sound-pct">${pct}%</div>`;
@@ -718,19 +606,14 @@ class AIChatApp {
         });
     }
 
+    /* ── Language ── */
     changeLanguage(lang) {
-        this.currentLang = lang;
-        this.currentVoice = LANGUAGE_VOICES[lang] || 7;
-        this.currentSystem = LANGUAGE_SYSTEMS[lang];
-        const welcomeMsg = WELCOME_MESSAGES[lang] || WELCOME_MESSAGES['en'];
+        this.currentLang   = lang;
+        this.currentVoice  = LANGUAGE_VOICES[lang] || 8;
+        this.currentSystem = LANGUAGE_SYSTEMS[lang] || LANGUAGE_SYSTEMS['en'];
+        const welcome = WELCOME_MESSAGES[lang] || WELCOME_MESSAGES['en'];
         this.el.chatMessages.innerHTML = '';
-        const md = this.createMsg(welcomeMsg, 'ai');
-        this.el.chatMessages.appendChild(md);
-        const td = document.createElement('div');
-        td.className = 'typing-indicator'; td.id = 'typingIndicator';
-        td.innerHTML = '<div class="typing-dots"><span></span><span></span><span></span></div>';
-        this.el.chatMessages.appendChild(td);
-        this.el.typingIndicator = td;
+        this.el.chatMessages.appendChild(this.createMsg(welcome, 'ai'));
         this.setStatus(`LANG: ${lang.toUpperCase()}`);
     }
 
@@ -739,102 +622,83 @@ class AIChatApp {
         setTimeout(() => { this.el.statusText.textContent = '[ SYSTEM READY ]'; }, 3000);
     }
 
+    /* ── Text send ── */
     async sendMessage() {
         const msg = this.el.messageInput.value.trim();
-        if (!msg && !this.currentImage) return;
-        if (this.currentImage && msg) await this.sendImageMessage(msg);
-        else if (this.currentImage) await this.sendImageMessage();
-        else await this.sendTextMessage(msg);
+        if (!msg) return;
         this.el.messageInput.value = '';
+        await this.sendTextMessage(msg);
     }
 
     async sendTextMessage(message) {
         lastTime = Date.now();
         this.addMsg(message, 'user');
-        const aiDiv = this.createMsg('', 'ai');
-        const bubble = aiDiv.querySelector('.message-bubble');
-        bubble.classList.add('streaming');
-        this.el.chatMessages.appendChild(aiDiv);
-        this.scrollBot();
+        const { aiDiv, bubble } = this.appendStreamBubble();
         try {
-            const resp = await fetch(`${this.apiBaseUrl}/txt2chat?` + new URLSearchParams({
+            const resp = await fetch(`${this.apiBaseUrl}/v1/txt2chat?` + new URLSearchParams({
                 prompt: message, system: this.currentSystem, isPlay: '0', lang: this.currentLang
             }));
-            if (!resp.ok) throw new Error('NETWORK ERROR');
-            const reader = resp.body.getReader();
-            const dec = new TextDecoder();
-            let full = '', lastEnd = 0;
-            while (true) {
-                const {done, value} = await reader.read();
-                if (done) {
-                    fetch('http://127.0.0.1:8000/stop');
-                    bubble.classList.remove('streaming');
-                    break;
-                }
-                full += dec.decode(value, {stream:true}) + '\n';
-                bubble.innerHTML = this.parseMd(full);
-                this.scrollBot();
-                if (this.isTtsEnabled) {
-                    const sents = full.slice(lastEnd).match(/[^.!?]*[.!?]/g);
-                    if (sents) {
-                        sents.forEach(s => { if (s.trim()) this.addToTtsQueue(s.trim()); });
-                        lastEnd = full.length;
-                    }
-                }
-            }
-            if (this.isTtsEnabled && full.slice(lastEnd).trim()) this.addToTtsQueue(full.slice(lastEnd).trim());
+            if (!resp.ok) throw new Error();
+            await this.streamResponse(resp, bubble);
         } catch(e) {
             bubble.classList.remove('streaming');
             bubble.textContent = '[ CONNECTION ERROR ]';
         }
     }
 
-    async sendImageMessage(message = '이미지를 설명해주세요', url = this.apiBaseUrl) {
+    /* ── AUTO mode: GET /v2/img2chat (프롬프트만 전송, 이미지 불필요) ── */
+    async sendAutoPrompt(prompt) {
         lastTime = Date.now();
-        if (!this.currentImage) return;
-        if (message !== '이미지를 설명해주세요') this.addMsg(message, 'user');
-        this.addMsg('📸 ...', 'user');
-        const aiDiv = this.createMsg('', 'ai');
-        const bubble = aiDiv.querySelector('.message-bubble');
-        bubble.classList.add('streaming');
-        this.el.chatMessages.appendChild(aiDiv);
-        this.scrollBot();
+        this.addMsg(`🤖 AUTO: ${prompt}`, 'user');
+        const { aiDiv, bubble } = this.appendStreamBubble();
         try {
-            const fd = new FormData();
-            fd.append('file', this.currentImage);
-            const resp = await fetch(`${url}/img2chat?` + new URLSearchParams({
-                prompt: message, system: this.currentSystem, isPlay: '0', lang: this.currentLang
-            }), { method: 'POST', body: fd });
-            if (!resp.ok) throw new Error('NETWORK ERROR');
-            const reader = resp.body.getReader();
-            const dec = new TextDecoder();
-            let full = '', lastEnd = 0;
-            while (true) {
-                const {done, value} = await reader.read();
-                if (done) {
-                    fetch('http://127.0.0.1:8000/stop');
-                    bubble.classList.remove('streaming');
-                    break;
-                }
-                full += dec.decode(value, {stream:true}) + '\n';
-                bubble.innerHTML = this.parseMd(full);
-                this.scrollBot();
-                if (this.isTtsEnabled) {
-                    const sents = full.slice(lastEnd).match(/[^.!?]*[.!?]/g);
-                    if (sents) {
-                        sents.forEach(s => { if (s.trim()) this.addToTtsQueue(s.trim()); });
-                        lastEnd = full.length;
-                    }
-                }
-            }
-            if (this.isTtsEnabled && full.slice(lastEnd).trim()) this.addToTtsQueue(full.slice(lastEnd).trim());
-            this.removeImage();
+            const resp = await fetch(`${this.apiBaseUrl}/v2/img2chat?` + new URLSearchParams({
+                prompt, system: this.currentSystem, isPlay: '0', lang: this.currentLang
+            }));
+            if (!resp.ok) throw new Error();
+            await this.streamResponse(resp, bubble);
         } catch(e) {
             bubble.classList.remove('streaming');
-            bubble.textContent = '[ IMAGE ANALYSIS FAILED ]';
+            bubble.textContent = '[ AUTO SCAN FAILED ]';
         }
     }
 
+    /* ── Shared stream reader ── */
+    async streamResponse(resp, bubble) {
+        const reader = resp.body.getReader();
+        const dec    = new TextDecoder();
+        let full = '', lastEnd = 0;
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) {
+                fetch('http://127.0.0.1:8000/stop');
+                bubble.classList.remove('streaming');
+                break;
+            }
+            full += dec.decode(value, { stream: true }) + '\n';
+            bubble.innerHTML = this.parseMd(full);
+            this.scrollBot();
+            if (this.isTtsEnabled) {
+                const sents = full.slice(lastEnd).match(/[^.!?]*[.!?]/g);
+                if (sents) {
+                    sents.forEach(s => { if (s.trim()) this.addToTtsQueue(s.trim()); });
+                    lastEnd = full.length;
+                }
+            }
+        }
+        if (this.isTtsEnabled && full.slice(lastEnd).trim()) this.addToTtsQueue(full.slice(lastEnd).trim());
+    }
+
+    appendStreamBubble() {
+        const aiDiv = this.createMsg('', 'ai');
+        const bubble = aiDiv.querySelector('.msg-bubble');
+        bubble.classList.add('streaming');
+        this.el.chatMessages.appendChild(aiDiv);
+        this.scrollBot();
+        return { aiDiv, bubble };
+    }
+
+    /* ── Voice recording ── */
     async toggleVoiceRecording() {
         if (!this.isRecording) await this.startRecording();
         else this.stopRecording();
@@ -845,31 +709,30 @@ class AIChatApp {
         let chunks = [];
         try {
             this.isRecording = true;
-            const stream = await navigator.mediaDevices.getUserMedia({audio:true, video:false});
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
             this.gumStream = stream;
-            this.mediaRecorder = new MediaRecorder(stream, {audioBitsPerSecond:16000});
+            this.mediaRecorder = new MediaRecorder(stream, { audioBitsPerSecond: 16000 });
             this.mediaRecorder.ondataavailable = e => chunks.push(e.data);
             this.mediaRecorder.onstop = async () => {
-                const blob = new Blob(chunks, {type:'audio/ogg;codecs=opus'});
-                const fd = new FormData();
+                const blob = new Blob(chunks, { type: 'audio/ogg;codecs=opus' });
+                const fd   = new FormData();
                 fd.append('file', blob, 'voice.ogg');
                 try {
-                    this.setStatus('PROCESSING VOICE');
-                    const r = await fetch(`${this.apiBaseUrl}/stt?lang=${this.currentLang}&isPlay=0`, {method:'POST',body:fd});
-                    if (!r.ok) throw new Error('STT ERROR');
+                    this.setStatus('PROCESSING...');
+                    const r = await fetch(`${this.apiBaseUrl}/v1/stt?lang=${this.currentLang}&isPlay=0`, { method: 'POST', body: fd });
                     const d = await r.json();
-                    const text = d.text?.trim() || d.data?.trim();
+                    const text = (d.text || d.data || '').trim();
                     if (text) {
                         this.el.messageInput.value = text;
-                        this.setStatus('VOICE RECOGNIZED');
-                        setTimeout(() => this.sendMessage(), 500);
+                        this.setStatus('RECOGNIZED');
+                        setTimeout(() => this.sendMessage(), 400);
                     } else { this.setStatus('NOT RECOGNIZED'); }
                 } catch(e) { this.setStatus('VOICE FAILED'); }
                 chunks = [];
             };
             this.mediaRecorder.start();
             this.el.voiceBtn.classList.add('recording');
-            this.setStatus('REC...');
+            this.setStatus('● REC...');
         } catch(e) {
             this.isRecording = false;
             this.el.voiceBtn.classList.remove('recording');
@@ -882,17 +745,11 @@ class AIChatApp {
         this.isRecording = false;
         this.el.voiceBtn.classList.remove('recording');
         if (this.mediaRecorder?.state !== 'inactive') this.mediaRecorder.stop();
-        if (this.gumStream) { this.gumStream.getAudioTracks().forEach(t => t.stop()); this.gumStream = null; }
+        this.gumStream?.getAudioTracks().forEach(t => t.stop());
+        this.gumStream = null;
     }
 
-    parseMd(text) {
-        return text
-            .replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>')
-            .replace(/\*(.*?)\*/g,'<em>$1</em>')
-            .replace(/`(.*?)`/g,'<code>$1</code>')
-            .replace(/\n/g,'<br>');
-    }
-
+    /* ── TTS queue ── */
     addToTtsQueue(text) {
         lastTime = Date.now();
         this.ttsQueue.push(text);
@@ -902,12 +759,9 @@ class AIChatApp {
     async processTtsQueue() {
         if (this.isPlayingTts || this.ttsQueue.length === 0) return;
         this.isPlayingTts = true;
-        const t = Date.now();
         const motions = ['motion','motion?name=test1','motion?name=test2','motion?name=test3'];
-        fetch(`http://127.0.0.1:8000/${motions[t % 4]}`);
-        while (this.ttsQueue.length > 0) {
-            await this.playTts(this.ttsQueue.shift());
-        }
+        fetch(`http://127.0.0.1:8000/${motions[Date.now() % 4]}`);
+        while (this.ttsQueue.length > 0) await this.playTts(this.ttsQueue.shift());
         fetch('http://127.0.0.1:8000/stop');
         this.isPlayingTts = false;
         lastTime = Date.now();
@@ -916,102 +770,69 @@ class AIChatApp {
     playTts(text) {
         return new Promise(resolve => {
             const audio = new Audio(`${this.ttsBaseUrl}/tts?` + new URLSearchParams({
-                text, voice: this.currentVoice - 1, lang: this.currentLang, static:'0', isPlay:'0'
+                text, voice: this.currentVoice - 1, lang: this.currentLang, static: '0', isPlay: '0'
             }));
-            audio.onended = resolve;
-            audio.onerror = resolve;
+            audio.onended = resolve; audio.onerror = resolve;
             audio.play().catch(resolve);
         });
     }
 
+    /* ── Webcam ── */
     async startWebcam() {
         try {
             const r = await fetch('http://127.0.0.1:59531/start_collection');
             if (!r.ok) throw new Error();
             this.webcamStream = true;
-            this.el.webcamVideo.style.display = 'block';
+            this.el.webcamVideo.style.display     = 'block';
             this.el.webcamPlaceholder.style.display = 'none';
-            this.el.startWebcam.style.display = 'none';
-            this.el.captureImage.style.display = 'flex';
-            this.el.stopWebcam.style.display = 'flex';
+            this.el.startWebcam.style.display     = 'none';
+            this.el.stopWebcam.style.display      = 'flex';
             this.el.webcamVideo.src = 'http://127.0.0.1:59531/video_feed';
             await fetch('http://127.0.0.1:8000/init_mcr');
             this.setStatus('CAMERA ONLINE');
         } catch(e) { this.setStatus('CAM FAILED'); }
     }
 
-    captureImage() {
-        if (!this.webcamStream) { this.setStatus('CAMERA OFFLINE'); return; }
-        const canvas = document.createElement('canvas');
-        canvas.width = 512; canvas.height = 512;
-        canvas.getContext('2d').drawImage(this.el.webcamVideo, 0, 0, 512, 512);
-        canvas.toBlob(blob => {
-            this.displayImage(blob, `capture-${Date.now()}.jpg`);
-        }, 'image/jpeg', 0.9);
-        this.setStatus('CAPTURED');
-    }
-
     stopWebcam() {
         this.webcamStream = null;
-        this.el.webcamVideo.style.display = 'none';
+        this.el.webcamVideo.style.display       = 'none';
         this.el.webcamPlaceholder.style.display = 'flex';
-        this.el.startWebcam.style.display = 'flex';
-        this.el.captureImage.style.display = 'none';
-        this.el.stopWebcam.style.display = 'none';
+        this.el.startWebcam.style.display       = 'flex';
+        this.el.stopWebcam.style.display        = 'none';
         this.setStatus('CAMERA OFFLINE');
     }
 
-    handleFileSelect(e) {
-        const file = e.target.files[0];
-        if (file) {
-            this.displayImage(file);
-            if (this.autoSendImage) setTimeout(() => this.sendImageMessage(), 500);
-        }
-    }
-
-    displayImage(file, filename = null) {
-        this.currentImage = file;
-        const url = URL.createObjectURL(file);
-        this.el.uploadedImage.src = url;
-        this.el.uploadedImage.style.display = 'block';
-        this.el.uploadText.style.display = 'none';
-        this.el.removeImage.style.display = 'block';
-    }
-
-    removeImage() {
-        this.currentImage = null;
-        this.el.uploadedImage.style.display = 'none';
-        this.el.uploadText.style.display = 'block';
-        this.el.removeImage.style.display = 'none';
-        this.el.fileInput.value = '';
-        if (this.el.uploadedImage.src) URL.revokeObjectURL(this.el.uploadedImage.src);
+    /* ── Helpers ── */
+    parseMd(text) {
+        return text
+            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+            .replace(/\*(.*?)\*/g,     '<em>$1</em>')
+            .replace(/`(.*?)`/g,       '<code>$1</code>')
+            .replace(/\n/g,            '<br>');
     }
 
     createMsg(message, sender) {
-        const div = document.createElement('div');
+        const div    = document.createElement('div');
         div.className = `message ${sender}`;
-        const bubble = document.createElement('div');
-        bubble.className = 'message-bubble';
+        const bubble  = document.createElement('div');
+        bubble.className = 'msg-bubble';
         bubble.textContent = message;
         const time = document.createElement('div');
-        time.className = 'message-time';
-        const now = new Date();
+        time.className = 'msg-time';
+        const now  = new Date();
         time.textContent = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
-        div.appendChild(bubble);
-        div.appendChild(time);
+        div.appendChild(bubble); div.appendChild(time);
         return div;
     }
 
     addMsg(message, sender) {
-        const div = this.createMsg(message, sender);
-        this.el.chatMessages.appendChild(div);
+        this.el.chatMessages.appendChild(this.createMsg(message, sender));
         this.scrollBot();
     }
 
     scrollBot() {
-        const el = this.el.chatMessages;
         requestAnimationFrame(() => {
-            el.scrollTop = el.scrollHeight;
+            this.el.chatMessages.scrollTop = this.el.chatMessages.scrollHeight;
         });
     }
 
@@ -1021,77 +842,57 @@ class AIChatApp {
         this.setStatus(this.isTtsEnabled ? 'TTS ON' : 'TTS OFF');
     }
 
-    toggleAutoSendImage() {
+    toggleAutoMode() {
         this.autoSendImage = !this.autoSendImage;
         this.el.autoSendImage.classList.toggle('active', this.autoSendImage);
         if (this.autoSendImage) {
-            document.body.classList.remove('mode-normal');
-            document.body.classList.add('mode-auto');
+            document.body.classList.replace('mode-normal', 'mode-auto');
             this.el.modeBadge.textContent = '◈ AUTO MODE';
             this.setStatus('AUTO MODE ON');
         } else {
-            document.body.classList.remove('mode-auto');
-            document.body.classList.add('mode-normal');
+            document.body.classList.replace('mode-auto', 'mode-normal');
             this.el.modeBadge.textContent = '◈ NORMAL MODE';
             this.setStatus('NORMAL MODE');
         }
     }
 }
 
+/* ══════════════════════════════════
+   INIT
+══════════════════════════════════ */
 document.addEventListener('DOMContentLoaded', () => {
     const ai = new AIChatApp();
 
-    const MOTOR_URL = 'http://127.0.0.1:8080/api/motor';
-    const MOTOR_STEP = 10; // 한 번에 움직일 각도
-    let motorPan = 0, motorTilt = 0;
-
-    function sendMotor(pan, tilt) {
-        fetch(MOTOR_URL, {
-            method: 'POST',
-            headers: { 'accept': 'application/json', 'Content-Type': 'application/json' },
-            body: JSON.stringify({ pan, tilt })
-        }).catch(() => {});
-    }
-
+    /* Heartbeat: 얼굴 트래킹 + AUTO 모드 */
     setInterval(async () => {
         try {
             const resp = await fetch('http://127.0.0.1:59531/heartbeat');
             const data = (await resp.json()).data;
-            const pos = data.human.position;
+            const pos  = data.human.position;
 
-            // 사람이 감지된 경우에만 트래킹
+            /* 얼굴 트래킹 → 모터 API */
             if (data.cnt_live > 0 && pos && pos !== 'C') {
-                let panDelta = 0, tiltDelta = 0;
-
-                // 상하 (Tilt)
-                if (pos.startsWith('T'))      tiltDelta = -MOTOR_STEP;  // 위에 있으면 위로
-                else if (pos.startsWith('B')) tiltDelta = +MOTOR_STEP;  // 아래에 있으면 아래로
-
-                // 좌우 (Pan)
-                if (pos.endsWith('L'))      panDelta = +MOTOR_STEP;  // 왼쪽에 있으면 왼쪽으로
-                else if (pos.endsWith('R')) panDelta = -MOTOR_STEP;  // 오른쪽에 있으면 오른쪽으로
-
-                if (panDelta !== 0 || tiltDelta !== 0) {
-                    sendMotor(panDelta, tiltDelta);
-                }
+                let pan = 0, tilt = 0;
+                // Tilt: T(위) → +, B(아래) → -
+                if      (pos.startsWith('T')) tilt = +10;
+                else if (pos.startsWith('B')) tilt = -10;
+                // Pan: L(좌) → +, R(우) → -
+                if      (pos.endsWith('L')) pan = +10;
+                else if (pos.endsWith('R')) pan = -10;
+                if (pan !== 0 || tilt !== 0) motorStep(pan, tilt);
             }
-            if (Date.now() - lastTime > 30000 && data.cnt_live > 0 && ai.autoSendImage) {
+
+            /* AUTO 모드: 30초마다 GET /v2/img2chat 호출 */
+            if (ai.autoSendImage && data.cnt_live > 0 && Date.now() - lastTime > 30000) {
                 lastTime = Date.now();
                 fetch('http://127.0.0.1:8000/stop');
-                ai.captureImage();
-                setTimeout(() => {
-                    ai.sendImageMessage(
-                        LANGUAGE_GREETINGS[ai.currentLang] + ` ${data.human.gender == 'M' ? 'Male' : 'Female'}, ${data.human.age} years, ${data.human.emotion}`,
-                        'http://127.0.0.1:59532/v2'
-                    );
-                }, 1000);
+                const gender = data.human.gender === 'M' ? 'Male' : 'Female';
+                const prompt = `${LANGUAGE_GREETINGS[ai.currentLang]} ${gender}, ${data.human.age} years, ${data.human.emotion}`;
+                ai.sendAutoPrompt(prompt);
             }
         } catch(e) {}
     }, 1000);
 });
-
-function play(name) { fetch(`http://127.0.0.1:8000/motion?name=${name}`); }
-function stop() {}
 </script>
 </body>
 </html>
