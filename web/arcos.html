@@ -29,6 +29,7 @@
         @keyframes hexPulse   { 0%,100%{opacity:.1;transform:scale(1)} 50%{opacity:.28;transform:scale(1.04)} }
         @keyframes soundBar   { 0%,100%{transform:scaleY(.35)} 50%{transform:scaleY(1)} }
         @keyframes btnPress   { 0%{transform:scale(1)} 50%{transform:scale(.93)} 100%{transform:scale(1)} }
+        @keyframes volTick    { 0%,100%{opacity:.3} 50%{opacity:.8} }
 
         html, body {
             width:100%; height:100%; overflow:hidden;
@@ -163,7 +164,7 @@
 
         .ctrl-sep { width:1px; height:34px; background:var(--bc); opacity:.35; flex-shrink:0; margin:0 2px; }
 
-        /* Motor row — 5 buttons in one horizontal line */
+        /* Motor row */
         .motor-row { display:flex; align-items:center; gap:3px; }
         .dp {
             width:32px; height:32px; flex-shrink:0;
@@ -202,6 +203,7 @@
         ════════════════════════ */
         .media-panel {
             display:grid;
+            grid-template-columns:1fr 46px;   /* camera | volume */
             grid-template-rows:1fr auto;
             background:rgba(0,0,0,.9);
         }
@@ -209,6 +211,7 @@
         /* Camera */
         .cam-wrap {
             position:relative; overflow:hidden; background:#000;
+            grid-column:1; grid-row:1;
             clip-path:polygon(14px 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%,0 14px);
             box-shadow:inset 0 0 50px rgba(0,0,0,.7), 0 0 18px var(--pg);
         }
@@ -269,8 +272,118 @@
         }
         .cam-btn:active { background:var(--pc); color:#000; }
 
-        /* Status bar */
+        /* ════════════════════════
+           VOLUME PANEL (세로 슬라이더)
+        ════════════════════════ */
+        .vol-panel {
+            grid-column:2; grid-row:1;
+            display:flex; flex-direction:column; align-items:center;
+            padding:10px 0;
+            background:rgba(0,0,0,.96);
+            border-left:1px solid var(--bc);
+            box-shadow:-4px 0 18px var(--pg);
+            user-select:none;
+            gap:6px;
+        }
+
+        /* VOL 라벨 */
+        .vol-label {
+            font-size:8px; letter-spacing:2px; color:var(--pc);
+            text-transform:uppercase; writing-mode:horizontal-tb;
+            opacity:.7;
+        }
+
+        /* 퍼센트 디스플레이 */
+        .vol-pct {
+            font-size:9px; font-weight:700; color:var(--pc);
+            letter-spacing:1px; text-shadow:0 0 8px var(--pc);
+            min-width:30px; text-align:center;
+        }
+
+        /* 슬라이더 트랙 영역 */
+        .vol-track-wrap {
+            flex:1; width:100%;
+            display:flex; flex-direction:column; align-items:center;
+            gap:0; position:relative; cursor:pointer;
+            padding:4px 0;
+        }
+
+        /* 눈금 + 트랙 레이아웃 */
+        .vol-track-inner {
+            position:relative;
+            width:20px;
+            height:100%;
+            display:flex; flex-direction:column; align-items:center;
+        }
+
+        /* 배경 트랙 */
+        .vol-track-bg {
+            position:absolute; top:0; bottom:0;
+            left:50%; transform:translateX(-50%);
+            width:4px;
+            background:rgba(0,200,255,.12);
+            border:1px solid rgba(0,200,255,.25);
+        }
+
+        /* 채워진 부분 (아래→위) */
+        .vol-track-fill {
+            position:absolute; bottom:0;
+            left:50%; transform:translateX(-50%);
+            width:4px;
+            background:linear-gradient(to top, var(--sc), var(--pc));
+            box-shadow:0 0 8px var(--pc), 0 0 20px var(--pg);
+            transition:height .08s ease;
+        }
+
+        /* 눈금 틱 */
+        .vol-ticks {
+            position:absolute; top:0; bottom:0; right:0; width:100%;
+            pointer-events:none;
+        }
+        .vol-tick {
+            position:absolute; right:0;
+            height:1px; background:var(--pc);
+            transform:translateY(-50%);
+            opacity:.2;
+        }
+        .vol-tick.major { width:8px; opacity:.55; }
+        .vol-tick.minor { width:4px; opacity:.2; }
+        .vol-tick.active { opacity:.9; box-shadow:0 0 4px var(--pc); }
+
+        /* 드래그 핸들 */
+        .vol-handle {
+            position:absolute;
+            left:50%; transform:translate(-50%,-50%);
+            width:14px; height:14px;
+            background:var(--pc);
+            clip-path:polygon(50% 0%,100% 50%,50% 100%,0% 50%);
+            box-shadow:0 0 10px var(--pc), 0 0 24px var(--pg);
+            transition:transform .08s ease, box-shadow .08s;
+            z-index:5;
+        }
+        .vol-handle:hover,
+        .vol-handle.dragging {
+            transform:translate(-50%,-50%) scale(1.3);
+            box-shadow:0 0 18px var(--pc), 0 0 40px var(--pg);
+        }
+
+        /* 빠른 버튼 */
+        .vol-quick-btns {
+            display:flex; flex-direction:column; gap:4px; align-items:center;
+        }
+        .vol-q-btn {
+            width:28px; height:20px;
+            border:1px solid var(--bc); background:var(--pg); color:var(--pc);
+            cursor:pointer; font-size:9px; font-family:'Courier New',monospace;
+            display:flex; align-items:center; justify-content:center;
+            letter-spacing:.5px; transition:all .15s;
+            clip-path:polygon(3px 0,100% 0,100% calc(100% - 3px),calc(100% - 3px) 100%,0 100%,0 3px);
+        }
+        .vol-q-btn:active { background:var(--pc); color:#000; }
+
+        /* ── Status bar (전체 너비) ── */
         .status-bar {
+            grid-column:1 / -1; grid-row:2;
             padding:7px 14px; flex-shrink:0;
             background:rgba(0,0,0,.98);
             border-top:1px solid var(--bc);
@@ -367,14 +480,12 @@
         </div>
 
         <div class="input-area">
-            <!-- 아이콘 토글 + D-Pad 모터 컨트롤 -->
             <div class="ctrl-row">
                 <button class="ico-toggle active" id="ttsToggle"     title="TTS 온/오프">🔊</button>
                 <button class="ico-toggle"        id="autoSendImage" title="AUTO AI 온/오프">⚡</button>
 
                 <div class="ctrl-sep"></div>
 
-                <!-- 모터 가로 일렬 배치: ◀ ▼ ◉ ▲ ▶ -->
                 <div class="motor-row">
                     <button class="dp"     onclick="motorStep(-10,0)"  title="좌">◀</button>
                     <button class="dp"     onclick="motorStep(0,10)"  title="아래">▼</button>
@@ -384,7 +495,6 @@
                 </div>
             </div>
 
-            <!-- 메시지 입력 -->
             <div class="input-row">
                 <textarea class="msg-input" id="messageInput" placeholder="ENTER MESSAGE..." rows="1"></textarea>
                 <button class="ico-btn voice-btn" id="voiceBtn" title="음성입력">🎤</button>
@@ -396,6 +506,7 @@
     <!-- ═══════════ RIGHT: MEDIA ═══════════ -->
     <div class="media-panel">
 
+        <!-- 카메라 -->
         <div class="cam-wrap">
             <div class="cam-corner tl"></div>
             <div class="cam-corner tr"></div>
@@ -417,6 +528,28 @@
             </div>
         </div>
 
+        <!-- ════ 볼륨 패널 ════ -->
+        <div class="vol-panel" id="volPanel">
+            <div class="vol-label">VOL</div>
+            <div class="vol-pct" id="volPct">70%</div>
+
+            <div class="vol-track-wrap" id="volTrackWrap">
+                <div class="vol-track-inner" id="volTrackInner">
+                    <div class="vol-track-bg"></div>
+                    <div class="vol-track-fill" id="volFill" style="height:70%"></div>
+                    <div class="vol-ticks"  id="volTicks"></div>
+                    <div class="vol-handle" id="volHandle" style="top:30%"></div>
+                </div>
+            </div>
+
+            <div class="vol-quick-btns">
+                <button class="vol-q-btn" id="volMax" title="최대 볼륨">MAX</button>
+                <button class="vol-q-btn" id="volMid" title="50% 볼륨">MID</button>
+                <button class="vol-q-btn" id="volMin" title="최소 볼륨">MIN</button>
+            </div>
+        </div>
+
+        <!-- 상태바 -->
         <div class="status-bar">
             <span id="statusText">[ SYSTEM READY ]</span>
             <div class="sound-bars">
@@ -499,7 +632,7 @@ const LANGUAGE_GREETINGS = {
     "ur": "ہیلو! کیسے ہو؟",
     "vi": "Chào! Dạo này sao rồi?",
     "zh": "嘿！最近怎么样？"
-}
+};
 
 const LANGUAGE_VOICES = {
     ar: 2, cs: 4, de: 6, en: 8, es: 11, fa: 13, fi: 15, fil: 17, fr: 19, hi: 21,
@@ -557,6 +690,136 @@ function motorStep(pan, tilt) {
 }
 
 /* ══════════════════════════════════
+   VOLUME CONTROLLER
+══════════════════════════════════ */
+class VolumeController {
+    constructor(ttsBaseUrl, onStatus) {
+        this.ttsBaseUrl = ttsBaseUrl;
+        this.onStatus   = onStatus;
+        this.volume     = 0.7;   // 초기 70%
+        this.isDragging = false;
+        this._debounceTimer = null;
+
+        this.elWrap   = document.getElementById('volTrackWrap');
+        this.elInner  = document.getElementById('volTrackInner');
+        this.elFill   = document.getElementById('volFill');
+        this.elHandle = document.getElementById('volHandle');
+        this.elPct    = document.getElementById('volPct');
+
+        this._buildTicks();
+        this._bindEvents();
+        this._render(this.volume);
+    }
+
+    /* 눈금 생성 (0~100%, 10단위 major / 5단위 minor) */
+    _buildTicks() {
+        const container = document.getElementById('volTicks');
+        container.innerHTML = '';
+        for (let i = 0; i <= 100; i += 5) {
+            const tick = document.createElement('div');
+            tick.className = 'vol-tick ' + (i % 10 === 0 ? 'major' : 'minor');
+            // top: 100% = 볼륨 0, top: 0% = 볼륨 100%
+            tick.style.top = `${100 - i}%`;
+            tick.dataset.val = i;
+            container.appendChild(tick);
+        }
+    }
+
+    /* 틱 하이라이트 */
+    _updateTicks(vol) {
+        const pct = vol * 100;
+        document.querySelectorAll('.vol-tick').forEach(t => {
+            t.classList.toggle('active', parseFloat(t.dataset.val) <= pct);
+        });
+    }
+
+    /* 트랙 클릭/드래그 → volume 계산 */
+    _posToVol(clientY) {
+        const rect = this.elInner.getBoundingClientRect();
+        const rel  = Math.max(0, Math.min(1, (clientY - rect.top) / rect.height));
+        return parseFloat((1 - rel).toFixed(2));
+    }
+
+    _bindEvents() {
+        /* 마우스 */
+        this.elWrap.addEventListener('mousedown', e => {
+            this.isDragging = true;
+            this.elHandle.classList.add('dragging');
+            this._setVol(this._posToVol(e.clientY));
+        });
+        document.addEventListener('mousemove', e => {
+            if (!this.isDragging) return;
+            this._setVol(this._posToVol(e.clientY));
+        });
+        document.addEventListener('mouseup', () => {
+            if (!this.isDragging) return;
+            this.isDragging = false;
+            this.elHandle.classList.remove('dragging');
+        });
+
+        /* 터치 */
+        this.elWrap.addEventListener('touchstart', e => {
+            this.isDragging = true;
+            this.elHandle.classList.add('dragging');
+            this._setVol(this._posToVol(e.touches[0].clientY));
+            e.preventDefault();
+        }, { passive: false });
+        document.addEventListener('touchmove', e => {
+            if (!this.isDragging) return;
+            this._setVol(this._posToVol(e.touches[0].clientY));
+            e.preventDefault();
+        }, { passive: false });
+        document.addEventListener('touchend', () => {
+            this.isDragging = false;
+            this.elHandle.classList.remove('dragging');
+        });
+
+        /* 빠른 버튼 */
+        document.getElementById('volMax').addEventListener('click', () => this._setVol(1.0));
+        document.getElementById('volMid').addEventListener('click', () => this._setVol(0.5));
+        document.getElementById('volMin').addEventListener('click', () => this._setVol(0.0));
+
+        /* 마우스 휠 */
+        this.elWrap.addEventListener('wheel', e => {
+            e.preventDefault();
+            const delta = e.deltaY > 0 ? -0.05 : 0.05;
+            this._setVol(Math.max(0, Math.min(1, this.volume + delta)));
+        }, { passive: false });
+    }
+
+    _setVol(val) {
+        this.volume = Math.round(val * 100) / 100;   // 소수 2자리
+        this._render(this.volume);
+        this._sendDebounced(this.volume);
+    }
+
+    _render(vol) {
+        const pct = (vol * 100).toFixed(0);
+        this.elFill.style.height   = `${pct}%`;
+        this.elHandle.style.top    = `${100 - pct}%`;
+        this.elPct.textContent     = `${pct}%`;
+        this._updateTicks(vol);
+    }
+
+    /* 드래그 중 과도한 API 호출 방지: 80ms 디바운스 */
+    _sendDebounced(vol) {
+        clearTimeout(this._debounceTimer);
+        this._debounceTimer = setTimeout(() => this._sendToServer(vol), 80);
+    }
+
+    async _sendToServer(vol) {
+        try {
+            const url = `${this.ttsBaseUrl}/volume?vol=${vol.toFixed(2)}`;
+            const r   = await fetch(url);
+            if (r.ok) this.onStatus(`VOL ${(vol * 100).toFixed(0)}%`);
+            else       this.onStatus('VOL ERR');
+        } catch(e) {
+            this.onStatus('VOL OFFLINE');
+        }
+    }
+}
+
+/* ══════════════════════════════════
    MAIN APP
 ══════════════════════════════════ */
 let lastTime = 0;
@@ -579,12 +842,15 @@ class AIChatApp {
         this.isPlayingTts = false;
 
         this.isTtsEnabled  = true;
-        this.autoSendImage = false;  // AUTO 모드
+        this.autoSendImage = false;
         this.webcamStream  = null;
 
         this.initEl();
         this.bind();
         this.startSoundMonitoring();
+
+        /* 볼륨 컨트롤러 초기화 */
+        this.volCtrl = new VolumeController(this.ttsBaseUrl, msg => this.setStatus(msg));
     }
 
     initEl() {
@@ -693,7 +959,6 @@ class AIChatApp {
         }
     }
 
-    /* ── AUTO mode: GET /v2/img2chat (프롬프트만 전송, 이미지 불필요) ── */
     async sendAutoPrompt(prompt) {
         lastTime = Date.now();
         this.addMsg(`🤖 AUTO: ${prompt}`, 'user');
@@ -710,7 +975,6 @@ class AIChatApp {
         }
     }
 
-    /* ── Shared stream reader ── */
     async streamResponse(resp, bubble) {
         const reader = resp.body.getReader();
         const dec    = new TextDecoder();
@@ -910,26 +1174,21 @@ class AIChatApp {
 document.addEventListener('DOMContentLoaded', () => {
     const ai = new AIChatApp();
 
-    /* Heartbeat: 얼굴 트래킹 + AUTO 모드 */
     setInterval(async () => {
         try {
             const resp = await fetch('http://127.0.0.1:59531/heartbeat');
             const data = (await resp.json()).data;
             const pos  = data.human.position;
 
-            /* 얼굴 트래킹 → 모터 API */
             if (data.cnt_live > 0 && pos && pos !== 'C') {
                 let pan = 0, tilt = 0;
-                // Tilt: T(위) → +, B(아래) → -
                 if      (pos.startsWith('T')) tilt = -10;
                 else if (pos.startsWith('B')) tilt = 10;
-                // Pan: L(좌) → +, R(우) → -
                 if      (pos.endsWith('L')) pan = +10;
                 else if (pos.endsWith('R')) pan = -10;
                 if (pan !== 0 || tilt !== 0) motorStep(pan, tilt);
             }
 
-            /* AUTO 모드: 30초마다 GET /v2/img2chat 호출 */
             if (ai.autoSendImage && data.cnt_live > 0 && Date.now() - lastTime > 30000) {
                 lastTime = Date.now();
                 fetch('http://127.0.0.1:8000/stop');
