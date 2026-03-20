@@ -4,7 +4,6 @@ from fastapi import FastAPI, File, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
 from huggingface_hub import snapshot_download, hf_hub_download
 import time as t
-import collections
 from pydantic import BaseModel, Field
 import numpy as np
 import utils
@@ -24,7 +23,8 @@ import time
 import cv2
 from openvino import Core
 from fastapi.staticfiles import StaticFiles
-from queue import Queue
+#from queue import Queue
+from asyncio import Queue
 from ultralytics import YOLO, FastSAM
 import openvino as ov
 #from playsound import playsound
@@ -34,6 +34,10 @@ from fastapi.middleware.cors import CORSMiddleware
 import hashlib
 import asyncio
 import requests
+from pyapriltags import Detector
+import httpx  # httpx를 사용하여 비동기 HTTP 요청을 처리합니다.
+
+
 #optimum-cli export openvino --weight-format int4 --task text-generation-with-past --model growdle/HyperCLOVAX-SEED-Text-Instruct-1.5B ./CLOVAX-1.5B-ov-int4
 #kakaocorp/kanana-1.5-2.1b-instruct-2505
 #https://github.com/Unitree-Go2-Robot/go2_robot
@@ -44,8 +48,7 @@ def getHash(text):
   hash_func.update(text.encode('utf-8'))
   return hash_func.hexdigest()
 
-hL = None
-hR = None
+_IP = "192.168.21.9" #12.128"#"192.168.12.112"
 
 ov = Core()
 
@@ -81,21 +84,32 @@ emotion_output_layer = emotion_compiled_model.output(0)
 emotion_height, emotion_width = list(emotion_input_layer.shape)[2:]
 
 det_model = YOLO('./models/yolo11s-seg_int8_openvino_model')
+ppe_model = YOLO('./models/yolo11n-helmet4_int8_openvino_model') #safety-11s_int8_openvino_model
 class_names = det_model.names
+ppe_names = ppe_model.names
+
+print(ppe_names)
+
+is_collecting = False
+
+detector = Detector(families="tag36h11") # 사용하는 태그 패밀리에 맞춰 설정
 
 # Enable logging for debugging
 logging.basicConfig(level=logging.ERROR)
 logger = logging.getLogger(__name__)
 
-_IP = "127.0.0.1" #si.getIP()
 _PORT = int(open("port.txt", 'r').read())
+
+# 원본 비디오 스트림 URL
+#SOURCE_VIDEO_URL = "http://10.42.0.1:59511/video_feed"
+SOURCE_VIDEO_URL = f"http://{_IP}:59512/video_raw"
 
 conn = None
 audio_hub = None
 track = None
 lastColor = 'cyan'
 state = { "charge" : 0, "temp" : 0, "voltage" : 0, "cnt_live" : 0, "cnt_object" : 0,  "boxes" : [], 
-         "human" : { "age" : "", "gender" : "", "emotion" : "", "position" : ""} }
+         "human" : { "age" : "", "gender" : "", "emotion" : "", "position" : ""}, "tag" : { "id" : None, "dist" : 0} }
 G1_ARM = {
   "clamp": 17, 
   "highFive": 18, 
@@ -132,6 +146,7 @@ G1_BALANCE = {
 }
 
 frame_queue = Queue(maxsize=5)
+depth_queue = Queue(maxsize=5)
 processed_frame_queue = Queue(maxsize=5)
 
 cnt_live = 0
@@ -152,14 +167,95 @@ app.add_middleware(
     allow_headers=["*"],  # 모든 헤더 허용
 )
 
+import threading
+import os
+import glob
 
 config = {"PERFORMANCE_HINT": "LATENCY"}
-path_tts = snapshot_download(repo_id="rippertnt/on-vits2-multi-tts-v1", allow_patterns="*ov*")
-pipe_tts = ov.compile_model(ov.read_model(model=f"{path_tts}/all_base_ov.xml"), device_name="CPU", config=config)
-conf_tts = utils.get_hparams_from_file(hf_hub_download(repo_id="rippertnt/on-vits2-multi-tts-v1", filename="all_base.json"))
+#path_tts = snapshot_download(repo_id="rippertnt/on-vits2-multi-tts-v1", allow_patterns="*ov*")
+pipe_tts = ov.compile_model(ov.read_model("./models/all_base_ov.xml"), device_name="CPU", config=config)
+conf_tts = utils.get_hparams_from_file("./models/all_base_ov.json")
+
+FACES_DIR = "faces"
+os.makedirs(FACES_DIR, exist_ok=True)
+last_face_saved_time = 0  # 마지막 저장 시간을 추적하는 전역 변수
+latest_face_frame = None  # 전역 변수로 최신 프레임 보관
+
+# PPE 저장 폴더 생성
+PPE_DIR = "ppe"
+os.makedirs(PPE_DIR, exist_ok=True)
+
+# 마지막 PPE 저장 시간을 추적하는 전역 변수
+last_ppe_saved_time = 0
+latest_ppe_frame = None # 스트리밍용 캐시
+
+#app.mount("/ppe", StaticFiles(directory=PPE_DIR), name="ppe")
+def save_ppe_async(crop_img, filename):
+    """PPE 탐지 영역을 비동기로 저장하고 최신 20개만 유지합니다."""
+    global latest_ppe_frame
+    try:
+        # 스트리밍용 메모리 캐시 업데이트
+        _, img_encoded = cv2.imencode('.jpg', crop_img)
+        latest_ppe_frame = img_encoded.tobytes()
+
+        # 파일 저장
+        path = os.path.join(PPE_DIR, filename)
+        cv2.imwrite(path, crop_img)
+        
+        # 오래된 파일 정리 (최신 20개 유지)
+        files = sorted(glob.glob(os.path.join(PPE_DIR, "*.jpg")), key=os.path.getmtime)
+        if len(files) > 20:
+            for i in range(len(files) - 20):
+                os.remove(files[i])
+    except Exception as e:
+        print(f"PPE Async Save Error: {e}")
+
+def save_face_async(face_img, filename):
+    global latest_face_frame
+    try:
+        # 메모리 캐시 업데이트 (인코딩된 데이터로 보관)
+        _, img_encoded = cv2.imencode('.jpg', face_img)
+        latest_face_frame = img_encoded.tobytes()
+        
+        # 파일 저장
+        path = os.path.join(FACES_DIR, filename)
+        cv2.imwrite(path, face_img)
+        
+        # (파일 정리 로직 생략...)
+    except Exception as e:
+        print(f"Async Save Error: {e}")
+
+@app.get("/ppe_stream")
+async def ppe_stream():
+    global latest_ppe_frame
+    async def generate():
+        while True:
+            if latest_ppe_frame is not None:
+                yield (b'--frame\r\n'
+                       b'Content-Type: image/jpeg\r\n\r\n' + latest_ppe_frame + b'\r\n')
+            else:
+                await asyncio.sleep(1)
+            await asyncio.sleep(0.5) # 0.5초 간격 갱신
+
+    return StreamingResponse(generate(), media_type="multipart/x-mixed-replace; boundary=frame")
+
+@app.get("/face_stream")
+async def face_stream():
+    global latest_face_frame
+    async def generate():
+        while True:
+            if latest_face_frame is not None:
+                yield (b'--frame\r\n'
+                       b'Content-Type: image/jpeg\r\n\r\n' + latest_face_frame + b'\r\n')
+            await asyncio.sleep(0.2) # 약 5 FPS로 갱신
+
+    return StreamingResponse(generate(), media_type="multipart/x-mixed-replace; boundary=frame")
 
 def visualize_face(frame,face_det_results):
     global state
+    global last_face_saved_time
+    global latest_face_frame
+    current_time = time.time()
     h, w, _ = frame.shape
 
     state["human"]["gender"] = ""
@@ -182,38 +278,59 @@ def visualize_face(frame,face_det_results):
             face_img = frame[ymin:ymax, xmin:xmax]
             
             if face_img.size > 0:
+                
+                # [기존 추론 코드 생략: age, gender, emotion]
+
+                # --- 10초에 한 번씩 비동기 저장 로직 ---
+                if current_time - last_face_saved_time > 10.0:
+                    print("face save...")
+                    last_face_saved_time = current_time
+                    
+                    # 파일명 생성 및 비동기 실행
+                    face_filename = f"face_{int(current_time)}.jpg"
+                    
+                    # 쓰레드를 생성하여 저장 (메인 루프 차단 없음)
+                    save_thread = threading.Thread(
+                        target=save_face_async, 
+                        args=(face_img.copy(), face_filename) # 원본 훼손 방지를 위해 copy() 전달
+                    )
+                    save_thread.start()
+                    print("save end...")
+                    # 상태 업데이트 (클라이언트가 확인할 수 있도록)
+                    #state["human"]["face_url"] = f"/faces/{face_filename}"
+
                 # 나이/성별 모델 추론
-                resized_age_gender = cv2.resize(face_img, (age_gender_width, age_gender_height))
+                #resized_age_gender = cv2.resize(face_img, (age_gender_width, age_gender_height))
                 # 입력 형태: [1, 3, H, W]
-                ag_input_tensor = np.expand_dims(resized_age_gender.transpose((2, 0, 1)), 0)
-                ag_results = age_gender_compiled_model(ag_input_tensor)
+                #ag_input_tensor = np.expand_dims(resized_age_gender.transpose((2, 0, 1)), 0)
+                #ag_results = age_gender_compiled_model(ag_input_tensor)
                 
                 # 결과 파싱
-                age_pred = int(ag_results[age_output_layer].reshape(1)[0] * 100) # OpenVINO age-gender 모델은 나이값을 100으로 나눈 값으로 출력.
-                gender_prob = ag_results[gender_output_layer].reshape(-1) # [female_prob, male_prob] 형태로 변환
+                #age_pred = int(ag_results[age_output_layer].reshape(1)[0] * 100) # OpenVINO age-gender 모델은 나이값을 100으로 나눈 값으로 출력.
+                #gender_prob = ag_results[gender_output_layer].reshape(-1) # [female_prob, male_prob] 형태로 변환
                 
                 # OpenVINO documentation: prob output across 2 type classes [0 - female, 1 - male].
-                gender_idx = np.argmax(gender_prob)
-                gender = "W" if gender_idx == 0 else "M"
+                #gender_idx = np.argmax(gender_prob)
+                #gender = "W" if gender_idx == 0 else "M"
                 
                 # 감정 모델 추론
-                resized_emotion = cv2.resize(face_img, (emotion_width, emotion_height))
-                emotion_input_tensor = np.expand_dims(resized_emotion.transpose((2, 0, 1)), 0)
-                emotion_results = emotion_compiled_model(emotion_input_tensor)
+                #resized_emotion = cv2.resize(face_img, (emotion_width, emotion_height))
+                #emotion_input_tensor = np.expand_dims(resized_emotion.transpose((2, 0, 1)), 0)
+                #emotion_results = emotion_compiled_model(emotion_input_tensor)
                 
                 # 결과 파싱
-                emotion_prob = emotion_results[emotion_output_layer].reshape(-1)
-                emotion = EMOTIONS[np.argmax(emotion_prob)]
+                #emotion_prob = emotion_results[emotion_output_layer].reshape(-1)
+                #emotion = EMOTIONS[np.argmax(emotion_prob)]
                 
                 # 결과값으로 박스 및 텍스트 그리기
                 cv2.rectangle(frame, (xmin, ymin), (xmax, ymax), (0, 255, 255), 2)
-                text = f"{gender}, {age_pred}y, {emotion}"
-                cv2.putText(frame, text, (xmin, ymax - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
+                #text = f"{gender}, {age_pred}y, {emotion}"
+                #cv2.putText(frame, text, (xmin, ymax - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
       
 
-                state["human"]["gender"] = gender
-                state["human"]["age"] = age_pred
-                state["human"]["emotion"] = emotion
+                #state["human"]["gender"] = gender
+                #state["human"]["age"] = age_pred
+                #state["human"]["emotion"] = emotion
     return frame      
 
 
@@ -228,7 +345,7 @@ def visualize_segmentation(frame, masks, boxes, classes, scores, depths, class_n
     state["human"]["depth"] = ""
     state["human"]["position"] = ""
 
-    for mask, box, cls_idx, score in zip(masks, boxes, classes, scores):
+    for mask, box, cls_idx, score, depth in zip(masks, boxes, classes, scores, depths):
         class_name = class_names[cls_idx]
 
         is_living = class_name in LIVING_CLASSES
@@ -273,7 +390,7 @@ def visualize_segmentation(frame, masks, boxes, classes, scores, depths, class_n
 
         if is_living:  
             state["cnt_live"] += 1          
-            #state["human"]["depth"] = depth
+            state["human"]["depth"] = depth
             state["human"]["position"] = position
         else:
             state["cnt_object"] += 1        
@@ -283,17 +400,17 @@ def visualize_segmentation(frame, masks, boxes, classes, scores, depths, class_n
             'score': round(float(score), 2),
             'bbox': {'x1': x1, 'y1': y1, 'x2': x2, 'y2': y2},
             'position': position,  # 위치 정보 추가
-            #'depth' : depth
+            'depth' : depth
         }) 
 
-        label = f"{class_name}:{score:.2f}"
+        label = f"{class_name}:{score:.2f} | {depth:.2f}m"
         cv2.putText(overlay, label, (x1, max(15, y1 - 10)),cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
 
     return overlay
 
 def get_mask_depths(masks, depth_frame, low_percentile=5):
     depths = []
-    depth_image = np.asanyarray(depth_frame.get_data())
+    depth_image = depth_frame
     for mask in masks:
         if mask.sum() == 0:
             depths.append(0.0)
@@ -313,116 +430,237 @@ def get_mask_depths(masks, depth_frame, low_percentile=5):
     return depths
 
 
-def processing_thread():
-    global cnt_live, cnt_object, lastTime, state, cnt_image
-    processing_times = collections.deque()
+import aiohttp
 
-    print("============= processing....")
+# 데이터 공유를 위한 비동기 큐 (최신 1프레임만 유지하여 지연 시간 최소화)
+raw_data_queue = asyncio.Queue(maxsize=1)
+
+async def fetch_combined_frame(session):
+    """
+    서버로부터 합쳐진 바이너리 데이터(RGB + Depth)를 받아 분리함.
+    네트워크 IO 및 단순 메모리 슬라이싱만 수행하여 속도를 극대화함.
+    """
+    # 원본 해상도 규격 (서버와 일치해야 함)
+    W, H = 640, 480
+    RGB_SIZE = W * H * 3          # 921,600 bytes
+    DEPTH_SIZE = W * H * 2        # 614,400 bytes (16bit)
+    TOTAL_SIZE = RGB_SIZE + DEPTH_SIZE
+
+    try:
+        # 1.0초 타임아웃으로 연결 유지 확인
+        async with session.get(SOURCE_VIDEO_URL, timeout=aiohttp.ClientTimeout(total=1.0)) as response:
+            if response.status == 200:
+                # 스트림 전체를 한 번에 읽음
+                data = await response.read()
+                
+                # 데이터 크기 검증 (데이터가 깨지거나 덜 왔을 경우 대비)
+                if len(data) >= TOTAL_SIZE:
+                    # 1. RGB 분리 (uint8)
+                    # .copy()를 사용하지 않고 슬라이싱만 하여 메모리 효율 증대
+                    frame = np.frombuffer(data[:RGB_SIZE], dtype=np.uint8).reshape(H, W, 3)
+                    
+                    # 2. Depth 분리 (uint16)
+                    depth_frame = np.frombuffer(data[RGB_SIZE:TOTAL_SIZE], dtype=np.uint16).reshape(H, W)
+                    
+                    return frame, depth_frame
+                else:
+                    print(f"Warning: Data incomplete ({len(data)}/{TOTAL_SIZE} bytes)")
+            else:
+                print(f"Server Error: HTTP {response.status}")
+                
+    except asyncio.TimeoutError:
+        print("Fetch Timeout: 서버 응답이 너무 늦습니다.")
+    except Exception as e:
+        print(f"Fetch Error: {e}")
+        
+    return None, None
+
+async def receiver_loop():
+    """[수신부] 서버에서 바이너리 데이터를 받아 큐에 넣음 (네트워크 전용)"""
+    print("============= Receiver Loop Started")
+    connector = aiohttp.TCPConnector(limit=None, keepalive_timeout=30)
+    async with aiohttp.ClientSession(connector=connector) as session:
+        while True:
+            try:
+                frame, depth = await fetch_combined_frame(session)
+                if frame is not None:
+                    # 큐가 가득 찼다면 기존 프레임을 버리고 최신 것을 넣음 (Latency 방지)
+                    if raw_data_queue.full():
+                        raw_data_queue.get_nowait()
+                    await raw_data_queue.put((frame, depth))
+                else:
+                    await asyncio.sleep(0.001)
+            except Exception as e:
+                print(f"Receiver Error: {e}")
+                await asyncio.sleep(0.1)
+
+async def processing_loop():
+    """[분석부] 큐에서 데이터를 꺼내 NPU 추론 및 시각화 수행 (연산 전용)"""
+    global cnt_image
+    global last_ppe_saved_time
+
+    print("============= Processing Loop Started")
+    tag_size = 0.12
+    fx, fy = 600, 600  # 예시 초점 거리
 
     while True:
-        if not frame_queue.empty():
-          frame = np.array(frame_queue.get())
-          cnt_live = 0
-          cnt_object = 0
+        # 1. 수신부로부터 데이터 획득 (데이터가 올 때까지 await)
+        frame, depth_frame = await raw_data_queue.get()
+        start_time = time.time()
 
-          if cnt_image % 100 == 0:
-            cv2.imwrite("capture.jpg", frame) #cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+        # 2. 전처리 최적화: INTER_NEAREST 사용 (CPU 부하 감소)
+        # AI 모델 입력 규격에 맞게 리사이즈
+        frame_ai = cv2.resize(frame, (640, 640), interpolation=cv2.INTER_NEAREST)
+        depth_ai = cv2.resize(depth_frame, (640, 640), interpolation=cv2.INTER_NEAREST)
 
-          cnt_image = cnt_image + 1
+        # 3. NPU 추론
+        res = det_model(frame_ai, device="intel:npu", verbose=False, conf=0.25)[0]
+        ppe_res = ppe_model(frame_ai, device="intel:npu", verbose=False, conf=0.25)[0]
 
-          start_time = time.time()
-
-          frame = cv2.resize(frame, (640, 640))
-          res = det_model(frame, device="intel:npu", verbose=False, conf=0.25)[0] #, imgsz=640
-
-          if hasattr(res, 'masks') and res.masks is not None:
-              masks = res.masks.data.cpu().numpy().astype(np.uint8)
-          else:
-              masks = []
-
-          boxes = res.boxes.xyxy.cpu().numpy()
-          classes = res.boxes.cls.cpu().numpy().astype(int)
-          scores = res.boxes.conf.cpu().numpy()
-
-          # 시각화
-          out = visualize_segmentation(frame, masks, boxes, classes, scores, None, class_names)
-
-          # 얼굴 감지 모델 추론
-          resized_frame = cv2.resize(frame, (face_det_width, face_det_height))
-          input_tensor = np.expand_dims(resized_frame.transpose((2, 0, 1)), 0)
-          face_det_results = face_det_compiled_model(input_tensor)[face_det_output_layer]
-
-          out = visualize_face(out, face_det_results)
-
-          # FPS 계산 및 표시
-          curr_time = time.time()
-          fps = 1.0 / (curr_time - start_time)
-          cv2.putText(out, f"FPS: {fps:.2f}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
-
-          if processed_frame_queue.full():
-              processed_frame_queue.get()  # 가장 오래된 프레임 제거   
-
-          processed_frame_queue.put(cv2.resize(out, (640, 480)))
+        # 4. 후처리 및 시각화 로직
+        if hasattr(res, 'masks') and res.masks is not None:
+            masks = res.masks.data.cpu().numpy().astype(np.uint8)
         else:
-            time.sleep(0.001)
+            masks = []
 
+        boxes = res.boxes.xyxy.cpu().numpy()
+        classes = res.boxes.cls.cpu().numpy().astype(int)
+        scores = res.boxes.conf.cpu().numpy()
+
+        if ppe_res.boxes is not None:
+          ppe_boxes = ppe_res.boxes.xyxy.cpu().numpy()
+          ppe_scores = ppe_res.boxes.conf.cpu().numpy()
+          ppe_classes = ppe_res.boxes.cls.cpu().numpy().astype(int)
+          ppe_names = ppe_model.names  # 클래스 이름 딕셔너리 획득
+          
+          for i, box in enumerate(ppe_boxes):
+              x1, y1, x2, y2 = map(int, box)
+              conf = ppe_scores[i]
+              cls_id = ppe_classes[i]
+              
+              # 클래스 이름 가져오기 (없을 경우 ID 표시)
+              label_text = ppe_names.get(cls_id, str(cls_id))
+              
+              if 'helmet' in label_text or 'face' in label_text:
+                  x1, y1, x2, y2 = map(int, box)
+                  conf = ppe_scores[i]
+                  display_str = f"{label_text.capitalize()}: {conf:.2f}"
+                  current_time = time.time()
+
+                  # 좌표 유효성 검사 및 Crop (out 프레임 혹은 frame_ai 사용)
+                  crop_h, crop_w = out.shape[:2]
+                  y1_c, y2_c = max(0, y1), min(crop_h, y2)
+                  x1_c, x2_c = max(0, x1), min(crop_w, x2)
+                  
+                  ppe_crop = out[y1_c:y2_c, x1_c:x2_c]
+
+                  if 'helmet' in label_text and current_time - last_ppe_saved_time > 10.0:
+                      print("helmet save...")
+                      last_ppe_saved_time = current_time
+                      
+                      ppe_filename = f"ppe_{label_text}_{int(current_time)}.jpg"
+                      # 비동기 쓰레드 시작
+                      threading.Thread(
+                          target=save_ppe_async, 
+                          args=(ppe_crop.copy(), ppe_filename)
+                      ).start()           
+                      
+                  elif 'face' in label_text and current_time - last_face_saved_time > 10.0:
+                    print("face save...")
+                    last_face_saved_time = current_time
+                    
+                    # 파일명 생성 및 비동기 실행
+                    face_filename = f"face_{int(current_time)}.jpg"
+                    
+                    # 쓰레드를 생성하여 저장 (메인 루프 차단 없음)
+                    save_thread = threading.Thread(
+                        target=save_face_async, 
+                        args=(ppe_crop.copy(), face_filename) # 원본 훼손 방지를 위해 copy() 전달
+                    )
+                    save_thread.start()                           
+                  
+                  # 1) 파란색 박스 그리기
+                  cv2.rectangle(out, (x1, y1), (x2, y2), (255, 0, 0), 2)
+                  
+                  # 2) 텍스트 배경 (파란색 바)
+                  (w, h), _ = cv2.getTextSize(display_str, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
+                  # 텍스트가 화면 위로 나가지 않도록 y좌표 보정
+                  text_y = max(y1, h + 10)
+                  cv2.rectangle(out, (x1, text_y - h - 10), (x1 + w, text_y), (255, 0, 0), -1)
+                  
+                  # 3) 텍스트 쓰기 (흰색)
+                  cv2.putText(out, display_str, (x1, text_y - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+
+
+        # 시각화 (원본 크기 640x480으로 직접 생성하여 불필요한 리사이즈 제거)
+        out = visualize_segmentation(frame_ai, masks, boxes, classes, scores,  get_mask_depths(masks, depth_ai), class_names)
+
+        gray = cv2.cvtColor(frame_ai, cv2.COLOR_BGR2GRAY)
+        tags = detector.detect(gray)
+
+        if tags:
+            # 픽셀 면적 기준으로 가장 큰 태그 선택
+            best_tag = max(tags, key=lambda t: cv2.contourArea(t.corners.astype(np.float32)))
+            
+            # --- 투명 노란색 채우기 로직 ---
+            overlay = out.copy()
+            # 태그의 네 모서리 좌표 가져오기
+            pts = best_tag.corners.reshape((-1, 1, 2)).astype(np.int32)
+            # 노란색(BGR: 0, 255, 255)으로 다각형 채우기
+            cv2.fillPoly(overlay, [pts], (0, 255, 255))
+            
+            # 투명도 적용 (0.2 opacity)
+            # out * 0.8 + overlay * 0.2
+            out = cv2.addWeighted(overlay, 0.2, out, 0.8, 0)
+            
+            # --- 우측 하단 정보 표시 ---
+            tag_id = best_tag.tag_id
+            cx, cy = int(best_tag.center[0]), int(best_tag.center[1])
+            
+            # Depth 데이터 활용 (범위 체크 포함)
+            dist = 0.0
+            if 0 <= cy < 640 and 0 <= cx < 640:
+                dist = depth_ai[cy, cx] / 1000.0  # mm -> m
+
+            info_str = f"ID: {tag_id} / Dist: {dist:.2f}m"
+            state["tag"]["id"] = tag_id
+            state["tag"]["dist"] = dist
+            (w, h), baseline = cv2.getTextSize(info_str, cv2.FONT_HERSHEY_SIMPLEX, 0.7, 2)
+            
+            # 우측 하단 여백 설정 (20px)
+            text_x = 640 - w - 20
+            text_y = 640 - 20
+            
+            # 가독성을 위한 검정색 배경 바 (약간의 투명도 가능)
+            cv2.rectangle(out, (text_x - 10, text_y - h - 10), (640, 640), (0, 0, 0), -1)
+            # 노란색 글씨로 정보 출력
+            cv2.putText(out, info_str, (text_x, text_y), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
+
+        # 5. FPS 계산 및 출력
+        fps = 1.0 / (time.time() - start_time)
+        cv2.putText(out, f"FPS: {fps:.2f}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
+
+        # 6. 결과 스트리밍 큐에 전달
+        if processed_frame_queue.full():
+            try: processed_frame_queue.get_nowait()
+            except: pass
+        
+        # 마지막 출력 해상도로 조정하여 put
+        await processed_frame_queue.put(cv2.resize(out, (640, 480)))
+        
+        cnt_image += 1
+        if cnt_image % 100 == 0:
+            cv2.imwrite("capture.jpg", frame)
 
 @app.get("/")
 def main():
   return { "result" : True, "data" : "AI-CPU-V2", "ip" : _IP, "port" : _PORT }      
 
-# Async function to receive video frames and put them in the queue
-async def recv_camera_stream(track: MediaStreamTrack):
-    while True:
-        frame = await track.recv()
-        img = frame.to_ndarray(format="bgr24")
-
-        if frame_queue.full():
-            frame_queue.get()  # 가장 오래된 프레임 제거        
-
-        frame_queue.put(img)
-
-@app.get("/connect")
-async def connect():
-  global conn
-  global audio_hub
-  conn =  UnitreeWebRTCConnection(WebRTCConnectionMethod.LocalAP) #Go2WebRTCConnection(WebRTCConnectionMethod.LocalSTA, ip="192.168.0.101")
-  await conn.connect()
-  print(1)
-  audio_hub = WebRTCAudioHub(conn, logger)
-  await audio_hub.set_play_mode('no_cycle')
-  print(2)
-  """
-  await conn.datachannel.pub_sub.publish_request_new(
-    RTC_TOPIC["MOTION_SWITCHER"], 
-    {
-        "api_id": 1002,
-        "parameter": {"name": "normal"}
-    }
-  )
-  """
-  conn.video.switchVideoChannel(True)
-  conn.video.add_track_callback(recv_camera_stream)
-  
-  # image processer start
-  threading.Thread(target=processing_thread, daemon=True).start()
-
-  def lowstate_callback(message):
-    #print(message)
-    msg = message['data']      
-    state["charge"] = msg['bms_state']['soc']
-    state["temp"] = msg['temperature_ntc1']
-    state["voltage"] = msg['power_v']
-
-  conn.datachannel.pub_sub.subscribe(RTC_TOPIC['LOW_STATE'], lowstate_callback)
-
-  return { "result" : True, "data" : True }        
-
 @app.get("/connect2")
 async def connect2():
   global conn
   #global audio_hub
-  conn =  Go2WebRTCConnection(WebRTCConnectionMethod.LocalAP) #Go2WebRTCConnection(WebRTCConnectionMethod.LocalSTA, ip="192.168.0.101")
+  conn =  UnitreeWebRTCConnection(WebRTCConnectionMethod.LocalAP) #Go2WebRTCConnection(WebRTCConnectionMethod.LocalSTA, ip="192.168.0.101")
   await conn.connect()
   print(1)
   #audio_hub = WebRTCAudioHub(conn, logger)
@@ -444,49 +682,16 @@ async def connect2():
 
 @app.get("/prepare")
 async def prepare():
-
-  global hL
-  global hR
-
-  try:
-      hL = HadnControler('/dev/ttyACM0') # L 컨트롤러 L동글 부터 연결
-      hR = HadnControler('/dev/ttyACM1') # R 컨트롤러
-      print("컨트롤러 초기화 성공")
-  except Exception as e:
-      print(f"컨트롤러 초기화 실패: {e}")
-      exit()
+  return { "result" : True, "data" : True }      
 
 @app.get("/prepare2")
 async def prepare2():
-
-  global hL
-  global hR
-
-  try:
-      hL = HadnControler('/dev/ttyACM2') # L 컨트롤러 L동글 부터 연결
-      hR = HadnControler('/dev/ttyACM3') # R 컨트롤러
-      print("컨트롤러 초기화 성공")
-  except Exception as e:
-      print(f"컨트롤러 초기화 실패: {e}")
-      exit()      
-
+  return { "result" : True, "data" : True }    
+  
 @app.get("/hand")
 async def hand(cmd : str):
-
-  global hL
-  global hR
-
-  print(cmd)
-
-  if cmd == 'release':
-    thread_L = threading.Thread(target=hL.send_release, args=(None,))
-    thread_R = threading.Thread(target=hR.send_release, args=(None,))     
-  else:
-    thread_L = threading.Thread(target=hL.send_motion, args=(cmd,))
-    thread_R = threading.Thread(target=hR.send_motion, args=(cmd,))
-
-  thread_L.start()
-  thread_R.start()
+  requests.get(f"http://{_IP}:59521/hands?cmd={cmd}")
+  return { "result" : True }    
 
 @app.get("/heartbeat")
 async def heartbeat():
@@ -496,19 +701,24 @@ async def heartbeat():
 
 @app.get("/video_feed")
 async def video_feed():
-  def generate():
-    while True:
-        if not processed_frame_queue.empty():
-            output = processed_frame_queue.get()
-            _, img_bytes = cv2.imencode('.jpg', output)
-            frame = img_bytes.tobytes()
+    async def generate():
+        while True:
+            # 1. 비동기 큐에서 프레임을 가져올 때까지 기다립니다 (await)
+            # .get()은 데이터가 들어올 때까지 이벤트 루프를 넘겨주고 대기합니다.
+            output = await processed_frame_queue.get()
+            
+            if output is not None:
+                # 2. 인코딩 (이 부분은 CPU 연산이므로 루프를 살짝 점유하지만 OK)
+                _, img_bytes = cv2.imencode('.jpg', output)
+                frame = img_bytes.tobytes()
 
-            yield (b'--frame\r\n'
-                    b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n\r\n')
-        else:
-            time.sleep(0.01)
+                yield (b'--frame\r\n'
+                       b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+            
+            # 3. 큐 작업 완료 표시 (Optional)
+            processed_frame_queue.task_done()
 
-  return StreamingResponse(generate(), media_type="multipart/x-mixed-replace; boundary=frame")
+    return StreamingResponse(generate(), media_type="multipart/x-mixed-replace; boundary=frame")
 
 lastCmd = {} 
 
@@ -839,249 +1049,54 @@ def tts(text = "", voice=6, lang='ko', static=0, isPlay=0):
     # 파일 열고 전송
     with open(f"output/{filename}.wav", "rb") as f:
         files = {"audio_file": (f"{filename}.wav", f, "audio/wav")}
-        response = requests.post("http://192.168.12.117:59521/audio", files=files)
+        response = requests.post(f"http://{_IP}:59521/audio", files=files)
 
     return f"output/{filename}.wav"
 
+@app.get("/led")
+async def led(r : int = 0,g : int = 0,b : int = 0,):
+  print(f"http://{_IP}:59521/led?r={r}&g={g}&b={b}")
+  response = requests.get(f"http://{_IP}:59521/led?r={r}&g={g}&b={b}")
+  return { "result" : True }
 
-import httpx  # httpx를 사용하여 비동기 HTTP 요청을 처리합니다.
+import matplotlib.colors
 
-# 원본 비디오 스트림 URL
-#SOURCE_VIDEO_URL = "http://10.42.0.1:59511/video_feed"
-SOURCE_VIDEO_URL = "http://192.168.12.117:59511/video_feed"
+@app.get("/color")
+async def color(value : str = 'red'):
+  print(value)
+  colors = matplotlib.colors.to_rgb(value)
+  arr = (np.array(colors) * 255).astype(int)
+  print("color", arr)
+  response = requests.get(f"http://{_IP}:59521/led?r={arr[0]}&g={arr[1]}&b={arr[2]}")
+  return { "result" : True }
 
-async def proxy_video_stream():
-    """원본 서버에서 비디오 스트림을 받아서 다시 스트리밍"""
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        try:
-            async with client.stream("GET", SOURCE_VIDEO_URL) as response:
-                response.raise_for_status()
-                async for chunk in response.aiter_bytes(chunk_size=1024):
-                    yield chunk
-        except httpx.RequestError as e:
-            print(f"비디오 스트림 연결 오류: {e}")
-            # 연결 오류 시 빈 프레임이나 오류 메시지를 반환할 수 있습니다
-            yield b""
-        except Exception as e:
-            print(f"예상치 못한 오류: {e}")
-            yield b""
-
-@app.get("/video_feed2")
-async def video_feed():
-    """비디오 스트림을 프록시하여 제공"""
-    return StreamingResponse(
-        proxy_video_stream(),
-        media_type="multipart/x-mixed-replace; boundary=frame"
-    )
-# 서버 B에서 비디오 스트리밍 시작
-
-is_collecting = False
-collection_task = None
-
-def parse_mjpeg_boundary(buffer):
-    """boundary=frame 형식의 MJPEG 스트림 파싱"""
-    frames = []
-    remaining_buffer = buffer
-    
-    # boundary 패턴들
-    boundary_patterns = [
-        b'--frame\r\n',
-        b'--frame\n', 
-        b'\r\n--frame\r\n',
-        b'\n--frame\n'
-    ]
-    
-    while True:
-        # boundary 찾기
-        boundary_pos = -1
-        next_boundary_pos = -1
-        
-        for pattern in boundary_patterns:
-            pos = remaining_buffer.find(pattern)
-            if pos != -1:
-                boundary_pos = pos
-                # 다음 boundary 찾기
-                next_pos = remaining_buffer.find(pattern, pos + len(pattern))
-                if next_pos != -1:
-                    next_boundary_pos = next_pos
-                    break
-        
-        if boundary_pos == -1 or next_boundary_pos == -1:
-            break
-            
-        # 현재 프레임 데이터 추출
-        frame_data = remaining_buffer[boundary_pos:next_boundary_pos]
-        
-        # Content-Type과 Content-Length 헤더 건너뛰기
-        header_end = frame_data.find(b'\r\n\r\n')
-        if header_end == -1:
-            header_end = frame_data.find(b'\n\n')
-        
-        if header_end != -1:
-            jpeg_data = frame_data[header_end + 4:]  # 헤더 이후 데이터
-            
-            # JPEG 시작 마커 확인
-            jpeg_start = jpeg_data.find(b'\xff\xd8')
-            if jpeg_start != -1:
-                jpeg_data = jpeg_data[jpeg_start:]
-                
-                # JPEG 끝 마커 찾기
-                jpeg_end = jpeg_data.find(b'\xff\xd9')
-                if jpeg_end != -1:
-                    complete_jpeg = jpeg_data[:jpeg_end + 2]
-                    
-                    try:
-                        # OpenCV로 디코딩
-                        nparr = np.frombuffer(complete_jpeg, np.uint8)
-                        frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-                        
-                        if frame is not None:
-                            # BGR을 RGB로 변환
-                            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                            frames.append(frame)
-                            #print(f"✓ 프레임 추출 성공: {frame.shape}")
-                        else:
-                            print("프레임 디코딩 실패")
-                            
-                    except Exception as e:
-                        print(f"프레임 디코딩 오류: {e}")
-        
-        # 처리된 부분 제거
-        remaining_buffer = remaining_buffer[next_boundary_pos:]
-    
-    return frames, remaining_buffer
-
-async def collect_frames():
-    """원본 서버에서 프레임을 수집하여 큐에 저장"""
-    global is_collecting
-    
-    buffer = b""
-    frame_count = 0
-    chunk_count = 0
-    
-    try:
-        print("비디오 스트림 연결 시작...")
-        
-        # 더 긴 타임아웃 설정
-        timeout = httpx.Timeout(connect=10.0, read=60.0, write=10.0, pool=10.0)
-        
-        async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
-            print(f"연결 시도: {SOURCE_VIDEO_URL}")
-            
-            async with client.stream("GET", SOURCE_VIDEO_URL) as response:
-                print(f"응답 상태: {response.status_code}")
-                print(f"응답 헤더: {dict(response.headers)}")
-                
-                if response.status_code != 200:
-                    print(f"HTTP 오류: {response.status_code}")
-                    return
-                
-                response.raise_for_status()
-                
-                print("스트림 읽기 시작...")
-                
-                async for chunk in response.aiter_bytes(chunk_size=4096):
-                    if not is_collecting:
-                        print("수집 중지 요청")
-                        break
-                    
-                    chunk_count += 1
-                    buffer += chunk
-                    
-                    # 5초마다 상태 출력
-                    if chunk_count % 100 == 0:
-                        #print(f"청크 {chunk_count}개 수신, 버퍼 크기: {len(buffer)} bytes")
-                        
-                        # 버퍼에서 boundary 패턴 확인 (디버깅용)
-                        if b'--frame' in buffer:
-                            boundary_count = buffer.count(b'--frame')
-                            #print(f"발견된 boundary 개수: {boundary_count}")
-                        
-                        # 버퍼의 처음 200바이트 출력 (디버깅용)
-                        if len(buffer) > 200:
-                            sample = buffer[:200]
-                            #print(f"버퍼 샘플: {sample[:100]}")
-                            #if b'Content-Type' in sample:
-                            #    print("Content-Type 헤더 발견")
-                    
-                    # 버퍼가 너무 커지지 않도록 제한
-                    if len(buffer) > 2 * 1024 * 1024:  # 2MB 제한
-                        #print("버퍼 크기 제한, 일부 제거")
-                        # 버퍼의 앞쪽 절반 제거
-                        buffer = buffer[len(buffer)//2:]
-                    
-                    # 최소 버퍼 크기에 도달했을 때만 파싱 시도
-                    if len(buffer) > 1000:  # 최소 1KB
-                        try:
-                            frames, buffer = parse_mjpeg_boundary(buffer)
-                            
-                            for frame in frames:
-                                frame_count += 1
-                                
-                                # 큐가 꽉 찬 경우 오래된 프레임 제거
-                                while frame_queue.full():
-                                    try:
-                                        dropped = frame_queue.get_nowait()
-                                        #print("오래된 프레임 드랍")
-                                    except frame_queue.Empty:
-                                        break
-                                
-                                try:
-                                    frame = cv2.resize(frame, (640, 384)) 
-                                    frame_queue.put_nowait(frame)
-                                    #print(f"✓ 프레임 #{frame_count} 큐에 추가 (크기: {frame_queue.qsize()}/{frame_queue.maxsize})")
-                                except frame_queue.Full:
-                                    print("큐 풀 - 프레임 스킵")
-                        
-                        except Exception as e:
-                            print(f"프레임 파싱 오류: {e}")
-                            # 파싱 오류시 버퍼 일부 제거
-                            if len(buffer) > 5000:
-                                buffer = buffer[1000:]
-                    
-                    # CPU 사용률 조절
-                    if chunk_count % 50 == 0:
-                        await asyncio.sleep(0.01)
-                        
-                print("스트림 종료")
-                    
-    except httpx.TimeoutException as e:
-        print(f"타임아웃 오류: {e}")
-    except httpx.ConnectError as e:
-        print(f"연결 오류: {e}")
-    except httpx.RequestError as e:
-        print(f"요청 오류: {e}")
-    except Exception as e:
-        print(f"예상치 못한 오류: {e}")
-        import traceback
-        print(traceback.format_exc())
-    finally:
-        is_collecting = False
-        print(f"프레임 수집 종료. 총 {frame_count}개 프레임 처리됨")
 
 @app.get("/start_collection")
 async def start_frame_collection():
-    """프레임 수집 시작"""
-    global is_collecting, collection_task
+    """수신 및 분석 루프 시작"""
+    global is_collecting
     
+    # 중복 실행 방지
     if is_collecting:
-        return {"message": "이미 프레임 수집이 진행 중입니다"}
+        return {"message": "이미 프레임 수집 및 분석이 진행 중입니다"}
     
-    # 기존 큐 비우기
-    cleared = 0
-    while not frame_queue.empty():
-        try:
-            frame_queue.get_nowait()
-            cleared += 1
-        except frame_queue.Empty:
-            break
+    # 1. 기존 큐 초기화 (Raw 데이터 큐와 처리된 결과 큐 모두)
+    for q in [raw_data_queue, processed_frame_queue]:
+        while not q.empty():
+            try:
+                q.get_nowait()
+            except asyncio.QueueEmpty:
+                break
     
-    print(f"큐 초기화: {cleared}개 프레임 제거")
+    print("모든 큐 초기화 완료")
     
     is_collecting = True
-    task1 = asyncio.create_task(collect_frames())
-    threading.Thread(target=processing_thread, daemon=True).start()
     
-    return {"message": "프레임 수집을 시작했습니다"}
+    # 2. 비동기 테스크로 수신부와 분석부를 각각 실행
+    # 이제 이 두 함수는 백그라운드에서 서로 데이터를 주고받으며 독립적으로 작동합니다.
+    asyncio.create_task(receiver_loop())   # 서버에서 데이터 가져오기 전담
+    asyncio.create_task(processing_loop()) # NPU 분석 및 시각화 전담
+    
+    return {"message": "수신 및 분석 파이프라인이 시작되었습니다."}
 
-print("Loading Complete","NPU")
+print("NPU","2502010900")

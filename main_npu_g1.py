@@ -48,7 +48,7 @@ def getHash(text):
   hash_func.update(text.encode('utf-8'))
   return hash_func.hexdigest()
 
-_IP = "192.168.12.106"#"192.168.12.112"
+_IP = "192.168.21.9" #12.128"#"192.168.12.112"
 
 ov = Core()
 
@@ -84,7 +84,7 @@ emotion_output_layer = emotion_compiled_model.output(0)
 emotion_height, emotion_width = list(emotion_input_layer.shape)[2:]
 
 det_model = YOLO('./models/yolo11s-seg_int8_openvino_model')
-ppe_model = YOLO('./models/safety-11s_int8_openvino_model')
+ppe_model = YOLO('./models/yolo11n-helmet4_int8_openvino_model') #ppe_model = YOLO('./models/safety-11s_int8_openvino_model')
 class_names = det_model.names
 ppe_names = ppe_model.names
 
@@ -527,53 +527,6 @@ async def processing_loop():
 @app.get("/")
 def main():
   return { "result" : True, "data" : "AI-CPU-V2", "ip" : _IP, "port" : _PORT }      
-
-# Async function to receive video frames and put them in the queue
-async def recv_camera_stream(track: MediaStreamTrack):
-    while True:
-        frame = await track.recv()
-        img = frame.to_ndarray(format="bgr24")
-
-        if frame_queue.full():
-            frame_queue.get()  # 가장 오래된 프레임 제거        
-
-        frame_queue.put(img)
-
-@app.get("/connect")
-async def connect():
-  global conn
-  global audio_hub
-  conn =  UnitreeWebRTCConnection(WebRTCConnectionMethod.LocalAP) #Go2WebRTCConnection(WebRTCConnectionMethod.LocalSTA, ip="192.168.0.101")
-  await conn.connect()
-  print(1)
-  audio_hub = WebRTCAudioHub(conn, logger)
-  await audio_hub.set_play_mode('no_cycle')
-  print(2)
-  """
-  await conn.datachannel.pub_sub.publish_request_new(
-    RTC_TOPIC["MOTION_SWITCHER"], 
-    {
-        "api_id": 1002,
-        "parameter": {"name": "normal"}
-    }
-  )
-  """
-  conn.video.switchVideoChannel(True)
-  conn.video.add_track_callback(recv_camera_stream)
-  
-  # image processer start
-  threading.Thread(target=processing_thread, daemon=True).start()
-
-  def lowstate_callback(message):
-    #print(message)
-    msg = message['data']      
-    state["charge"] = msg['bms_state']['soc']
-    state["temp"] = msg['temperature_ntc1']
-    state["voltage"] = msg['power_v']
-
-  conn.datachannel.pub_sub.subscribe(RTC_TOPIC['LOW_STATE'], lowstate_callback)
-
-  return { "result" : True, "data" : True }        
 
 @app.get("/connect2")
 async def connect2():
