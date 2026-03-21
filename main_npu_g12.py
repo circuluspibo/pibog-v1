@@ -385,7 +385,13 @@ class WebRTCManager:
             for cid in dead:
                 await self.close(cid)
 
-    async def create_answer(self, client_id, offer_sdp, offer_type):
+    async def create_offer(self, client_id: str) -> dict:
+        """
+        서버가 offer를 만들어 반환.
+        - 트랙/DataChannel을 서버가 먼저 추가하므로 mid 순서 확정
+        - 클라이언트는 이 offer를 setRemoteDescription 후 answer 생성
+        - ICE candidate는 양쪽 SDP에 미리 포함(vanilla ICE) → Trickle 불필요
+        """
         pc = RTCPeerConnection(configuration=RTC_CONFIG)
         self._pcs[client_id] = pc
 
@@ -394,26 +400,42 @@ class WebRTCManager:
         pc.addTrack(FrameProviderTrack(stream_q_face, fps=5))
         pc.addTrack(FrameProviderTrack(stream_q_ppe,  fps=5))
 
+        # DataChannel: state 전송용
         dc = pc.createDataChannel("state", ordered=False, maxRetransmits=0)
         self._dcs[client_id] = dc
 
         @pc.on("connectionstatechange")
         async def _on_state():
+            logger.info(f"PC [{client_id}] → {pc.connectionState}")
             if pc.connectionState in ("failed","closed","disconnected"):
                 await self.close(client_id)
 
-        await pc.setRemoteDescription(RTCSessionDescription(offer_sdp, offer_type))
-        answer = await pc.createAnswer()
-        await pc.setLocalDescription(answer)
+        # offer 생성
+        offer = await pc.createOffer()
+        await pc.setLocalDescription(offer)
 
-        # ICE gathering 완료 대기 (로컬망 → 즉시 완료)
-        t0 = time.time()
-        while pc.iceGatheringState != "complete":
-            await asyncio.sleep(0.02)
-            if time.time()-t0 > 5.0:
-                break
+        # ICE gathering 완료까지 대기 (aiortc 이벤트 기반)
+        gather_done = asyncio.Event()
+        @pc.on("icegatheringstatechange")
+        def _on_gather():
+            if pc.iceGatheringState == "complete":
+                gather_done.set()
+        if pc.iceGatheringState == "complete":
+            gather_done.set()
+        try:
+            await asyncio.wait_for(gather_done.wait(), timeout=5.0)
+        except asyncio.TimeoutError:
+            logger.warning(f"ICE gather timeout [{client_id}]")
 
-        return {"sdp": pc.localDescription.sdp, "type": pc.localDescription.type}
+        return {"sdp": pc.localDescription.sdp, "type": pc.localDescription.type,
+                "client_id": client_id}
+
+    async def set_answer(self, client_id: str, answer_sdp: str, answer_type: str):
+        """클라이언트 answer SDP를 받아 연결 완료"""
+        pc = self._pcs.get(client_id)
+        if pc is None:
+            raise ValueError(f"Unknown client_id: {client_id}")
+        await pc.setRemoteDescription(RTCSessionDescription(answer_sdp, answer_type))
 
     async def close(self, client_id):
         pc = self._pcs.pop(client_id, None)
@@ -445,13 +467,25 @@ async def _shutdown():
     await webrtc_manager.close_all()
 
 # ── 시그널링 ──
-class OfferRequest(BaseModel):
-    sdp: str; type: str; client_id: str
+class AnswerRequest(BaseModel):
+    sdp: str
+    type: str
+    client_id: str
 
-@app.post("/webrtc/offer")
-async def webrtc_offer(req: OfferRequest):
-    answer = await webrtc_manager.create_answer(req.client_id, req.sdp, req.type)
-    return JSONResponse(answer)
+@app.get("/webrtc/offer")
+async def webrtc_get_offer(client_id: str):
+    """
+    클라이언트가 GET으로 요청 → 서버가 offer SDP 반환
+    클라이언트는 이걸 setRemoteDescription 후 answer 만들어 POST /webrtc/answer 로 전송
+    """
+    offer = await webrtc_manager.create_offer(client_id)
+    return JSONResponse(offer)
+
+@app.post("/webrtc/answer")
+async def webrtc_post_answer(req: AnswerRequest):
+    """클라이언트 answer SDP 수신 → 연결 완료"""
+    await webrtc_manager.set_answer(req.client_id, req.sdp, req.type)
+    return JSONResponse({"result": True})
 
 @app.delete("/webrtc/{client_id}")
 async def webrtc_disconnect(client_id: str):
