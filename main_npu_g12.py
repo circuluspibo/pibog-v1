@@ -53,11 +53,13 @@ logger = logging.getLogger(__name__)
 # ─────────────────────────────────────────────────────────────
 # 설정
 # ─────────────────────────────────────────────────────────────
-_IP          = "192.168.21.19"
+_IP          = "192.168.0.19"
 _SERVER_PORT = 59530
 SOURCE_VIDEO_URL = f"http://{_IP}:59512/video_raw"
 
-# 로컬 폐쇄망: STUN/TURN 없음, host candidate 만 사용
+# 로컬 폐쇄망: STUN/TURN 없음
+# aiortc는 서버의 모든 NIC에서 host candidate를 수집함
+# iceServers=[] 로 충분 (STUN 불필요)
 RTC_CONFIG = RTCConfiguration(iceServers=[])
 
 # ─────────────────────────────────────────────────────────────
@@ -414,7 +416,7 @@ class WebRTCManager:
         offer = await pc.createOffer()
         await pc.setLocalDescription(offer)
 
-        # ICE gathering 완료까지 대기 (aiortc 이벤트 기반)
+        # ICE gathering 완료까지 대기 (이벤트 기반)
         gather_done = asyncio.Event()
         @pc.on("icegatheringstatechange")
         def _on_gather():
@@ -427,8 +429,15 @@ class WebRTCManager:
         except asyncio.TimeoutError:
             logger.warning(f"ICE gather timeout [{client_id}]")
 
-        return {"sdp": pc.localDescription.sdp, "type": pc.localDescription.type,
-                "client_id": client_id}
+        sdp = pc.localDescription.sdp
+        # candidate 라인 로그 출력 (디버깅용 - 어떤 IP가 잡혔는지 확인)
+        cands = [l for l in sdp.splitlines() if l.startswith("a=candidate")]
+        logger.warning(f"[ICE candidates for {client_id}]:\n" + "\n".join(cands))
+        print(f"[ICE] server candidates ({len(cands)}):")
+        for c in cands:
+            print("  ", c)
+
+        return {"sdp": sdp, "type": pc.localDescription.type, "client_id": client_id}
 
     async def set_answer(self, client_id: str, answer_sdp: str, answer_type: str):
         """클라이언트 answer SDP를 받아 연결 완료"""
