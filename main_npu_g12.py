@@ -1,1121 +1,679 @@
-from fastapi.middleware.cors import CORSMiddleware
-from serverinfo import si
-from fastapi import FastAPI, File, UploadFile
-from fastapi.responses import FileResponse, StreamingResponse, JSONResponse
-from huggingface_hub import snapshot_download, hf_hub_download
+"""
+구조:
+  Thread-1 receiver   : HTTP → raw_q (수신 전용)
+  Thread-2 processing : raw_q → AI추론/시각화 → stream_q["main"/"face"/"ppe"] (처리 전용)
+  asyncio  WebRTC     : stream_q → FrameProviderTrack.recv() → WebRTC 송출
+  asyncio  FastAPI    : 기존 REST 엔드포인트 그대로
+
+  큐는 threading.Queue 사용 (스레드↔스레드, 스레드↔asyncio 모두 안전)
+  recv()에서는 loop.run_in_executor 로 blocking get() → 이벤트루프 비블로킹
+"""
+
+import queue
+import threading
+import time
 import time as t
-from pydantic import BaseModel, Field
-import numpy as np
-import utils
-from playsound import playsound
-from scipy.io.wavfile import write
-from text import text_to_sequence
+import hashlib
+import asyncio
 import json
+import fractions
+import os
+import glob
+import logging
+import requests
+import numpy as np
+import cv2
+import matplotlib.colors
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
+from scipy.io.wavfile import write
 from pydub import AudioSegment
+from playsound import playsound
+from pyapriltags import Detector
+from av import VideoFrame
+from aiortc import RTCPeerConnection, RTCSessionDescription, RTCDataChannel, VideoStreamTrack, RTCConfiguration
+
+from openvino import Core
+from ultralytics import YOLO
+
+import utils
+from text import text_to_sequence
 from serverinfo import si
 from unitree_webrtc_connect.webrtc_audiohub import WebRTCAudioHub
 from unitree_webrtc_connect.webrtc_driver import UnitreeWebRTCConnection, WebRTCConnectionMethod
-from unitree_webrtc_connect.constants import RTC_TOPIC, VUI_COLOR, SPORT_CMD
-import logging
-from aiortc import MediaStreamTrack, RTCPeerConnection, RTCSessionDescription, RTCDataChannel, VideoStreamTrack
-from aiortc import RTCConfiguration, RTCIceServer
-from requests import get
-import time
-import cv2
-from openvino import Core
-from fastapi.staticfiles import StaticFiles
-from asyncio import Queue
-from ultralytics import YOLO, FastSAM
-import openvino as ov
-from mandro import HadnControler
-import threading
-import hashlib
-import asyncio
-import requests
-from pyapriltags import Detector
-import httpx
-import fractions
-import aiohttp
-from av import VideoFrame
-
-
-def getHash(text):
-    hash_func = hashlib.new('md5')
-    hash_func.update(text.encode('utf-8'))
-    return hash_func.hexdigest()
-
-_IP = "192.168.0.19"
-_SERVER_PORT = 59530          # FastAPI 서버 포트
-
-# ── 로컬망 전용 ICE 설정 ─────────────────────────────────────
-# 외부 STUN/TURN 없이 host candidate만 사용.
-# 같은 L2 망이면 이것만으로 연결 가능.
-# aiortc 가 자동으로 서버의 모든 NIC IP를 host candidate로 포함시킴.
-RTC_CONFIG = RTCConfiguration(iceServers=[])   # STUN/TURN 없음
-
-ov_core = Core()
-
-FACE_DETECTION_MODEL_XML = "./models/face-detection-retail-0005/FP16-INT8/face-detection-retail-0005.xml"
-AGE_GENDER_MODEL_XML = "./models/age-gender-recognition-retail-0013/FP16-INT8/age-gender-recognition-retail-0013.xml"
-EMOTION_MODEL_XML = "./models/emotions-recognition-retail-0003/FP16-INT8/emotions-recognition-retail-0003.xml"
-
-DEVICE = "NPU"
-LIVING_CLASSES = {'person', 'cat', 'dog', 'bird', 'teddy bear', 'cow', 'sheep', 'horse'}
-EMOTIONS = ['neutral', 'happy', 'sad', 'surprise', 'anger']
-
-# 얼굴 탐지 모델
-face_det_model = ov_core.read_model(model=FACE_DETECTION_MODEL_XML)
-face_det_compiled_model = ov_core.compile_model(model=face_det_model, device_name=DEVICE)
-face_det_input_layer = face_det_compiled_model.input(0)
-face_det_output_layer = face_det_compiled_model.output(0)
-face_det_height, face_det_width = list(face_det_input_layer.shape)[2:]
-
-# 나이/성별 모델
-age_gender_model = ov_core.read_model(model=AGE_GENDER_MODEL_XML)
-age_gender_compiled_model = ov_core.compile_model(model=age_gender_model, device_name=DEVICE)
-age_gender_input_layer = age_gender_compiled_model.input(0)
-age_output_layer = age_gender_compiled_model.output("age_conv3")
-gender_output_layer = age_gender_compiled_model.output("prob")
-age_gender_height, age_gender_width = list(age_gender_input_layer.shape)[2:]
-
-# 감정 모델
-emotion_model = ov_core.read_model(model=EMOTION_MODEL_XML)
-emotion_compiled_model = ov_core.compile_model(model=emotion_model, device_name=DEVICE)
-emotion_input_layer = emotion_compiled_model.input(0)
-emotion_output_layer = emotion_compiled_model.output(0)
-emotion_height, emotion_width = list(emotion_input_layer.shape)[2:]
-
-det_model = YOLO('./models/yolo11s-seg_int8_openvino_model')
-ppe_model = YOLO('./models/yolo11n-helmet4_int8_openvino_model')
-class_names = det_model.names
-ppe_names = ppe_model.names
-
-print(ppe_names)
-
-is_collecting = False
-
-detector = Detector(families="tag36h11")
+from unitree_webrtc_connect.constants import RTC_TOPIC, SPORT_CMD
 
 logging.basicConfig(level=logging.ERROR)
 logger = logging.getLogger(__name__)
 
-_PORT = int(open("port.txt", 'r').read())
-
+# ─────────────────────────────────────────────────────────────
+# 설정
+# ─────────────────────────────────────────────────────────────
+_IP          = "192.168.21.19"
+_SERVER_PORT = 59530
 SOURCE_VIDEO_URL = f"http://{_IP}:59512/video_raw"
 
-conn = None
-audio_hub = None
-track = None
-lastColor = 'cyan'
+# 로컬 폐쇄망: STUN/TURN 없음, host candidate 만 사용
+RTC_CONFIG = RTCConfiguration(iceServers=[])
+
+# ─────────────────────────────────────────────────────────────
+# 큐 선언 (모두 threading.Queue, maxsize=1 → 최신 1장만 유지)
+# ─────────────────────────────────────────────────────────────
+raw_q          = queue.Queue(maxsize=1)   # receiver  → processing
+stream_q_main  = queue.Queue(maxsize=1)   # processing → WebRTC main track
+stream_q_face  = queue.Queue(maxsize=1)   # processing → WebRTC face track
+stream_q_ppe   = queue.Queue(maxsize=1)   # processing → WebRTC ppe  track
+
+def q_put(q: queue.Queue, item):
+    """꽉 찼으면 오래된 것 버리고 새 것 넣기"""
+    try:
+        q.get_nowait()
+    except queue.Empty:
+        pass
+    q.put(item)
+
+# ─────────────────────────────────────────────────────────────
+# OpenVINO 모델 로드
+# ─────────────────────────────────────────────────────────────
+DEVICE = "NPU"
+ov_core = Core()
+
+face_det_compiled  = ov_core.compile_model(
+    ov_core.read_model("./models/face-detection-retail-0005/FP16-INT8/face-detection-retail-0005.xml"), DEVICE)
+age_gender_compiled = ov_core.compile_model(
+    ov_core.read_model("./models/age-gender-recognition-retail-0013/FP16-INT8/age-gender-recognition-retail-0013.xml"), DEVICE)
+emotion_compiled   = ov_core.compile_model(
+    ov_core.read_model("./models/emotions-recognition-retail-0003/FP16-INT8/emotions-recognition-retail-0003.xml"), DEVICE)
+
+face_det_h, face_det_w   = list(face_det_compiled.input(0).shape)[2:]
+age_gender_h, age_gender_w = list(age_gender_compiled.input(0).shape)[2:]
+emotion_h, emotion_w     = list(emotion_compiled.input(0).shape)[2:]
+
+det_model   = YOLO('./models/yolo11s-seg_int8_openvino_model')
+ppe_model   = YOLO('./models/yolo11n-helmet4_int8_openvino_model')
+class_names = det_model.names
+ppe_names   = ppe_model.names
+print(ppe_names)
+
+detector = Detector(families="tag36h11")
+
+config_tts = {"PERFORMANCE_HINT": "LATENCY"}
+pipe_tts   = ov_core.compile_model(ov_core.read_model("./models/all_base_ov.xml"), "CPU", config_tts)
+conf_tts   = utils.get_hparams_from_file("./models/all_base_ov.json")
+
+# ─────────────────────────────────────────────────────────────
+# 전역 상태
+# ─────────────────────────────────────────────────────────────
+LIVING_CLASSES = {'person','cat','dog','bird','teddy bear','cow','sheep','horse'}
+EMOTIONS       = ['neutral','happy','sad','surprise','anger']
+
 state = {
-    "charge": 0, "temp": 0, "voltage": 0,
-    "cnt_live": 0, "cnt_object": 0, "boxes": [],
-    "human": {"age": "", "gender": "", "emotion": "", "position": ""},
-    "tag": {"id": None, "dist": 0}
+    "charge":0,"temp":0,"voltage":0,
+    "cnt_live":0,"cnt_object":0,"boxes":[],
+    "human":{"age":"","gender":"","emotion":"","position":""},
+    "tag":{"id":None,"dist":0}
 }
 
-G1_ARM = {
-    "clamp": 17, "highFive": 18, "shakeHands_1": 27,
-    "makeHeartBothHands": 20, "makeHeartSingleHands": 21,
-    "blowKiss": 12, "hug": 19, "hightWave": 26, "lowWave": 25,
-    "ultramanRay": 24, "bothHandsUp": 15, "singleHandsUp": 23,
-    "Refuse": 22, "Release_Arm": 99,
-}
+conn        = None
+audio_hub   = None
+lastColor   = 'cyan'
+lastCmd     = {}
+is_collecting = False
 
-G1_STATE = {
-    "ZeroTorque": 0, "Damp": 1, "Preparation": 4, "Seating": 3,
-    "Walk_G1": 500, "Walk2_G1": 501, "Run_G1": 801,
-    "Squat_G1": 706, "SquatUp_G1": 706, "LieUp_G1": 702,
-}
+_PORT = int(open("port.txt").read())
 
-G1_BALANCE = {"Stand_G1": 0, "Step_G1": 1}
+FACES_DIR = "faces"; os.makedirs(FACES_DIR, exist_ok=True)
+PPE_DIR   = "ppe";   os.makedirs(PPE_DIR,   exist_ok=True)
+last_face_saved_time = 0.0
+last_ppe_saved_time  = 0.0
 
 # ─────────────────────────────────────────────────────────────
-# [변경] MJPEG 큐 제거 → WebRTC용 latest_frames 공유 메모리로 교체
-# processed_frame_queue, frame_queue, depth_queue 는 아래로 대체됨
+# 파일 저장 (저장 전용 daemon 스레드에서 호출)
 # ─────────────────────────────────────────────────────────────
-# ── receiver_loop → processing_thread 용 raw 큐 (threading) ──
-import queue as _queue
-raw_data_queue_th = _queue.Queue(maxsize=1)   # blocking Queue, 스레드 전용
-
-# ── processing_thread → WebRTC recv() 용 공유 버퍼 ────────────
-# 구조: 각 키마다 (버퍼 numpy, 버전카운터) 를 tuple로 보관
-# threading.Condition 으로 "새 프레임 도착" 을 recv() 에 알림
-# recv() 는 condition.wait() 로 CPU 0% 대기, 새 프레임 오면 즉시 깨어남
-import threading as _threading
-_shared = {
-    "main": None,
-    "face": None,
-    "ppe":  None,
-}
-_shared_ver = {"main": 0, "face": 0, "ppe": 0}
-_shared_cond = {
-    "main": _threading.Condition(),
-    "face": _threading.Condition(),
-    "ppe":  _threading.Condition(),
-}
-
-def _push_frame(key: str, bgr_frame):
-    """processing 스레드에서 호출 — 새 프레임을 공유 버퍼에 저장하고 대기자를 깨움"""
-    with _shared_cond[key]:
-        _shared[key] = bgr_frame          # 참조 교체 (numpy 배열 자체를 새로 할당)
-        _shared_ver[key] += 1
-        _shared_cond[key].notify_all()    # recv() 코루틴의 스레드를 깨움
-
-cnt_live = 0
-cnt_object = 0
-lastTime = 0
-cnt_image = 0
-
-import os
-import glob
-
-config = {"PERFORMANCE_HINT": "LATENCY"}
-pipe_tts = ov_core.compile_model(ov_core.read_model("./models/all_base_ov.xml"), device_name="CPU", config=config)
-conf_tts = utils.get_hparams_from_file("./models/all_base_ov.json")
-
-FACES_DIR = "faces"
-os.makedirs(FACES_DIR, exist_ok=True)
-last_face_saved_time = 0
-latest_face_frame = None  # (하위 호환용, 이후 latest_frames["face"] 로 통일)
-
-PPE_DIR = "ppe"
-os.makedirs(PPE_DIR, exist_ok=True)
-last_ppe_saved_time = 0
-latest_ppe_frame = None   # (하위 호환용)
-
-
-# ─────────────────────────────────────────────────────────────
-# 파일 저장 헬퍼 (기존과 동일, latest_frames도 함께 업데이트)
-# ─────────────────────────────────────────────────────────────
-
-def save_ppe_async(crop_img, filename):
-    """파일 저장 전용 스레드 함수. 스트리밍 캐시는 processing_loop에서 직접 업데이트."""
-    global latest_ppe_frame
+def _save_face(img, filename):
     try:
-        _, img_encoded = cv2.imencode('.jpg', crop_img, [cv2.IMWRITE_JPEG_QUALITY, 70])
-        latest_ppe_frame = img_encoded.tobytes()
-        cv2.imwrite(os.path.join(PPE_DIR, filename), crop_img)
-        files = sorted(glob.glob(os.path.join(PPE_DIR, "*.jpg")), key=os.path.getmtime)
-        if len(files) > 20:
-            for old_f in files[:-20]:
-                os.remove(old_f)
+        cv2.imwrite(os.path.join(FACES_DIR, filename), img)
     except Exception as e:
-        print(f"PPE Async Save Error: {e}")
+        print(f"face save error: {e}")
 
-
-def save_face_async(face_img, filename):
-    """파일 저장 전용 스레드 함수. 스트리밍 캐시는 processing_loop에서 직접 업데이트."""
-    global latest_face_frame
+def _save_ppe(img, filename):
     try:
-        _, img_encoded = cv2.imencode('.jpg', face_img, [cv2.IMWRITE_JPEG_QUALITY, 70])
-        latest_face_frame = img_encoded.tobytes()
-        cv2.imwrite(os.path.join(FACES_DIR, filename), face_img)
+        cv2.imwrite(os.path.join(PPE_DIR, filename), img)
+        files = sorted(glob.glob(os.path.join(PPE_DIR,"*.jpg")), key=os.path.getmtime)
+        for f in files[:-20]:
+            os.remove(f)
     except Exception as e:
-        print(f"Async Save Error: {e}")
-
+        print(f"ppe save error: {e}")
 
 # ─────────────────────────────────────────────────────────────
-# AI 처리 함수들 (기존과 완전 동일)
+# AI 처리 헬퍼 (기존 로직 그대로)
 # ─────────────────────────────────────────────────────────────
-
-def visualize_face(frame, face_det_results):
-    global state
-    global last_face_saved_time
-    global latest_face_frame
-    current_time = time.time()
-    h, w, _ = frame.shape
-
-    state["human"]["gender"] = ""
-    state["human"]["age"] = ""
-    state["human"]["emotion"] = ""
-
-    for detection in face_det_results[0][0]:
-        confidence = detection[2]
-        if confidence > 0.5:
-            xmin = int(detection[3] * w)
-            ymin = int(detection[4] * h)
-            xmax = int(detection[5] * w)
-            ymax = int(detection[6] * h)
-
-            xmin = max(0, xmin)
-            ymin = max(0, ymin)
-            xmax = min(w, xmax)
-            ymax = min(h, ymax)
-            face_img = frame[ymin:ymax, xmin:xmax]
-
-            if face_img.size > 0:
-                if current_time - last_face_saved_time > 10.0:
-                    print("face save...")
-                    last_face_saved_time = current_time
-                    face_filename = f"face_{int(current_time)}.jpg"
-                    save_thread = threading.Thread(
-                        target=save_face_async,
-                        args=(face_img.copy(), face_filename)
-                    )
-                    save_thread.start()
-                    print("save end...")
-
-                cv2.rectangle(frame, (xmin, ymin), (xmax, ymax), (0, 255, 255), 2)
-
-    return frame
-
-
-def visualize_segmentation(frame, masks, boxes, classes, scores, depths, class_names, alpha=0.5):
+def visualize_segmentation(frame, masks, boxes, classes, scores, depths, alpha=0.5):
     global state
     overlay = frame.copy()
-
-    state['boxes'] = []
-    state["cnt_object"] = 0
-    state["cnt_live"] = 0
-    state["human"]["depth"] = ""
-    state["human"]["position"] = ""
+    state['boxes'] = []; state["cnt_object"] = 0; state["cnt_live"] = 0
+    state["human"]["depth"] = ""; state["human"]["position"] = ""
+    H, W = frame.shape[:2]
+    cell_h, cell_w = H//3, W//3
 
     for mask, box, cls_idx, score, depth in zip(masks, boxes, classes, scores, depths):
-        class_name = class_names[cls_idx]
-        is_living = class_name in LIVING_CLASSES
-        color = (0, 0, 255) if is_living else (0, 255, 0)
-
-        overlay[mask == 1] = (overlay[mask == 1] * (1 - alpha) + np.array(color) * alpha).astype(np.uint8)
-        x1, y1, x2, y2 = map(int, box)
-        cv2.rectangle(overlay, (x1, y1), (x2, y2), color, 2)
-
-        height, width, channels = frame.shape
-        cell_h = height // 3
-        cell_w = width // 3
-
-        cx = (x1 + x2) // 2
-        cy = (y1 + y2) // 2
-
-        if cy < cell_h:
-            row = 'T'
-        elif cy < 2 * cell_h:
-            row = 'C'
-        else:
-            row = 'B'
-
-        if cx < cell_w:
-            col = 'L'
-        elif cx < 2 * cell_w:
-            col = 'C'
-        else:
-            col = 'R'
-
-        position = row + col
-
+        cls_name = class_names[cls_idx]
+        is_living = cls_name in LIVING_CLASSES
+        color = (0,0,255) if is_living else (0,255,0)
+        overlay[mask==1] = (overlay[mask==1]*(1-alpha) + np.array(color)*alpha).astype(np.uint8)
+        x1,y1,x2,y2 = map(int, box)
+        cv2.rectangle(overlay,(x1,y1),(x2,y2),color,2)
+        cx,cy = (x1+x2)//2, (y1+y2)//2
+        row = 'T' if cy<cell_h else ('C' if cy<2*cell_h else 'B')
+        col = 'L' if cx<cell_w else ('C' if cx<2*cell_w else 'R')
+        pos = row+col
         if is_living:
             state["cnt_live"] += 1
-            state["human"]["depth"] = depth
-            state["human"]["position"] = position
+            state["human"]["depth"]    = depth
+            state["human"]["position"] = pos
         else:
             state["cnt_object"] += 1
-
-        state['boxes'].append({
-            'class': class_name,
-            'score': round(float(score), 2),
-            'bbox': {'x1': x1, 'y1': y1, 'x2': x2, 'y2': y2},
-            'position': position,
-            'depth': depth
-        })
-
-        label = f"{class_name}:{score:.2f} | {depth:.2f}m"
-        cv2.putText(overlay, label, (x1, max(15, y1 - 10)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
-
+        state['boxes'].append({'class':cls_name,'score':round(float(score),2),
+                                'bbox':{'x1':x1,'y1':y1,'x2':x2,'y2':y2},'position':pos,'depth':depth})
+        cv2.putText(overlay,f"{cls_name}:{score:.2f}|{depth:.2f}m",(x1,max(15,y1-10)),
+                    cv2.FONT_HERSHEY_SIMPLEX,0.5,color,1)
     return overlay
 
-
-def get_mask_depths(masks, depth_frame, low_percentile=5):
+def get_mask_depths(masks, depth_frame, low_pct=5):
     depths = []
-    depth_image = depth_frame
     for mask in masks:
-        if mask.sum() == 0:
-            depths.append(0.0)
-            continue
-        depth_values = depth_image[mask == 1]
-        valid = depth_values[depth_values > 0]
-        if len(valid) > 0:
-            low_thresh = np.percentile(valid, low_percentile)
-            filtered = valid[valid >= low_thresh]
-            if len(filtered) > 0:
-                closest_depth_m = np.min(filtered) / 1000.0
-            else:
-                closest_depth_m = np.min(valid) / 1000.0
+        if mask.sum()==0: depths.append(0.0); continue
+        vals = depth_frame[mask==1]; valid = vals[vals>0]
+        if len(valid)>0:
+            thr = np.percentile(valid, low_pct)
+            f   = valid[valid>=thr]
+            depths.append((np.min(f) if len(f)>0 else np.min(valid))/1000.0)
         else:
-            closest_depth_m = 0.0
-        depths.append(closest_depth_m)
+            depths.append(0.0)
     return depths
 
-
 # ─────────────────────────────────────────────────────────────
-# 수신 루프 (기존과 동일)
+# Thread-1: receiver  (HTTP 수신 전담)
 # ─────────────────────────────────────────────────────────────
-
-def receiver_thread_func():
-    """
-    완전한 스레드 함수 — asyncio 이벤트 루프와 완전 분리.
-    requests 로 RGB+Depth 바이너리를 받아 raw_data_queue_th 에 넣음.
-    """
+def receiver_thread():
     W, H = 640, 480
-    RGB_SIZE  = W * H * 3
-    DEPTH_SIZE = W * H * 2
-    TOTAL_SIZE = RGB_SIZE + DEPTH_SIZE
-    print("============= Receiver Thread Started")
+    RGB_SIZE   = W*H*3
+    DEPTH_SIZE = W*H*2
+    TOTAL      = RGB_SIZE + DEPTH_SIZE
+    print("=== Receiver thread started")
     while True:
         try:
             resp = requests.get(SOURCE_VIDEO_URL, timeout=1.0)
-            if resp.status_code == 200:
-                data = resp.content
-                if len(data) >= TOTAL_SIZE:
-                    frame = np.frombuffer(data[:RGB_SIZE],        dtype=np.uint8).reshape(H, W, 3).copy()
-                    depth = np.frombuffer(data[RGB_SIZE:TOTAL_SIZE], dtype=np.uint16).reshape(H, W).copy()
-                    # 오래된 프레임 버리고 최신만 유지
-                    if raw_data_queue_th.full():
-                        try: raw_data_queue_th.get_nowait()
-                        except: pass
-                    raw_data_queue_th.put((frame, depth))
-                else:
-                    print(f"Warning: Data incomplete ({len(data)}/{TOTAL_SIZE})")
+            if resp.status_code == 200 and len(resp.content) >= TOTAL:
+                raw = resp.content
+                frame = np.frombuffer(raw[:RGB_SIZE],        dtype=np.uint8 ).reshape(H,W,3).copy()
+                depth = np.frombuffer(raw[RGB_SIZE:TOTAL],   dtype=np.uint16).reshape(H,W  ).copy()
+                q_put(raw_q, (frame, depth))   # 오래된 프레임 버리고 최신만 유지
             else:
-                print(f"Server Error: HTTP {resp.status_code}")
-                time.sleep(0.1)
+                time.sleep(0.01)
         except Exception as e:
-            print(f"Receiver Error: {e}")
+            print(f"Receiver error: {e}")
             time.sleep(0.1)
 
-
 # ─────────────────────────────────────────────────────────────
-# 처리 스레드 — asyncio 이벤트 루프와 완전 분리된 동기 함수
-# NPU 추론 / CV 처리 / 시각화 전부 여기서 실행
-# 결과는 _push_frame() 으로 공유 버퍼에 저장 → FrameProviderTrack 이 읽어감
+# Thread-2: processing  (AI 추론/시각화 전담)
+# raw_q에서 꺼내 → 처리 → stream_q_* 에 넣기
 # ─────────────────────────────────────────────────────────────
-
-def processing_thread_func():
-    global cnt_image
-    global last_ppe_saved_time
-    global last_face_saved_time
-
-    print("============= Processing Thread Started")
+def processing_thread():
+    global last_face_saved_time, last_ppe_saved_time
+    cnt_image = 0
+    print("=== Processing thread started")
 
     while True:
-        # 1. 수신부로부터 데이터 획득 (blocking get — CPU 0% 대기)
+        # raw_q 에서 최신 프레임 꺼내기 (없으면 대기)
         try:
-            frame, depth_frame = raw_data_queue_th.get(timeout=1.0)
-        except _queue.Empty:
+            frame, depth_frame = raw_q.get(timeout=1.0)
+        except queue.Empty:
             continue
-        start_time = time.time()
 
-        # 2. 전처리
-        frame_ai = cv2.resize(frame, (640, 640), interpolation=cv2.INTER_NEAREST)
-        depth_ai = cv2.resize(depth_frame, (640, 640), interpolation=cv2.INTER_NEAREST)
+        t0 = time.time()
 
-        # 3. NPU 추론 (동기, 스레드 안에서 직접 호출 — 이벤트 루프 블로킹 없음)
+        # 전처리
+        frame_ai = cv2.resize(frame, (640,640), interpolation=cv2.INTER_NEAREST)
+        depth_ai = cv2.resize(depth_frame, (640,640), interpolation=cv2.INTER_NEAREST)
+
+        # NPU 추론 (동기, 스레드 안이므로 이벤트루프 블로킹 없음)
         res     = det_model(frame_ai, device="intel:npu", verbose=False, conf=0.25)[0]
         ppe_res = ppe_model(frame_ai, device="intel:npu", verbose=False, conf=0.25)[0]
 
-        # 4. 후처리 (기존과 동일)
-        if hasattr(res, 'masks') and res.masks is not None:
-            masks = res.masks.data.cpu().numpy().astype(np.uint8)
-        else:
-            masks = []
-
-        boxes = res.boxes.xyxy.cpu().numpy()
+        # 세그멘테이션
+        masks   = res.masks.data.cpu().numpy().astype(np.uint8) if res.masks else []
+        boxes   = res.boxes.xyxy.cpu().numpy()
         classes = res.boxes.cls.cpu().numpy().astype(int)
-        scores = res.boxes.conf.cpu().numpy()
+        scores  = res.boxes.conf.cpu().numpy()
+        out     = visualize_segmentation(frame_ai, masks, boxes, classes, scores,
+                                         get_mask_depths(masks, depth_ai))
 
-        # 5. 세그멘테이션 시각화 (기존과 동일)
-        out = visualize_segmentation(
-            frame_ai, masks, boxes, classes, scores,
-            get_mask_depths(masks, depth_ai), class_names
-        )
-
-        # 6. PPE 탐지 + 시각화 (기존과 동일)
+        # PPE 탐지
+        cur_time = time.time()
         if ppe_res.boxes is not None:
-            ppe_boxes = ppe_res.boxes.xyxy.cpu().numpy()
-            ppe_scores = ppe_res.boxes.conf.cpu().numpy()
-            ppe_classes = ppe_res.boxes.cls.cpu().numpy().astype(int)
-            ppe_names_local = ppe_model.names
+            for i, box in enumerate(ppe_res.boxes.xyxy.cpu().numpy()):
+                x1,y1,x2,y2 = map(int, box)
+                conf    = float(ppe_res.boxes.conf.cpu().numpy()[i])
+                cls_id  = int(ppe_res.boxes.cls.cpu().numpy()[i])
+                label   = ppe_names.get(cls_id, str(cls_id))
 
-            for i, box in enumerate(ppe_boxes):
-                x1, y1, x2, y2 = map(int, box)
-                conf = ppe_scores[i]
-                cls_id = ppe_classes[i]
-                label_text = ppe_names_local.get(cls_id, str(cls_id))
+                if 'helmet' in label or 'face' in label:
+                    ch,cw   = out.shape[:2]
+                    crop    = out[max(0,y1):min(ch,y2), max(0,x1):min(cw,x2)].copy()
 
-                if 'helmet' in label_text or 'face' in label_text:
-                    display_str = f"{label_text.capitalize()}: {conf:.2f}"
-                    current_time = time.time()
+                    if 'helmet' in label:
+                        # 스트리밍 큐에 즉시 push
+                        q_put(stream_q_ppe, crop)
+                        # 파일 저장은 10초 간격 daemon 스레드
+                        if cur_time - last_ppe_saved_time > 10.0:
+                            last_ppe_saved_time = cur_time
+                            threading.Thread(target=_save_ppe,
+                                args=(crop, f"ppe_{label}_{int(cur_time)}.jpg"), daemon=True).start()
+                    elif 'face' in label:
+                        q_put(stream_q_face, crop)
+                        if cur_time - last_face_saved_time > 10.0:
+                            last_face_saved_time = cur_time
+                            threading.Thread(target=_save_face,
+                                args=(crop, f"face_{int(cur_time)}.jpg"), daemon=True).start()
 
-                    crop_h, crop_w = out.shape[:2]
-                    y1_c, y2_c = max(0, y1), min(crop_h, y2)
-                    x1_c, x2_c = max(0, x1), min(crop_w, x2)
-                    ppe_crop = out[y1_c:y2_c, x1_c:x2_c]
+                    # 박스 그리기
+                    disp = f"{label.capitalize()}: {conf:.2f}"
+                    cv2.rectangle(out,(x1,y1),(x2,y2),(255,0,0),2)
+                    (tw,th),_ = cv2.getTextSize(disp, cv2.FONT_HERSHEY_SIMPLEX,0.5,1)
+                    ty = max(y1, th+10)
+                    cv2.rectangle(out,(x1,ty-th-10),(x1+tw,ty),(255,0,0),-1)
+                    cv2.putText(out,disp,(x1,ty-5),cv2.FONT_HERSHEY_SIMPLEX,0.5,(255,255,255),1)
 
-                    if 'helmet' in label_text:
-                        # ① 스트리밍: 공유 버퍼 즉시 교체 (스레드 안에서 직접 호출 가능)
-                        _push_frame("ppe", ppe_crop.copy())
-                        # ② 파일 저장 (10초 간격, 별도 daemon 스레드)
-                        if current_time - last_ppe_saved_time > 10.0:
-                            last_ppe_saved_time = current_time
-                            ppe_fn = f"ppe_{label_text}_{int(current_time)}.jpg"
-                            _threading.Thread(target=save_ppe_async,
-                                              args=(ppe_crop.copy(), ppe_fn), daemon=True).start()
-
-                    elif 'face' in label_text:
-                        # ① 스트리밍: 공유 버퍼 즉시 교체
-                        _push_frame("face", ppe_crop.copy())
-                        # ② 파일 저장 (10초 간격, 별도 daemon 스레드)
-                        if current_time - last_face_saved_time > 10.0:
-                            last_face_saved_time = current_time
-                            face_fn = f"face_{int(current_time)}.jpg"
-                            _threading.Thread(target=save_face_async,
-                                              args=(ppe_crop.copy(), face_fn), daemon=True).start()
-
-                    # PPE 박스 및 텍스트 그리기 (기존과 동일)
-                    cv2.rectangle(out, (x1, y1), (x2, y2), (255, 0, 0), 2)
-                    (w_t, h_t), _ = cv2.getTextSize(display_str, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
-                    text_y = max(y1, h_t + 10)
-                    cv2.rectangle(out, (x1, text_y - h_t - 10), (x1 + w_t, text_y), (255, 0, 0), -1)
-                    cv2.putText(out, display_str, (x1, text_y - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
-
-        # 7. AprilTag 탐지 (기존과 동일)
-        gray = cv2.cvtColor(frame_ai, cv2.COLOR_BGR2GRAY)
-        tags = detector.detect(gray)
-
+        # AprilTag
+        tags = detector.detect(cv2.cvtColor(frame_ai, cv2.COLOR_BGR2GRAY))
         if tags:
-            best_tag = max(tags, key=lambda t: cv2.contourArea(t.corners.astype(np.float32)))
+            best = max(tags, key=lambda t: cv2.contourArea(t.corners.astype(np.float32)))
+            pts  = best.corners.reshape((-1,1,2)).astype(np.int32)
+            ov2  = out.copy(); cv2.fillPoly(ov2,[pts],(0,255,255))
+            out  = cv2.addWeighted(ov2,0.2,out,0.8,0)
+            tid  = best.tag_id
+            cx,cy = int(best.center[0]), int(best.center[1])
+            dist  = depth_ai[cy,cx]/1000.0 if 0<=cy<640 and 0<=cx<640 else 0.0
+            state["tag"]["id"] = tid; state["tag"]["dist"] = dist
+            info = f"ID:{tid} / {dist:.2f}m"
+            (tw,th),_ = cv2.getTextSize(info,cv2.FONT_HERSHEY_SIMPLEX,0.7,2)
+            tx = 640-tw-20; ty = 640-20
+            cv2.rectangle(out,(tx-10,ty-th-10),(640,640),(0,0,0),-1)
+            cv2.putText(out,info,(tx,ty),cv2.FONT_HERSHEY_SIMPLEX,0.7,(0,255,255),2)
 
-            overlay = out.copy()
-            pts = best_tag.corners.reshape((-1, 1, 2)).astype(np.int32)
-            cv2.fillPoly(overlay, [pts], (0, 255, 255))
-            out = cv2.addWeighted(overlay, 0.2, out, 0.8, 0)
+        # FPS
+        fps = 1.0/(time.time()-t0)
+        cv2.putText(out,f"FPS:{fps:.1f}",(10,30),cv2.FONT_HERSHEY_SIMPLEX,0.7,(255,255,0),2)
 
-            tag_id = best_tag.tag_id
-            cx_t, cy_t = int(best_tag.center[0]), int(best_tag.center[1])
-
-            dist = 0.0
-            if 0 <= cy_t < 640 and 0 <= cx_t < 640:
-                dist = depth_ai[cy_t, cx_t] / 1000.0
-
-            info_str = f"ID: {tag_id} / Dist: {dist:.2f}m"
-            state["tag"]["id"] = tag_id
-            state["tag"]["dist"] = dist
-
-            (w_tag, h_tag), baseline = cv2.getTextSize(info_str, cv2.FONT_HERSHEY_SIMPLEX, 0.7, 2)
-            text_x = 640 - w_tag - 20
-            text_y = 640 - 20
-            cv2.rectangle(out, (text_x - 10, text_y - h_tag - 10), (640, 640), (0, 0, 0), -1)
-            cv2.putText(out, info_str, (text_x, text_y), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
-
-        # 8. FPS 표시 (기존과 동일)
-        fps = 1.0 / (time.time() - start_time)
-        cv2.putText(out, f"FPS: {fps:.2f}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
-
-        # ── 결과 프레임 → 공유 버퍼 push (recv() 를 깨움) ──────
-        main_frame = cv2.resize(out, (640, 480))
-        _push_frame("main", main_frame)   # 새 numpy 배열 참조 교체 + notify
+        # 메인 스트리밍 큐에 push (640x480 리사이즈)
+        main_frame = cv2.resize(out,(640,480))
+        q_put(stream_q_main, main_frame)
 
         cnt_image += 1
         if cnt_image % 100 == 0:
             cv2.imwrite("capture.jpg", frame)
 
-
 # ─────────────────────────────────────────────────────────────
-# WebRTC: VideoStreamTrack 구현
+# WebRTC VideoStreamTrack
+# stream_q_* 에서 blocking get → asyncio run_in_executor로 비블로킹화
 # ─────────────────────────────────────────────────────────────
-
 class FrameProviderTrack(VideoStreamTrack):
-    """
-    processing_thread_func() 이 _push_frame() 으로 업데이트하는
-    공유 버퍼(_shared)에서 프레임을 읽어 WebRTC VideoFrame으로 변환.
-
-    핵심:
-    - asyncio.get_event_loop().run_in_executor 로
-      threading.Condition.wait() 를 await 화 → 이벤트 루프 비블로킹
-    - 새 프레임이 도착할 때마다 Condition.notify_all() → recv() 즉시 깨어남
-    - 스레드(processing)와 asyncio(WebRTC) 가 완전히 분리된 채로 동기화
-    """
-
     kind = "video"
 
-    def __init__(self, frame_key: str, fps: int = 15):
+    def __init__(self, q: queue.Queue, fps: int = 15):
         super().__init__()
-        self.frame_key  = frame_key
-        self._seen_ver  = -1
-        self._pts       = 0
-        self._time_base = fractions.Fraction(1, 90000)
-        self._pts_step  = 90000 // fps
-        self._loop      = None
+        self._q        = q
+        self._pts      = 0
+        self._tb       = fractions.Fraction(1, 90000)
+        self._step     = 90000 // fps
+        self._blank    = np.zeros((480,640,3), dtype=np.uint8)
 
     async def recv(self):
-        if self._loop is None:
-            self._loop = asyncio.get_event_loop()
+        loop = asyncio.get_event_loop()
 
-        key  = self.frame_key
-        cond = _shared_cond[key]
-        seen = self._seen_ver
+        # blocking get을 executor에서 실행 → 이벤트루프 비블로킹
+        # timeout=0.1 → 프레임 없으면 blank 반환 (WebRTC 연결 유지)
+        def _get():
+            try:
+                return self._q.get(timeout=0.1)
+            except queue.Empty:
+                return None
 
-        # threading.Condition.wait 를 executor 에서 실행 → 이벤트 루프 비블로킹
-        def _wait_new():
-            with cond:
-                # 현재 버전과 같으면 새 프레임 올 때까지 대기 (timeout=1초 안전장치)
-                while _shared_ver[key] == seen:
-                    cond.wait(timeout=1.0)
-                return _shared[key], _shared_ver[key]
-
-        bgr, new_ver = await self._loop.run_in_executor(None, _wait_new)
-
-        self._seen_ver = new_ver
-
+        bgr = await loop.run_in_executor(None, _get)
         if bgr is None:
-            bgr = np.zeros((480, 640, 3), dtype=np.uint8)
+            bgr = self._blank
 
         rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
         vf  = VideoFrame.from_ndarray(rgb, format="rgb24")
         vf.pts       = self._pts
-        vf.time_base = self._time_base
-        self._pts   += self._pts_step
+        vf.time_base = self._tb
+        self._pts   += self._step
         return vf
 
-
 # ─────────────────────────────────────────────────────────────
-# WebRTC: 연결 관리자
+# WebRTC 연결 관리
 # ─────────────────────────────────────────────────────────────
-
 class WebRTCManager:
-    """
-    - 클라이언트 1개당 RTCPeerConnection 1개
-    - 비디오 트랙 3개 (main 15fps / face 5fps / ppe 5fps) 단일 PC에 번들
-    - DataChannel "state" 로 state JSON을 100ms 간격 diff 전송
-      → 변경 없으면 전송 안 함 (대역폭 절약)
-    - DataChannel ordered=False, maxRetransmits=0
-      → UDP-like, 재전송 없이 최신 state 우선
-    """
-
     def __init__(self):
-        self.peer_connections: dict[str, RTCPeerConnection] = {}
-        self.data_channels: dict[str, RTCDataChannel] = {}
-        self._last_state_hash = None
+        self._pcs:  dict[str, RTCPeerConnection] = {}
+        self._dcs:  dict[str, RTCDataChannel]    = {}
+        self._last_hash = None
 
-    async def start_broadcast_loop(self, interval: float = 0.1):
+    async def start_broadcast_loop(self, interval=0.1):
         while True:
             await asyncio.sleep(interval)
-            await self._broadcast_state()
-
-    async def _broadcast_state(self):
-        state_json = json.dumps(state, ensure_ascii=False)
-        h = hash(state_json)
-        if h == self._last_state_hash:
-            return
-        self._last_state_hash = h
-
-        msg = state_json.encode("utf-8")
-        dead = []
-        for cid, dc in list(self.data_channels.items()):
-            try:
-                if dc.readyState == "open":
-                    dc.send(msg)
-                else:
+            js = json.dumps(state, ensure_ascii=False)
+            h  = hash(js)
+            if h == self._last_hash:
+                continue
+            self._last_hash = h
+            msg  = js.encode()
+            dead = []
+            for cid, dc in list(self._dcs.items()):
+                try:
+                    if dc.readyState == "open":
+                        dc.send(msg)
+                    else:
+                        dead.append(cid)
+                except Exception:
                     dead.append(cid)
-            except Exception as e:
-                logger.warning(f"DataChannel send error [{cid}]: {e}")
-                dead.append(cid)
+            for cid in dead:
+                await self.close(cid)
 
-        for cid in dead:
-            await self.close(cid)
-
-    async def create_answer(self, client_id: str, offer_sdp: str, offer_type: str) -> dict:
-        # 로컬망 전용: STUN 없이 host candidate만 사용
+    async def create_answer(self, client_id, offer_sdp, offer_type):
         pc = RTCPeerConnection(configuration=RTC_CONFIG)
-        self.peer_connections[client_id] = pc
+        self._pcs[client_id] = pc
 
-        # 비디오 트랙 3개 추가
-        pc.addTrack(FrameProviderTrack("main", fps=15))
-        pc.addTrack(FrameProviderTrack("face", fps=5))
-        pc.addTrack(FrameProviderTrack("ppe",  fps=5))
+        # 트랙 추가: main(15fps) / face(5fps) / ppe(5fps)
+        pc.addTrack(FrameProviderTrack(stream_q_main, fps=15))
+        pc.addTrack(FrameProviderTrack(stream_q_face, fps=5))
+        pc.addTrack(FrameProviderTrack(stream_q_ppe,  fps=5))
 
-        # DataChannel: UDP-like (ordered=False, maxRetransmits=0)
         dc = pc.createDataChannel("state", ordered=False, maxRetransmits=0)
-        self.data_channels[client_id] = dc
-
-        @dc.on("open")
-        def on_dc_open():
-            logger.info(f"DataChannel open [{client_id}]")
+        self._dcs[client_id] = dc
 
         @pc.on("connectionstatechange")
-        async def on_conn_change():
-            logger.info(f"PC [{client_id}] state: {pc.connectionState}")
-            if pc.connectionState in ("failed", "closed", "disconnected"):
+        async def _on_state():
+            if pc.connectionState in ("failed","closed","disconnected"):
                 await self.close(client_id)
 
-        await pc.setRemoteDescription(RTCSessionDescription(sdp=offer_sdp, type=offer_type))
+        await pc.setRemoteDescription(RTCSessionDescription(offer_sdp, offer_type))
         answer = await pc.createAnswer()
         await pc.setLocalDescription(answer)
 
-        # ── 로컬망 핵심: ICE gathering 완료 대기 ─────────────────
-        # 외부 STUN이 없으므로 host candidate 수집이 즉시 끝남.
-        # gathering 완료 전 SDP를 반환하면 candidate가 빠질 수 있으므로 대기.
-        # (aiortc는 gather 완료 후 iceGatheringState = "complete" 로 전환)
-        gather_start = time.time()
+        # ICE gathering 완료 대기 (로컬망 → 즉시 완료)
+        t0 = time.time()
         while pc.iceGatheringState != "complete":
             await asyncio.sleep(0.02)
-            if time.time() - gather_start > 5.0:   # 5초 타임아웃 (로컬망이면 <100ms)
-                logger.warning(f"ICE gathering timeout [{client_id}]")
+            if time.time()-t0 > 5.0:
                 break
 
         return {"sdp": pc.localDescription.sdp, "type": pc.localDescription.type}
 
-    async def close(self, client_id: str):
-        pc = self.peer_connections.pop(client_id, None)
-        self.data_channels.pop(client_id, None)
+    async def close(self, client_id):
+        pc = self._pcs.pop(client_id, None)
+        self._dcs.pop(client_id, None)
         if pc:
             await pc.close()
-        logger.info(f"PC closed [{client_id}]")
 
     async def close_all(self):
-        for cid in list(self.peer_connections.keys()):
+        for cid in list(self._pcs):
             await self.close(cid)
-
 
 webrtc_manager = WebRTCManager()
 
-
 # ─────────────────────────────────────────────────────────────
-# FastAPI 앱
+# FastAPI
 # ─────────────────────────────────────────────────────────────
-
 app = FastAPI()
-
-app.mount("/web", StaticFiles(directory="web"), name="web")
+app.mount("/web",      StaticFiles(directory="web"),      name="web")
 app.mount("/webfonts", StaticFiles(directory="webfonts"), name="webfonts")
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["*"],
-)
-
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True,
+                   allow_methods=["*"], allow_headers=["*"])
 
 @app.on_event("startup")
-async def on_startup():
-    asyncio.create_task(webrtc_manager.start_broadcast_loop(interval=0.1))
-    logger.info("WebRTC broadcast loop started")
-
+async def _startup():
+    asyncio.create_task(webrtc_manager.start_broadcast_loop())
 
 @app.on_event("shutdown")
-async def on_shutdown():
+async def _shutdown():
     await webrtc_manager.close_all()
 
-
-# ─────────────────────────────────────────────────────────────
-# WebRTC 시그널링 엔드포인트
-# ─────────────────────────────────────────────────────────────
-
+# ── 시그널링 ──
 class OfferRequest(BaseModel):
-    sdp: str
-    type: str
-    client_id: str
-
+    sdp: str; type: str; client_id: str
 
 @app.post("/webrtc/offer")
 async def webrtc_offer(req: OfferRequest):
-    """
-    클라이언트 offer SDP → 서버 answer SDP 반환.
-    단일 HTTP POST로 시그널링 완료.
-    """
-    answer = await webrtc_manager.create_answer(
-        client_id=req.client_id,
-        offer_sdp=req.sdp,
-        offer_type=req.type,
-    )
+    answer = await webrtc_manager.create_answer(req.client_id, req.sdp, req.type)
     return JSONResponse(answer)
-
 
 @app.delete("/webrtc/{client_id}")
 async def webrtc_disconnect(client_id: str):
     await webrtc_manager.close(client_id)
     return {"result": True}
 
-
-# ─────────────────────────────────────────────────────────────
-# 기존 엔드포인트 전부 보존
-# ─────────────────────────────────────────────────────────────
-
+# ── 기존 엔드포인트 (원본 그대로) ──
 @app.get("/")
-def main():
+def main_route():
     return {"result": True, "data": "AI-CPU-V2", "ip": _IP, "port": _PORT}
-
 
 @app.get("/connect2")
 async def connect2():
     global conn
     conn = UnitreeWebRTCConnection(WebRTCConnectionMethod.LocalAP)
     await conn.connect()
-    print(1)
-
     def lowstate_callback(message):
         msg = message['data']
-        state["charge"] = msg['bms_state']['soc']
-        state["temp"] = msg['temperature_ntc1']
+        state["charge"]  = msg['bms_state']['soc']
+        state["temp"]    = msg['temperature_ntc1']
         state["voltage"] = msg['power_v']
-
     conn.datachannel.pub_sub.subscribe(RTC_TOPIC['LOW_STATE'], lowstate_callback)
     return {"result": True, "data": True}
-
 
 @app.get("/prepare")
 async def prepare():
     return {"result": True, "data": True}
 
-
 @app.get("/prepare2")
 async def prepare2():
     return {"result": True, "data": True}
-
 
 @app.get("/hand")
 async def hand(cmd: str):
     requests.get(f"http://{_IP}:59521/hands?cmd={cmd}")
     return {"result": True}
 
-
 @app.get("/heartbeat")
 async def heartbeat():
-    print(state)
     return {"result": True, "data": state}
 
-
 @app.get("/start_collection")
-async def start_frame_collection():
+async def start_collection():
     global is_collecting
     if is_collecting:
-        return {"message": "이미 프레임 수집 및 분석이 진행 중입니다"}
-
-    while not raw_data_queue.empty():
-        try:
-            raw_data_queue.get_nowait()
-        except asyncio.QueueEmpty:
-            break
-
-    print("모든 큐 초기화 완료")
+        return {"message": "already running"}
     is_collecting = True
-
-    # receiver / processing 은 완전한 독립 스레드로 실행
-    # → asyncio 이벤트 루프와 격리, NPU/CV 블로킹이 WebRTC에 영향 없음
-    _threading.Thread(target=receiver_thread_func,   daemon=True).start()
-    _threading.Thread(target=processing_thread_func, daemon=True).start()
-
-    return {"message": "수신 및 분석 파이프라인이 시작되었습니다."}
-
+    threading.Thread(target=receiver_thread,   daemon=True).start()
+    threading.Thread(target=processing_thread, daemon=True).start()
+    return {"message": "started"}
 
 @app.get("/sport")
 async def sport(cmd: str, x=0.0, y=0.0, z=0.0, data=None):
     global conn
-    out = 0
-    print(cmd, f'x:{x}, y:{y}, z:{z}')
     if conn is None:
-        print('Disconnected', cmd)
-    elif cmd == 'Move':
+        return {"result": False, "data": "disconnected"}
+    if cmd == 'Move':
         out = await conn.datachannel.pub_sub.publish_request_new(
-            RTC_TOPIC["SPORT_MOD"], {
-                "api_id": SPORT_CMD[cmd],
-                "parameter": {"x": float(x), "y": float(y), "z": float(z)}
-            }
-        )
+            RTC_TOPIC["SPORT_MOD"],
+            {"api_id": SPORT_CMD[cmd], "parameter": {"x":float(x),"y":float(y),"z":float(z)}})
     elif data is not None:
         out = await conn.datachannel.pub_sub.publish_request_new(
-            RTC_TOPIC["SPORT_MOD"], {
-                "api_id": SPORT_CMD[cmd],
-                "parameter": {"data": float(data)}
-            }
-        )
+            RTC_TOPIC["SPORT_MOD"],
+            {"api_id": SPORT_CMD[cmd], "parameter": {"data":float(data)}})
     else:
-        if lastCmd.get(cmd, False):
-            lastCmd[cmd] = True
-            out = await conn.datachannel.pub_sub.publish_request_new(
-                RTC_TOPIC["SPORT_MOD"], {
-                    "api_id": SPORT_CMD[cmd],
-                    "parameter": {"data": True}
-                }
-            )
-        else:
-            lastCmd[cmd] = False
-            out = await conn.datachannel.pub_sub.publish_request_new(
-                RTC_TOPIC["SPORT_MOD"], {
-                    "api_id": SPORT_CMD[cmd],
-                    "parameter": {"data": False}
-                }
-            )
-    print("response", out)
+        v = not lastCmd.get(cmd, False)
+        lastCmd[cmd] = v
+        out = await conn.datachannel.pub_sub.publish_request_new(
+            RTC_TOPIC["SPORT_MOD"],
+            {"api_id": SPORT_CMD[cmd], "parameter": {"data":v}})
     return {"result": True, "data": out}
 
-
-lastCmd = {}
-
-
-def toFloat(value):
-    try:
-        return float(value)
-    except (ValueError, TypeError):
-        return value
-
+def toFloat(v):
+    try: return float(v)
+    except: return v
 
 @app.get("/manual")
 async def manual(cmd: str, data: str):
     out = await conn.datachannel.pub_sub.publish_request_new(
-        RTC_TOPIC["SPORT_MOD"], {
-            "api_id": int(cmd),
-            "parameter": {"data": toFloat(data)}
-        }
-    )
-    print("response", out)
+        RTC_TOPIC["SPORT_MOD"], {"api_id":int(cmd),"parameter":{"data":toFloat(data)}})
     return {"result": True, "data": out}
 
+G1_ARM = {"clamp":17,"highFive":18,"shakeHands_1":27,"makeHeartBothHands":20,
+          "makeHeartSingleHands":21,"blowKiss":12,"hug":19,"hightWave":26,
+          "lowWave":25,"ultramanRay":24,"bothHandsUp":15,"singleHandsUp":23,
+          "Refuse":22,"Release_Arm":99}
+G1_STATE   = {"ZeroTorque":0,"Damp":1,"Preparation":4,"Seating":3,
+              "Walk_G1":500,"Walk2_G1":501,"Run_G1":801,"Squat_G1":706,"LieUp_G1":702}
+G1_BALANCE = {"Stand_G1":0,"Step_G1":1}
 
 @app.get("/arm")
 async def arm(cmd="clamp"):
-    global conn
     await conn.datachannel.pub_sub.publish_request_new(
-        "rt/api/arm/request", {
-            "api_id": 7106,
-            "parameter": {"data": G1_ARM[cmd]}
-        }
-    )
-    return {"result": True, "data": True}
-
+        "rt/api/arm/request", {"api_id":7106,"parameter":{"data":G1_ARM[cmd]}})
+    return {"result": True}
 
 @app.get("/walkG1")
-async def walkG1(lx=0, ly=0, rx=0, ry=0):
-    print("walking", f"L : {lx} {ly} | R : {rx} {ry}")
-    global conn
+async def walkG1(lx=0,ly=0,rx=0,ry=0):
     conn.datachannel.pub_sub.publish_without_callback(
-        "rt/wirelesscontroller", {
-            "lx": float(lx), "ly": float(ly), "rx": float(rx), "ry": float(ry)
-        }
-    )
-    return {"result": True, "data": True}
-
+        "rt/wirelesscontroller",
+        {"lx":float(lx),"ly":float(ly),"rx":float(rx),"ry":float(ry)})
+    return {"result": True}
 
 @app.get("/stateG1")
 async def stateG1(cmd="Walk_G1"):
-    global conn
     await conn.datachannel.pub_sub.publish_request_new(
-        "rt/api/sport/request", {
-            "api_id": 7101,
-            "parameter": {"data": G1_STATE[cmd]}
-        }
-    )
-    return {"result": True, "data": True}
-
+        "rt/api/sport/request", {"api_id":7101,"parameter":{"data":G1_STATE[cmd]}})
+    return {"result": True}
 
 @app.get("/balanceG1")
 async def balanceG1(cmd="Stand_G1"):
-    global conn
     await conn.datachannel.pub_sub.publish_request_new(
-        "rt/api/sport/request", {
-            "api_id": 7102,
-            "parameter": {"data": G1_BALANCE[cmd]}
-        }
-    )
-    return {"result": True, "data": True}
-
+        "rt/api/sport/request", {"api_id":7102,"parameter":{"data":G1_BALANCE[cmd]}})
+    return {"result": True}
 
 @app.get("/speech")
 async def speech(text: str, motion=None, voice=31, lang='ko'):
-    print('speech', text)
     global audio_hub
     filename = getHash(text)
     if audio_hub is not None:
-        response = await audio_hub.get_audio_list()
-        if response and isinstance(response, dict):
-            data_str = response.get('data', {}).get('data', '{}')
-            audio_list = json.loads(data_str).get('audio_list', [])
-            existing_audio = next((a for a in audio_list if a['CUSTOM_NAME'] == filename), None)
-            if existing_audio:
-                print(f"Audio file {filename} already exists, skipping upload")
-                uuid = existing_audio['UNIQUE_ID']
+        resp = await audio_hub.get_audio_list()
+        if resp and isinstance(resp, dict):
+            audio_list = json.loads(resp.get('data',{}).get('data','{}')).get('audio_list',[])
+            existing   = next((a for a in audio_list if a['CUSTOM_NAME']==filename), None)
+            if existing:
+                uuid = existing['UNIQUE_ID']
             else:
-                print(f"Audio file {filename} not found, proceeding with upload")
-                audio_file_path = tts(text=text, voice=voice, lang=lang)
-                logger.info(f"Using audio file: {audio_file_path}")
-                response = await audio_hub.upload_audio_file(audio_file_path)
-                uuid = None
-                print(response)
-                response = await audio_hub.get_audio_list()
-                if response and isinstance(response, dict):
-                    data_str = response.get('data', {}).get('data', '{}')
-                    audio_list = json.loads(data_str).get('audio_list', [])
-                existing_audio = next((a for a in audio_list if a['CUSTOM_NAME'] == filename), None)
-                uuid = existing_audio['UNIQUE_ID']
-        print(f"Starting audio playback of file: {uuid}")
+                path = tts(text=text, voice=voice, lang=lang)
+                await audio_hub.upload_audio_file(path)
+                resp2      = await audio_hub.get_audio_list()
+                audio_list = json.loads(resp2.get('data',{}).get('data','{}')).get('audio_list',[])
+                uuid       = next(a for a in audio_list if a['CUSTOM_NAME']==filename)['UNIQUE_ID']
         await audio_hub.play_by_uuid(uuid)
-    return {"result": True, "data": True}
-
+    return {"result": True}
 
 @app.get("/color")
 async def color(value='purple', warn=0):
-    global conn
-    global lastColor
-    if lastColor == value:
-        return
-    print(warn)
+    global conn, lastColor
+    if lastColor == value: return {"result": True}
     if int(warn) > 0:
-        await speech("저한테 접근하면 위험하니, 조심해 주세요.", 'Content', 0, 'ko')
-    if conn is None:
-        print('brightness', value)
-    else:
-        lastColor = value
+        await speech("저한테 접근하면 위험하니, 조심해 주세요.")
+    lastColor = value
+    if conn:
         await conn.datachannel.pub_sub.publish_request_new(
-            RTC_TOPIC["VUI"],
-            {"api_id": 1007, "parameter": {"color": value}}
-        )
-    return {"result": True, "data": True}
-
+            RTC_TOPIC["VUI"], {"api_id":1007,"parameter":{"color":value}})
+    return {"result": True}
 
 @app.get("/brightness")
 async def brightness(value=10):
-    global conn
-    if conn is None:
-        print('brightness', value)
-    else:
+    if conn:
         await conn.datachannel.pub_sub.publish_request_new(
-            RTC_TOPIC["VUI"],
-            {"api_id": 1005, "parameter": {"brightness": int(value)}}
-        )
-    return {"result": True, "data": True}
-
+            RTC_TOPIC["VUI"], {"api_id":1005,"parameter":{"brightness":int(value)}})
+    return {"result": True}
 
 @app.get("/mode")
 async def mode(value='normal'):
-    global conn
-    if conn is None:
-        print('mode', value)
-    else:
+    if conn:
         conn.datachannel.pub_sub.publish_without_callback(
-            RTC_TOPIC["MOTION_SWITCHER"],
-            {"api_id": 1002, "parameter": {"name": value}}
-        )
-    return {"result": True, "data": True}
-
+            RTC_TOPIC["MOTION_SWITCHER"], {"api_id":1002,"parameter":{"name":value}})
+    return {"result": True}
 
 @app.get("/volume")
 async def volume(value=10):
-    global conn
-    if conn is None:
-        print('volume', value)
-    else:
+    if conn:
         conn.datachannel.pub_sub.publish_without_callback(
-            RTC_TOPIC["VUI"],
-            {"api_id": 1003, "parameter": {"volume": int(value)}}
-        )
-    return {"result": True, "data": True}
-
+            RTC_TOPIC["VUI"], {"api_id":1003,"parameter":{"volume":int(value)}})
+    return {"result": True}
 
 @app.get("/monitor")
 def monitor():
     return si.getAll()
 
+def getHash(text):
+    h = hashlib.new('md5'); h.update(text.encode()); return h.hexdigest()
 
-@app.get("/v1/tts", response_class=FileResponse, summary="입력한 문장으로 부터 음성을 생성합니다.")
+@app.get("/v1/tts", response_class=FileResponse)
 def tts(text="", voice=31, lang='ko', static=0, isPlay=0):
-    start = t.time()
-    print(text, static)
     filename = getHash(text)
-
-    phoneme_ids = text_to_sequence(text, [f'canvers_{lang}_cleaners'])
-    text_np = np.expand_dims(np.array(phoneme_ids, dtype=np.int64), 0)
-
-    inputs = {
-        "input": text_np,
-        "input_lengths": np.array([text_np.shape[1]], dtype=np.int64),
-        "scales": np.array([0.667, 1.0, 0.8], dtype=np.float16),
-        "sid": np.array([int(voice)], dtype=np.int64) if voice is not None else None
-    }
-
-    start_time = t.time()
-    result = pipe_tts(inputs)
-    print(f"Inference time: {t.time() - start_time:.4f} seconds")
-
-    audio = list(result.values())[0].squeeze((0, 1))
-    print(t.time() - start)
-
+    ids      = text_to_sequence(text, [f'canvers_{lang}_cleaners'])
+    inp      = np.expand_dims(np.array(ids, dtype=np.int64), 0)
+    inputs   = {"input":inp,"input_lengths":np.array([inp.shape[1]],dtype=np.int64),
+                "scales":np.array([0.667,1.0,0.8],dtype=np.float16),
+                "sid":np.array([int(voice)],dtype=np.int64)}
+    audio    = list(pipe_tts(inputs).values())[0].squeeze((0,1))
     if int(static) > 0:
         write(data=audio, rate=conf_tts.data.sampling_rate, filename="output/human.wav")
         return "output/human.wav"
-    else:
-        write(data=audio, rate=conf_tts.data.sampling_rate, filename=f"output/{filename}.wav")
-        audio_seg = AudioSegment.from_wav(f"output/{filename}.wav")
-        audio_seg = audio_seg.set_frame_rate(22050)
-        audio_seg = audio_seg.set_sample_width(2)
-        audio_seg = audio_seg.set_channels(1)
-        audio_seg.export(f"output/{filename}.wav", format='wav', codec="pcm_s16le")
-        if int(isPlay) > 0:
-            playsound(f"output/{filename}.wav")
-        return f"output/{filename}.wav"
+    path = f"output/{filename}.wav"
+    write(data=audio, rate=conf_tts.data.sampling_rate, filename=path)
+    seg = AudioSegment.from_wav(path).set_frame_rate(22050).set_sample_width(2).set_channels(1)
+    seg.export(path, format='wav', codec="pcm_s16le")
+    if int(isPlay) > 0: playsound(path)
+    return path
 
-
-@app.get("/v2/tts", response_class=FileResponse, summary="음성 생성 후 로봇에서 재생")
-def tts_v2(text="", voice=6, lang='ko', static=0, isPlay=0):
-    start = t.time()
-    print(text, static)
+@app.get("/v2/tts", response_class=FileResponse)
+def tts_v2(text="", voice=6, lang='ko'):
     filename = getHash(text)
-
-    phoneme_ids = text_to_sequence(text, [f'canvers_{lang}_cleaners'])
-    text_np = np.expand_dims(np.array(phoneme_ids, dtype=np.int64), 0)
-
-    inputs = {
-        "input": text_np,
-        "input_lengths": np.array([text_np.shape[1]], dtype=np.int64),
-        "scales": np.array([0.667, 1.0, 0.8], dtype=np.float16),
-        "sid": np.array([int(voice)], dtype=np.int64) if voice is not None else None
-    }
-
-    start_time = t.time()
-    result = pipe_tts(inputs)
-    print(f"Inference time: {t.time() - start_time:.4f} seconds")
-
-    audio = list(result.values())[0].squeeze((0, 1))
-    print(t.time() - start)
-
-    write(data=audio, rate=conf_tts.data.sampling_rate, filename=f"output/{filename}.wav")
-
-    with open(f"output/{filename}.wav", "rb") as f:
-        files = {"audio_file": (f"{filename}.wav", f, "audio/wav")}
-        response = requests.post(f"http://{_IP}:59521/audio", files=files)
-
-    return f"output/{filename}.wav"
-
+    ids      = text_to_sequence(text, [f'canvers_{lang}_cleaners'])
+    inp      = np.expand_dims(np.array(ids, dtype=np.int64), 0)
+    inputs   = {"input":inp,"input_lengths":np.array([inp.shape[1]],dtype=np.int64),
+                "scales":np.array([0.667,1.0,0.8],dtype=np.float16),
+                "sid":np.array([int(voice)],dtype=np.int64)}
+    audio    = list(pipe_tts(inputs).values())[0].squeeze((0,1))
+    path     = f"output/{filename}.wav"
+    write(data=audio, rate=conf_tts.data.sampling_rate, filename=path)
+    with open(path,"rb") as f:
+        requests.post(f"http://{_IP}:59521/audio", files={"audio_file":(f"{filename}.wav",f,"audio/wav")})
+    return path
 
 @app.get("/led")
-async def led(r: int = 0, g: int = 0, b: int = 0):
-    print(f"http://{_IP}:59521/led?r={r}&g={g}&b={b}")
+async def led(r:int=0,g:int=0,b:int=0):
     requests.get(f"http://{_IP}:59521/led?r={r}&g={g}&b={b}")
     return {"result": True}
 
-
-import matplotlib.colors
-
-
 @app.get("/color_led")
-async def color_led(value: str = 'red'):
-    print(value)
-    colors = matplotlib.colors.to_rgb(value)
-    arr = (np.array(colors) * 255).astype(int)
-    print("color", arr)
-    requests.get(f"http://{_IP}:59521/led?r={arr[0]}&g={arr[1]}&b={arr[2]}")
+async def color_led(value:str='red'):
+    rgb = (np.array(matplotlib.colors.to_rgb(value))*255).astype(int)
+    requests.get(f"http://{_IP}:59521/led?r={rgb[0]}&g={rgb[1]}&b={rgb[2]}")
     return {"result": True}
-
 
 print("NPU", "2502010900")
 
-# ── 직접 실행 시 포트 59530으로 기동 ─────────────────────────
-# uvicorn main_webrtc:app --host 0.0.0.0 --port 59530 으로도 동일
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(
-        "main_webrtc:app",
-        host="0.0.0.0",    # 모든 NIC에서 수신 (로컬망 어느 IP로 접속해도 OK)
-        port=_SERVER_PORT,
-        reload=False,
-    )
+    uvicorn.run("main_webrtc_new:app", host="0.0.0.0", port=_SERVER_PORT, reload=False)
