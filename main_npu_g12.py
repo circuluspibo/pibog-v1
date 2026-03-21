@@ -18,6 +18,7 @@ from unitree_webrtc_connect.webrtc_driver import UnitreeWebRTCConnection, WebRTC
 from unitree_webrtc_connect.constants import RTC_TOPIC, VUI_COLOR, SPORT_CMD
 import logging
 from aiortc import MediaStreamTrack, RTCPeerConnection, RTCSessionDescription, RTCDataChannel, VideoStreamTrack
+from aiortc import RTCConfiguration, RTCIceServer
 from requests import get
 import time
 import cv2
@@ -44,6 +45,13 @@ def getHash(text):
     return hash_func.hexdigest()
 
 _IP = "192.168.21.9"
+_SERVER_PORT = 59530          # FastAPI 서버 포트
+
+# ── 로컬망 전용 ICE 설정 ─────────────────────────────────────
+# 외부 STUN/TURN 없이 host candidate만 사용.
+# 같은 L2 망이면 이것만으로 연결 가능.
+# aiortc 가 자동으로 서버의 모든 NIC IP를 host candidate로 포함시킴.
+RTC_CONFIG = RTCConfiguration(iceServers=[])   # STUN/TURN 없음
 
 ov_core = Core()
 
@@ -605,7 +613,8 @@ class WebRTCManager:
             await self.close(cid)
 
     async def create_answer(self, client_id: str, offer_sdp: str, offer_type: str) -> dict:
-        pc = RTCPeerConnection()
+        # 로컬망 전용: STUN 없이 host candidate만 사용
+        pc = RTCPeerConnection(configuration=RTC_CONFIG)
         self.peer_connections[client_id] = pc
 
         # 비디오 트랙 3개 추가
@@ -630,6 +639,17 @@ class WebRTCManager:
         await pc.setRemoteDescription(RTCSessionDescription(sdp=offer_sdp, type=offer_type))
         answer = await pc.createAnswer()
         await pc.setLocalDescription(answer)
+
+        # ── 로컬망 핵심: ICE gathering 완료 대기 ─────────────────
+        # 외부 STUN이 없으므로 host candidate 수집이 즉시 끝남.
+        # gathering 완료 전 SDP를 반환하면 candidate가 빠질 수 있으므로 대기.
+        # (aiortc는 gather 완료 후 iceGatheringState = "complete" 로 전환)
+        gather_start = time.time()
+        while pc.iceGatheringState != "complete":
+            await asyncio.sleep(0.02)
+            if time.time() - gather_start > 5.0:   # 5초 타임아웃 (로컬망이면 <100ms)
+                logger.warning(f"ICE gathering timeout [{client_id}]")
+                break
 
         return {"sdp": pc.localDescription.sdp, "type": pc.localDescription.type}
 
@@ -1075,3 +1095,14 @@ async def color_led(value: str = 'red'):
 
 
 print("NPU", "2502010900")
+
+# ── 직접 실행 시 포트 59530으로 기동 ─────────────────────────
+# uvicorn main_webrtc:app --host 0.0.0.0 --port 59530 으로도 동일
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(
+        "main_webrtc:app",
+        host="0.0.0.0",    # 모든 NIC에서 수신 (로컬망 어느 IP로 접속해도 OK)
+        port=_SERVER_PORT,
+        reload=False,
+    )
