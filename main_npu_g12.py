@@ -53,7 +53,7 @@ logger = logging.getLogger(__name__)
 # ─────────────────────────────────────────────────────────────
 # 설정
 # ─────────────────────────────────────────────────────────────
-_IP          = "192.168.0.19"
+_IP          = "192.168.21.19"
 _SERVER_PORT = 59530
 SOURCE_VIDEO_URL = f"http://{_IP}:59512/video_raw"
 
@@ -67,8 +67,9 @@ RTC_CONFIG = RTCConfiguration(iceServers=[])
 # ─────────────────────────────────────────────────────────────
 raw_q          = queue.Queue(maxsize=1)   # receiver  → processing
 stream_q_main  = queue.Queue(maxsize=1)   # processing → WebRTC main track
-stream_q_face  = queue.Queue(maxsize=1)   # processing → WebRTC face track
-stream_q_ppe   = queue.Queue(maxsize=1)   # processing → WebRTC ppe  track
+# face/ppe 는 스트리밍 대신 캡처 이미지를 DataChannel 로 전송
+# {"type":"face"|"ppe", "b64":"...", "label":"...", "conf":0.xx}
+capture_q      = queue.Queue(maxsize=4)   # processing → broadcast_loop → DataChannel
 
 def q_put(q: queue.Queue, item):
     """꽉 찼으면 오래된 것 버리고 새 것 넣기"""
@@ -265,23 +266,31 @@ def processing_thread():
                 label   = ppe_names.get(cls_id, str(cls_id))
 
                 if 'helmet' in label or 'face' in label:
-                    ch,cw   = out.shape[:2]
-                    crop    = out[max(0,y1):min(ch,y2), max(0,x1):min(cw,x2)].copy()
+                    ch,cw = out.shape[:2]
+                    crop  = out[max(0,y1):min(ch,y2), max(0,x1):min(cw,x2)].copy()
+                    cap_type = "ppe" if 'helmet' in label else "face"
 
-                    if 'helmet' in label:
-                        # 스트리밍 큐에 즉시 push
-                        q_put(stream_q_ppe, crop)
-                        # 파일 저장은 10초 간격 daemon 스레드
-                        if cur_time - last_ppe_saved_time > 10.0:
-                            last_ppe_saved_time = cur_time
-                            threading.Thread(target=_save_ppe,
-                                args=(crop, f"ppe_{label}_{int(cur_time)}.jpg"), daemon=True).start()
-                    elif 'face' in label:
-                        q_put(stream_q_face, crop)
-                        if cur_time - last_face_saved_time > 10.0:
-                            last_face_saved_time = cur_time
-                            threading.Thread(target=_save_face,
-                                args=(crop, f"face_{int(cur_time)}.jpg"), daemon=True).start()
+                    # JPEG 인코딩 → base64 → capture_q (DataChannel로 클라이언트 전송)
+                    ok, buf = cv2.imencode('.jpg', crop, [cv2.IMWRITE_JPEG_QUALITY, 75])
+                    if ok:
+                        import base64
+                        b64 = base64.b64encode(buf).decode()
+                        msg = json.dumps({"type": cap_type, "b64": b64,
+                                          "label": label, "conf": round(conf, 2)})
+                        try:
+                            capture_q.put_nowait(msg)
+                        except queue.Full:
+                            pass  # 처리 못하면 그냥 버림
+
+                    # 파일 저장 (10초 간격)
+                    if cap_type == "ppe" and cur_time - last_ppe_saved_time > 10.0:
+                        last_ppe_saved_time = cur_time
+                        threading.Thread(target=_save_ppe,
+                            args=(crop.copy(), f"ppe_{label}_{int(cur_time)}.jpg"), daemon=True).start()
+                    elif cap_type == "face" and cur_time - last_face_saved_time > 10.0:
+                        last_face_saved_time = cur_time
+                        threading.Thread(target=_save_face,
+                            args=(crop.copy(), f"face_{int(cur_time)}.jpg"), daemon=True).start()
 
                     # 박스 그리기
                     disp = f"{label.capitalize()}: {conf:.2f}"
@@ -333,13 +342,12 @@ class FrameProviderTrack(VideoStreamTrack):
         self._pts      = 0
         self._tb       = fractions.Fraction(1, 90000)
         self._step     = 90000 // fps
-        self._blank    = np.zeros((480,640,3), dtype=np.uint8)
+        self._last_bgr = np.zeros((480,640,3), dtype=np.uint8)  # 마지막 프레임 보관
+        self._last_vf  = None                                    # 마지막 VideoFrame 재사용
 
     async def recv(self):
         loop = asyncio.get_event_loop()
 
-        # blocking get을 executor에서 실행 → 이벤트루프 비블로킹
-        # timeout=0.1 → 프레임 없으면 blank 반환 (WebRTC 연결 유지)
         def _get():
             try:
                 return self._q.get(timeout=0.1)
@@ -347,11 +355,25 @@ class FrameProviderTrack(VideoStreamTrack):
                 return None
 
         bgr = await loop.run_in_executor(None, _get)
-        if bgr is None:
-            bgr = self._blank
 
-        rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
-        vf  = VideoFrame.from_ndarray(rgb, format="rgb24")
+        if bgr is not None:
+            # 새 프레임 → 변환 후 캐시
+            self._last_bgr = bgr
+            rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
+            self._last_vf = VideoFrame.from_ndarray(rgb, format="rgb24")
+        elif self._last_vf is not None:
+            # 새 프레임 없음 → 마지막 프레임 재사용 (깜빡임 없음)
+            vf = self._last_vf
+            vf.pts       = self._pts
+            vf.time_base = self._tb
+            self._pts   += self._step
+            return vf
+        else:
+            # 아직 한 번도 프레임 없음 → 검정
+            rgb = cv2.cvtColor(self._last_bgr, cv2.COLOR_BGR2RGB)
+            self._last_vf = VideoFrame.from_ndarray(rgb, format="rgb24")
+
+        vf = self._last_vf
         vf.pts       = self._pts
         vf.time_base = self._tb
         self._pts   += self._step
@@ -369,22 +391,33 @@ class WebRTCManager:
     async def start_broadcast_loop(self, interval=0.1):
         while True:
             await asyncio.sleep(interval)
+
+            open_dcs = [(cid, dc) for cid, dc in self._dcs.items()
+                        if dc.readyState == "open"]
+            dead = [cid for cid, dc in self._dcs.items()
+                    if dc.readyState not in ("open", "connecting")]
+
+            # ① state 변경 시 전송
             js = json.dumps(state, ensure_ascii=False)
             h  = hash(js)
-            if h == self._last_hash:
-                continue
-            self._last_hash = h
-            msg  = js.encode()
-            dead = []
-            for cid, dc in list(self._dcs.items()):
+            if h != self._last_hash:
+                self._last_hash = h
+                msg = js.encode()
+                for cid, dc in open_dcs:
+                    try: dc.send(msg)
+                    except Exception: dead.append(cid)
+
+            # ② capture_q 에 쌓인 캡처 이미지 전송 (face/ppe)
+            while not capture_q.empty():
                 try:
-                    if dc.readyState == "open":
-                        dc.send(msg)
-                    else:
-                        dead.append(cid)
-                except Exception:
-                    dead.append(cid)
-            for cid in dead:
+                    cap_msg = capture_q.get_nowait()
+                    for cid, dc in open_dcs:
+                        try: dc.send(cap_msg.encode())
+                        except Exception: pass
+                except queue.Empty:
+                    break
+
+            for cid in set(dead):
                 await self.close(cid)
 
     async def create_offer(self, client_id: str) -> dict:
@@ -397,10 +430,8 @@ class WebRTCManager:
         pc = RTCPeerConnection(configuration=RTC_CONFIG)
         self._pcs[client_id] = pc
 
-        # 트랙 추가: main(15fps) / face(5fps) / ppe(5fps)
+        # 트랙: main 비디오만 (face/ppe 는 DataChannel 캡처로 전환)
         pc.addTrack(FrameProviderTrack(stream_q_main, fps=15))
-        pc.addTrack(FrameProviderTrack(stream_q_face, fps=5))
-        pc.addTrack(FrameProviderTrack(stream_q_ppe,  fps=5))
 
         # DataChannel: state 전송용
         dc = pc.createDataChannel("state", ordered=False, maxRetransmits=0)
