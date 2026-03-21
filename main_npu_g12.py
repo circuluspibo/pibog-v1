@@ -44,7 +44,7 @@ def getHash(text):
     hash_func.update(text.encode('utf-8'))
     return hash_func.hexdigest()
 
-_IP = "192.168.21.9"
+_IP = "192.168.21.19"
 _SERVER_PORT = 59530          # FastAPI 서버 포트
 
 # ── 로컬망 전용 ICE 설정 ─────────────────────────────────────
