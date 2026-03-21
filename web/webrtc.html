@@ -193,18 +193,18 @@
     </div>
   </div>
 
-  <!-- 서브 스트림 (얼굴 + PPE crop) -->
+  <!-- 캡처 이미지 (face / ppe) -->
   <div class="panel">
-    <div class="plabel">SUB STREAMS <span class="badge idle" id="bs">IDLE</span></div>
+    <div class="plabel">CAPTURE <span class="badge idle" id="bs">IDLE</span></div>
     <div class="sub-grid">
       <div class="svwrap">
         <div class="svlabel">FACE DETECT</div>
-        <video id="vf" autoplay playsinline muted></video>
+        <img id="img-face" style="width:100%;height:100%;object-fit:cover;display:block;background:#000">
         <div class="nosig" id="nsf" style="font-size:9px">NO FACE</div>
       </div>
       <div class="svwrap">
         <div class="svlabel">PPE / HELMET</div>
-        <video id="vp" autoplay playsinline muted></video>
+        <img id="img-ppe" style="width:100%;height:100%;object-fit:cover;display:block;background:#000">
         <div class="nosig" id="nsp" style="font-size:9px">NO PPE</div>
       </div>
     </div>
@@ -286,24 +286,18 @@ async function connect() {
   // 로컬 폐쇄망: STUN/TURN 없이 host candidate만 사용
   pc = new RTCPeerConnection({ iceServers: [] });
 
-  // 트랙 수신: 서버 addTrack 순서 main→face→ppe 와 동일
-  const MAP = [
-    { vid:'vm', ns:'nsm', badge:'bm' },
-    { vid:'vf', ns:'nsf', badge:'bs' },
-    { vid:'vp', ns:'nsp', badge:'bs' },
-  ];
+  // 트랙: main 비디오 1개 (face/ppe 는 DataChannel 캡처)
   pc.ontrack = (e) => {
-    const m = MAP[trackCount++];
-    if (!m) return;
-    document.getElementById(m.vid).srcObject = e.streams[0];
-    document.getElementById(m.ns).style.display = 'none';
-    const b = document.getElementById(m.badge);
+    trackCount++;
+    document.getElementById('vm').srcObject = e.streams[0];
+    document.getElementById('nsm').style.display = 'none';
+    const b = document.getElementById('bm');
     b.textContent = 'LIVE'; b.className = 'badge live';
     document.getElementById('itrk').textContent = trackCount;
-    console.log(`[WebRTC] track ${trackCount} → #${m.vid}`);
+    console.log('[WebRTC] main track received');
   };
 
-  // DataChannel: 서버가 createDataChannel로 생성해서 offer SDP에 포함시킴
+  // DataChannel: state JSON + face/ppe 캡처 이미지 (base64)
   pc.ondatachannel = (e) => {
     if (e.channel.label !== 'state') return;
     const dc = e.channel;
@@ -316,7 +310,15 @@ async function connect() {
     dc.onmessage = (ev) => {
       dcMsgTotal++;
       const raw = ev.data instanceof ArrayBuffer ? new TextDecoder().decode(ev.data) : ev.data;
-      try { updateUI(JSON.parse(raw)); } catch(err) { console.warn('DC parse', err); }
+      try {
+        const data = JSON.parse(raw);
+        if (data.type === 'face' || data.type === 'ppe') {
+          // 캡처 이미지 수신 → <img> 에 표시
+          showCapture(data);
+        } else {
+          updateUI(data);
+        }
+      } catch(err) { console.warn('DC parse', err); }
     };
     dc.onclose = () => {
       const b = document.getElementById('bdc');
@@ -414,11 +416,17 @@ async function disconnect() {
     fetch(`${BASE}/webrtc/${clientId}`, { method: 'DELETE' }).catch(()=>{});
     pc.close(); pc = null;
   }
-  ['vm','vf','vp'].forEach(id => {
+  const vmEl = document.getElementById('vm');
+  if (vmEl) vmEl.srcObject = null;
+  // face/ppe 는 img 태그이므로 src 초기화
+  ['img-face','img-ppe'].forEach(id => {
     const el = document.getElementById(id);
-    if (el) el.srcObject = null;
+    if (el) el.src = '';
   });
-  ['nsm','nsf','nsp'].forEach(id => document.getElementById(id).style.display = '');
+  ['nsm','nsf','nsp'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = '';
+  });
   ['bm','bs'].forEach(id => {
     const b = document.getElementById(id);
     b.textContent = 'IDLE'; b.className = 'badge idle';
@@ -428,6 +436,30 @@ async function disconnect() {
   document.getElementById('itrk').textContent = '0';
   trackCount = 0;
   setStatus('disconnected');
+}
+
+// ── 캡처 이미지 표시 ──────────────────────────────────────
+function showCapture(data) {
+  const imgId = data.type === 'face' ? 'img-face' : 'img-ppe';
+  const nsId  = data.type === 'face' ? 'nsf'      : 'nsp';
+  const el    = document.getElementById(imgId);
+  const ns    = document.getElementById(nsId);
+  if (!el) return;
+  el.src = 'data:image/jpeg;base64,' + data.b64;
+  if (ns) ns.style.display = 'none';
+
+  // badge 업데이트
+  const b = document.getElementById('bs');
+  b.textContent = 'CAPTURE'; b.className = 'badge live';
+
+  // DC 로그에도 표시
+  const now = new Date().toISOString().substr(11,8);
+  dcLines.unshift(
+    `<div class="dcrow"><span class="dct">${now}</span>` +
+    `<span>${data.type.toUpperCase()} ${data.label} ${(data.conf*100).toFixed(0)}%</span></div>`
+  );
+  if (dcLines.length > 5) dcLines.pop();
+  document.getElementById('dcbody').innerHTML = dcLines.join('');
 }
 
 // ── UI 업데이트 ────────────────────────────────────────────
