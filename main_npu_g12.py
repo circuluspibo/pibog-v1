@@ -142,6 +142,8 @@ latest_frames = {
     "face": None,   # 얼굴 crop (BGR numpy, 가변 크기)
     "ppe":  None,   # PPE/헬멧 crop (BGR numpy, 가변 크기)
 }
+# 프레임이 교체될 때마다 증가하는 카운터 → FrameProviderTrack 이 새 프레임 여부 감지
+latest_frame_ids = {"main": 0, "face": 0, "ppe": 0}
 latest_frames_lock = threading.Lock()
 
 cnt_live = 0
@@ -172,38 +174,46 @@ latest_ppe_frame = None   # (하위 호환용)
 # ─────────────────────────────────────────────────────────────
 
 def save_ppe_async(crop_img, filename):
+    """스트리밍 캐시 업데이트(우선) → 파일 저장(후순위)"""
     global latest_ppe_frame
     try:
-        _, img_encoded = cv2.imencode('.jpg', crop_img)
+        # ① 스트리밍 캐시 업데이트 (lock 시간 최소화: copy는 lock 밖)
+        snap = crop_img.copy()
+        with latest_frames_lock:
+            latest_frames["ppe"] = snap
+            latest_frame_ids["ppe"] += 1
+
+        # ② MJPEG 호환 캐시 (레거시)
+        _, img_encoded = cv2.imencode('.jpg', snap, [cv2.IMWRITE_JPEG_QUALITY, 70])
         latest_ppe_frame = img_encoded.tobytes()
 
-        # [추가] WebRTC 트랙용 캐시 업데이트
-        with latest_frames_lock:
-            latest_frames["ppe"] = crop_img.copy()
-
+        # ③ 파일 저장 (스트리밍과 무관, 느려도 됨)
         path = os.path.join(PPE_DIR, filename)
-        cv2.imwrite(path, crop_img)
-
+        cv2.imwrite(path, snap)
         files = sorted(glob.glob(os.path.join(PPE_DIR, "*.jpg")), key=os.path.getmtime)
         if len(files) > 20:
-            for i in range(len(files) - 20):
-                os.remove(files[i])
+            for old_f in files[:-20]:
+                os.remove(old_f)
     except Exception as e:
         print(f"PPE Async Save Error: {e}")
 
 
 def save_face_async(face_img, filename):
+    """스트리밍 캐시 업데이트(우선) → 파일 저장(후순위)"""
     global latest_face_frame
     try:
-        _, img_encoded = cv2.imencode('.jpg', face_img)
+        # ① 스트리밍 캐시 업데이트
+        snap = face_img.copy()
+        with latest_frames_lock:
+            latest_frames["face"] = snap
+            latest_frame_ids["face"] += 1
+
+        # ② MJPEG 호환 캐시 (레거시)
+        _, img_encoded = cv2.imencode('.jpg', snap, [cv2.IMWRITE_JPEG_QUALITY, 70])
         latest_face_frame = img_encoded.tobytes()
 
-        # [추가] WebRTC 트랙용 캐시 업데이트
-        with latest_frames_lock:
-            latest_frames["face"] = face_img.copy()
-
-        path = os.path.join(FACES_DIR, filename)
-        cv2.imwrite(path, face_img)
+        # ③ 파일 저장
+        cv2.imwrite(os.path.join(FACES_DIR, filename), snap)
     except Exception as e:
         print(f"Async Save Error: {e}")
 
@@ -407,9 +417,14 @@ async def processing_loop():
         frame_ai = cv2.resize(frame, (640, 640), interpolation=cv2.INTER_NEAREST)
         depth_ai = cv2.resize(depth_frame, (640, 640), interpolation=cv2.INTER_NEAREST)
 
-        # 3. NPU 추론 (기존과 동일)
-        res = det_model(frame_ai, device="intel:npu", verbose=False, conf=0.25)[0]
-        ppe_res = ppe_model(frame_ai, device="intel:npu", verbose=False, conf=0.25)[0]
+        # 3. NPU 추론 — run_in_executor 로 블로킹 연산을 스레드 풀에서 실행
+        # → asyncio 이벤트 루프가 NPU 대기 중에도 recv() 등 다른 코루틴 처리 가능
+        loop = asyncio.get_event_loop()
+        def run_inference():
+            r   = det_model(frame_ai, device="intel:npu", verbose=False, conf=0.25)[0]
+            rp  = ppe_model(frame_ai, device="intel:npu", verbose=False, conf=0.25)[0]
+            return r, rp
+        res, ppe_res = await loop.run_in_executor(None, run_inference)
 
         # 4. 후처리 (기존과 동일)
         if hasattr(res, 'masks') and res.masks is not None:
@@ -512,8 +527,11 @@ async def processing_loop():
         # 기존: await processed_frame_queue.put(cv2.resize(out, (640, 480)))
         # 변경: WebRTC FrameProviderTrack이 이 값을 읽어감
         # ─────────────────────────────────────────────────────
+        # lock 밖에서 resize (CPU 연산) → lock 시간 최소화
+        main_frame = cv2.resize(out, (640, 480))
         with latest_frames_lock:
-            latest_frames["main"] = cv2.resize(out, (640, 480))
+            latest_frames["main"] = main_frame
+            latest_frame_ids["main"] += 1
 
         cnt_image += 1
         if cnt_image % 100 == 0:
@@ -531,9 +549,12 @@ class FrameProviderTrack(VideoStreamTrack):
     """
     latest_frames[frame_key] 의 BGR numpy 배열을 WebRTC VideoFrame으로 변환.
 
-    - recv() 호출마다 await asyncio.sleep(1/fps) 으로 FPS 제어
-    - 새 프레임 없으면 이전 프레임 재전송 (검정 화면 방지)
-    - BGR → RGB 변환 후 av.VideoFrame.from_ndarray 사용
+    버그 수정 포인트:
+    1. next_timestamp() 사용 → aiortc 내부 클럭과 동기화 (pts 오류 방지)
+    2. lock 안에서 .copy() 로 스냅샷만 뜨고 즉시 해제
+       → processing_loop 가 버퍼를 덮어써도 인코더가 안전하게 읽음
+    3. latest_frame_ids 로 새 프레임 여부 감지
+       → 변화 없으면 BGR→RGB 변환 생략, 이전 VideoFrame 재사용
     """
 
     kind = "video"
@@ -541,29 +562,36 @@ class FrameProviderTrack(VideoStreamTrack):
     def __init__(self, frame_key: str, fps: int = 15):
         super().__init__()
         self.frame_key = frame_key
-        self.fps = fps
-        self._pts = 0
-        self._time_base = fractions.Fraction(1, fps)
-        self._blank = np.zeros((480, 640, 3), dtype=np.uint8)
+        self._blank_rgb = np.zeros((480, 640, 3), dtype=np.uint8)
+        self._last_vframe = None   # 직전 VideoFrame 재사용
+        self._last_id = -1         # 마지막으로 처리한 frame_id
 
     async def recv(self):
-        await asyncio.sleep(1.0 / self.fps)
+        # aiortc 권장 방식: 내부 클럭 기반 pts/time_base
+        pts, time_base = await self.next_timestamp()
 
+        # lock 안에서는 id 비교 + copy() 만 → 최소 시간 점유
         with latest_frames_lock:
-            bgr = latest_frames.get(self.frame_key)
+            cur_id = latest_frame_ids.get(self.frame_key, 0)
+            if cur_id != self._last_id and latest_frames.get(self.frame_key) is not None:
+                bgr_snap = latest_frames[self.frame_key].copy()
+                self._last_id = cur_id
+            else:
+                bgr_snap = None   # 새 프레임 없음
 
-        if bgr is None:
-            bgr = self._blank
+        if bgr_snap is not None:
+            # BGR → RGB 변환 (lock 밖에서 수행)
+            rgb = cv2.cvtColor(bgr_snap, cv2.COLOR_BGR2RGB)
+            vf = VideoFrame.from_ndarray(rgb, format="rgb24")
+            self._last_vframe = vf
+        elif self._last_vframe is not None:
+            vf = self._last_vframe          # 이전 프레임 재사용
+        else:
+            vf = VideoFrame.from_ndarray(self._blank_rgb, format="rgb24")
 
-        # BGR → RGB (av 라이브러리 기준)
-        rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
-
-        frame = VideoFrame.from_ndarray(rgb, format="rgb24")
-        frame.pts = self._pts
-        frame.time_base = self._time_base
-        self._pts += 1
-
-        return frame
+        vf.pts = pts
+        vf.time_base = time_base
+        return vf
 
 
 # ─────────────────────────────────────────────────────────────
