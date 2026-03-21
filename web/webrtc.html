@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ROBOT MONITOR — WebRTC</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow+Condensed:wght@300;400;600;700;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:      #080c10;
+    --surf:    #0d1318;
+    --border:  #1a2535;
+    --accent:  #00e5ff;
+    --warn:    #ff6b35;
+    --ok:      #39ff14;
+    --dim:     #1e2d3d;
+    --text:    #c8d8e8;
+    --muted:   #3a5060;
+    --mono:    'Share Tech Mono', monospace;
+    --sans:    'Barlow Condensed', sans-serif;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: var(--sans); min-height: 100vh; overflow-x: hidden; }
+  body::before {
+    content: ''; position: fixed; inset: 0; z-index: 9999; pointer-events: none;
+    background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.03) 2px, rgba(0,0,0,0.03) 4px);
+  }
+
+  /* Header */
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    height: 50px; padding: 0 20px;
+    background: var(--surf); border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; z-index: 100;
+  }
+  .logo { font-family: var(--mono); font-size: 12px; letter-spacing: 4px; color: var(--accent); }
+  .logo em { color: var(--muted); font-style: normal; }
+  .hdr-right { display: flex; gap: 16px; align-items: center; }
+  .dot-wrap { display: flex; align-items: center; gap: 7px; font-family: var(--mono); font-size: 10px; letter-spacing: 1px; text-transform: uppercase; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); transition: background .3s; }
+  .dot.connecting { background: var(--warn); animation: blink 1s infinite; }
+  .dot.connected  { background: var(--ok); box-shadow: 0 0 5px var(--ok); }
+  .dot.error      { background: #ff3366; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.3} }
+  #btn {
+    font-family: var(--mono); font-size: 11px; letter-spacing: 2px; text-transform: uppercase;
+    padding: 5px 14px; background: transparent; border: 1px solid var(--accent); color: var(--accent);
+    cursor: pointer; transition: all .2s;
+  }
+  #btn:hover:not(:disabled) { background: var(--accent); color: var(--bg); }
+  #btn:disabled { border-color: var(--muted); color: var(--muted); cursor: default; }
+
+  /* Grid */
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 300px;
+    grid-template-rows: auto 1fr;
+    gap: 1px; background: var(--border);
+    min-height: calc(100vh - 50px);
+  }
+  .panel { background: var(--surf); overflow: hidden; }
+  .plabel {
+    font-family: var(--mono); font-size: 9px; letter-spacing: 3px;
+    text-transform: uppercase; color: var(--muted);
+    padding: 7px 12px 6px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .badge { font-size: 8px; padding: 2px 6px; border: 1px solid currentColor; letter-spacing: 1px; }
+  .badge.live { color: var(--ok); animation: blink 2s infinite; }
+  .badge.idle { color: var(--muted); }
+
+  /* Video */
+  .vwrap { position: relative; background: #000; width: 100%; aspect-ratio: 4/3; }
+  .vwrap video { width: 100%; height: 100%; object-fit: contain; display: block; }
+  .vfps { position: absolute; bottom: 6px; left: 8px; font-family: var(--mono); font-size: 10px; color: var(--accent); opacity: .6; pointer-events: none; }
+  .sub-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--border); }
+  .svwrap { position: relative; background: #000; aspect-ratio: 1; }
+  .svwrap video { width: 100%; height: 100%; object-fit: cover; }
+  .svlabel {
+    position: absolute; top: 0; left: 0; right: 0; z-index: 2; padding: 5px 8px;
+    background: rgba(8,12,16,.75); font-family: var(--mono); font-size: 8px;
+    letter-spacing: 2px; color: var(--muted); text-transform: uppercase;
+  }
+  .nosig {
+    position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    background: rgba(8,12,16,.92); font-family: var(--mono); font-size: 10px;
+    letter-spacing: 2px; color: var(--muted); gap: 8px; text-transform: uppercase;
+  }
+  .nosig svg { opacity: .25; }
+
+  /* State panel */
+  .spanel { grid-row: 1 / 3; grid-column: 3; display: flex; flex-direction: column; }
+
+  /* Battery */
+  .bat-block { padding: 14px 12px; border-bottom: 1px solid var(--border); }
+  .bat-head { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 9px; letter-spacing: 2px; color: var(--muted); margin-bottom: 7px; }
+  .bat-track { height: 12px; background: var(--dim); border: 1px solid var(--border); overflow: hidden; }
+  .bat-fill { height: 100%; background: linear-gradient(90deg, var(--ok), #aaff44); transition: width .6s ease; }
+  .bat-fill.w { background: linear-gradient(90deg, var(--warn), #ffb000); }
+  .bat-fill.c { background: #ff3366; }
+
+  /* Metrics */
+  .metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--border); border-bottom: 1px solid var(--border); }
+  .metric { background: var(--surf); padding: 10px 12px; }
+  .mkey { font-family: var(--mono); font-size: 8px; letter-spacing: 2px; color: var(--muted); text-transform: uppercase; margin-bottom: 3px; }
+  .mval { font-family: var(--mono); font-size: 20px; color: var(--accent); line-height: 1; }
+  .mval.ok   { color: var(--ok); }
+  .mval.warn { color: var(--warn); }
+  .munit { font-family: var(--mono); font-size: 8px; color: var(--muted); letter-spacing: 1px; }
+
+  /* Object list */
+  .objsec { flex: 1; overflow-y: auto; }
+  .objsec::-webkit-scrollbar { width: 2px; }
+  .objsec::-webkit-scrollbar-thumb { background: var(--dim); }
+  .sec-head {
+    font-family: var(--mono); font-size: 8px; letter-spacing: 3px; text-transform: uppercase; color: var(--muted);
+    padding: 7px 12px 5px; border-bottom: 1px solid var(--border);
+    display: flex; justify-content: space-between; align-items: center;
+    position: sticky; top: 0; background: var(--surf); z-index: 1;
+  }
+  .chip { font-size: 8px; padding: 1px 5px; border: 1px solid var(--accent); color: var(--accent); }
+  .orow { display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-bottom: 1px solid rgba(26,37,53,.6); }
+  .orow:hover { background: rgba(0,229,255,.02); }
+  .odot { width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; }
+  .odot.l { background: #ff4444; }
+  .odot.o { background: var(--ok); }
+  .ocls { flex: 1; font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: 1px; }
+  .oscr { font-family: var(--mono); font-size: 9px; color: var(--muted); }
+  .opos { font-family: var(--mono); font-size: 8px; background: var(--dim); padding: 2px 4px; color: var(--accent); letter-spacing: 1px; }
+
+  /* Human */
+  .hblock { padding: 10px 12px; border-top: 1px solid var(--border); }
+  .hrow { display: flex; justify-content: space-between; align-items: center; padding: 3px 0; border-bottom: 1px solid rgba(26,37,53,.5); }
+  .hrow:last-child { border: none; }
+  .hkey { font-family: var(--mono); font-size: 8px; letter-spacing: 2px; color: var(--muted); text-transform: uppercase; }
+  .hval { font-family: var(--mono); font-size: 10px; }
+
+  /* Tag */
+  .tblock { display: flex; gap: 14px; align-items: center; padding: 10px 12px; border-top: 1px solid var(--border); }
+  .tid { font-family: var(--sans); font-size: 34px; font-weight: 900; color: #ff0; line-height: 1; }
+  .tdist { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+  .tdist span { color: var(--text); font-size: 18px; }
+
+  /* DC log */
+  .dclog { padding: 6px 12px 10px; border-top: 1px solid var(--border); }
+  .dcrow { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 8px; padding: 1px 0; color: var(--muted); }
+  .dct { color: var(--accent); opacity: .5; }
+
+  /* Bottom bar */
+  .bbar {
+    grid-column: 1 / 3; background: var(--surf); padding: 8px 14px;
+    display: flex; gap: 20px; flex-wrap: wrap;
+    font-family: var(--mono); font-size: 9px; letter-spacing: 1px; color: var(--muted);
+    border-top: 1px solid var(--border);
+  }
+  .bbar span { color: var(--text); }
+
+  @media (max-width: 1000px) { .grid { grid-template-columns: 1fr 300px; } .spanel { grid-row: 1/3; grid-column: 2; } }
+  @media (max-width: 680px)  { .grid { grid-template-columns: 1fr; } .spanel { grid-row: auto; grid-column: 1; } }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">ROBOT<em>_</em>MONITOR <em style="font-size:10px;margin-left:6px">// WebRTC</em></div>
+  <div class="hdr-right">
+    <div class="dot-wrap">
+      <div class="dot" id="dot"></div>
+      <span id="clbl">DISCONNECTED</span>
+    </div>
+    <button id="btn" onclick="toggleConnect()">CONNECT</button>
+  </div>
+</header>
+
+<div class="grid">
+
+  <!-- 메인 스트림 (세그멘테이션 + PPE 합성) -->
+  <div class="panel">
+    <div class="plabel">MAIN — SEG + PPE <span class="badge idle" id="bm">IDLE</span></div>
+    <div class="vwrap">
+      <video id="vm" autoplay playsinline muted></video>
+      <div class="nosig" id="nsm">
+        <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
+          <rect x="2" y="18" width="6" height="14" fill="currentColor" opacity=".2"/>
+          <rect x="13" y="12" width="6" height="20" fill="currentColor" opacity=".5"/>
+          <rect x="24" y="4"  width="6" height="28" fill="currentColor" opacity=".8"/>
+          <line x1="1" y1="35" x2="35" y2="1" stroke="#ff3366" stroke-width="2"/>
+        </svg>
+        NO SIGNAL
+      </div>
+      <div class="vfps" id="fps">— fps</div>
+    </div>
+  </div>
+
+  <!-- 서브 스트림 (얼굴 + PPE crop) -->
+  <div class="panel">
+    <div class="plabel">SUB STREAMS <span class="badge idle" id="bs">IDLE</span></div>
+    <div class="sub-grid">
+      <div class="svwrap">
+        <div class="svlabel">FACE DETECT</div>
+        <video id="vf" autoplay playsinline muted></video>
+        <div class="nosig" id="nsf" style="font-size:9px">NO FACE</div>
+      </div>
+      <div class="svwrap">
+        <div class="svlabel">PPE / HELMET</div>
+        <video id="vp" autoplay playsinline muted></video>
+        <div class="nosig" id="nsp" style="font-size:9px">NO PPE</div>
+      </div>
+    </div>
+    <div class="dclog">
+      <div class="sec-head" style="padding:4px 0;background:transparent;position:static">DC LOG</div>
+      <div id="dcbody"></div>
+    </div>
+  </div>
+
+  <!-- 상태 패널 -->
+  <div class="panel spanel">
+    <div class="plabel">SYSTEM STATE <span class="badge live" id="bdc">DC —</span></div>
+
+    <div class="bat-block">
+      <div class="bat-head"><span>BATTERY</span><span id="bpct">—%</span></div>
+      <div class="bat-track"><div class="bat-fill" id="bfill" style="width:0%"></div></div>
+    </div>
+
+    <div class="metrics">
+      <div class="metric"><div class="mkey">VOLTAGE</div><div class="mval" id="vv">—</div><div class="munit">V</div></div>
+      <div class="metric"><div class="mkey">TEMP</div><div class="mval" id="vt">—</div><div class="munit">°C</div></div>
+      <div class="metric"><div class="mkey">LIVE OBJ</div><div class="mval ok" id="vl">0</div><div class="munit">PERSON/ANIMAL</div></div>
+      <div class="metric"><div class="mkey">OBJECTS</div><div class="mval" id="vo">0</div><div class="munit">DETECTED</div></div>
+    </div>
+
+    <div class="objsec">
+      <div class="sec-head">DETECTED <span class="chip" id="bcount">0</span></div>
+      <div id="blist"></div>
+    </div>
+
+    <div class="hblock">
+      <div class="sec-head" style="padding:4px 0;background:transparent;position:static;margin-bottom:4px">HUMAN ANALYSIS</div>
+      <div class="hrow"><span class="hkey">POSITION</span><span class="hval" id="hp">—</span></div>
+      <div class="hrow"><span class="hkey">EMOTION</span><span class="hval"  id="he">—</span></div>
+      <div class="hrow"><span class="hkey">GENDER</span><span class="hval"   id="hg">—</span></div>
+      <div class="hrow"><span class="hkey">AGE</span><span class="hval"      id="ha">—</span></div>
+      <div class="hrow"><span class="hkey">DEPTH</span><span class="hval"    id="hd">—</span></div>
+    </div>
+
+    <div class="tblock">
+      <div><div class="mkey" style="margin-bottom:4px">APRILTAG ID</div><div class="tid" id="tid">—</div></div>
+      <div><div class="mkey" style="margin-bottom:4px">DISTANCE</div><div class="tdist"><span id="tdist">—</span> m</div></div>
+    </div>
+
+  </div>
+
+  <!-- 하단 통계 바 -->
+  <div class="bbar">
+    <div>RTT <span id="irtt">—</span> ms</div>
+    <div>DC/s <span id="idcr">—</span></div>
+    <div>PC <span id="ipcs">—</span></div>
+    <div>ICE <span id="iice">—</span></div>
+    <div>TRACKS <span id="itrk">0</span> / 3</div>
+    <div>SERVER <span id="isrv">—</span></div>
+  </div>
+
+</div>
+
+<script>
+const SERVER_HOST = location.hostname;
+const SERVER_PORT = 8000; // FastAPI 포트
+const OFFER_URL   = `http://${SERVER_HOST}:${SERVER_PORT}/webrtc/offer`;
+const LIVING      = new Set(['person','cat','dog','bird','teddy bear','cow','sheep','horse']);
+
+let pc = null, connected = false, clientId = null;
+let trackCount = 0;
+let dcMsgTotal = 0, dcMsgPrev = 0;
+let statsTimer = null, dcRateTimer = null;
+const dcLines = [];
+
+// ── 연결/해제 ─────────────────────────────────────────────
+async function toggleConnect() {
+  connected ? await disconnect() : await connect();
+}
+
+async function connect() {
+  setStatus('connecting');
+  clientId  = crypto.randomUUID();
+  trackCount = 0;
+
+  pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+
+  // 트랙 수신 매핑: 서버 addTrack 순서 main(0) → face(1) → ppe(2) 와 동일하게 처리
+  const MAP = [
+    { vid: 'vm', ns: 'nsm', badge: 'bm' },
+    { vid: 'vf', ns: 'nsf', badge: 'bs' },
+    { vid: 'vp', ns: 'nsp', badge: 'bs' },
+  ];
+
+  pc.ontrack = (e) => {
+    const m = MAP[trackCount++];
+    if (!m) return;
+    document.getElementById(m.vid).srcObject = e.streams[0];
+    document.getElementById(m.ns).style.display  = 'none';
+    const b = document.getElementById(m.badge);
+    b.textContent = 'LIVE'; b.className = 'badge live';
+    document.getElementById('itrk').textContent = trackCount;
+  };
+
+  // DataChannel: 서버가 createDataChannel로 만들어 보내는 채널을 받음
+  pc.ondatachannel = (e) => {
+    if (e.channel.label !== 'state') return;
+    const dc = e.channel;
+    dc.binaryType = 'arraybuffer';
+    dc.onopen = () => {
+      const b = document.getElementById('bdc');
+      b.textContent = 'DC ON'; b.className = 'badge live';
+      startDcRate();
+    };
+    dc.onmessage = (ev) => {
+      dcMsgTotal++;
+      const raw = ev.data instanceof ArrayBuffer ? new TextDecoder().decode(ev.data) : ev.data;
+      try { updateUI(JSON.parse(raw)); } catch(err) { console.warn('DC parse error', err); }
+    };
+    dc.onclose = () => {
+      const b = document.getElementById('bdc');
+      b.textContent = 'DC OFF'; b.className = 'badge idle';
+    };
+  };
+
+  pc.onconnectionstatechange = () => {
+    document.getElementById('ipcs').textContent = pc.connectionState;
+    if (['failed','closed','disconnected'].includes(pc.connectionState)) setStatus('error');
+  };
+  pc.oniceconnectionstatechange = () => {
+    document.getElementById('iice').textContent = pc.iceConnectionState;
+  };
+
+  // 수신 전용 트랜시버 3개 추가 (main / face / ppe)
+  for (let i = 0; i < 3; i++) pc.addTransceiver('video', { direction: 'recvonly' });
+
+  // Offer 생성 및 ICE gathering 대기
+  const offer = await pc.createOffer();
+  await pc.setLocalDescription(offer);
+  await waitIce(pc, 4000);
+
+  // 시그널링: 단일 HTTP POST
+  let answer;
+  try {
+    const res = await fetch(OFFER_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sdp: pc.localDescription.sdp, type: pc.localDescription.type, client_id: clientId })
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    answer = await res.json();
+  } catch(err) {
+    console.error('Signaling failed:', err);
+    setStatus('error');
+    document.getElementById('isrv').textContent = 'UNREACHABLE';
+    return;
+  }
+
+  await pc.setRemoteDescription(new RTCSessionDescription(answer));
+  setStatus('connected');
+  document.getElementById('isrv').textContent = `${SERVER_HOST}:${SERVER_PORT}`;
+  startStats();
+}
+
+function waitIce(pc, ms) {
+  return new Promise(res => {
+    if (pc.iceGatheringState === 'complete') return res();
+    const tid = setTimeout(res, ms);
+    pc.addEventListener('icegatheringstatechange', function h() {
+      if (pc.iceGatheringState === 'complete') {
+        clearTimeout(tid); pc.removeEventListener('icegatheringstatechange', h); res();
+      }
+    });
+  });
+}
+
+async function disconnect() {
+  stopStats();
+  if (pc) {
+    fetch(`http://${SERVER_HOST}:${SERVER_PORT}/webrtc/${clientId}`, { method: 'DELETE' }).catch(()=>{});
+    pc.close(); pc = null;
+  }
+  ['vm','vf','vp'].forEach(id => { const el = document.getElementById(id); if(el) el.srcObject = null; });
+  ['nsm','nsf','nsp'].forEach(id => document.getElementById(id).style.display = '');
+  ['bm','bs'].forEach(id => { const b = document.getElementById(id); b.textContent = 'IDLE'; b.className = 'badge idle'; });
+  const bdc = document.getElementById('bdc');
+  bdc.textContent = 'DC —'; bdc.className = 'badge idle';
+  document.getElementById('itrk').textContent = '0';
+  trackCount = 0;
+  setStatus('disconnected');
+}
+
+// ── UI 업데이트 ────────────────────────────────────────────
+function updateUI(s) {
+  // 배터리
+  const pct = s.charge ?? 0;
+  document.getElementById('bpct').textContent = pct + '%';
+  const fill = document.getElementById('bfill');
+  fill.style.width = pct + '%';
+  fill.className = 'bat-fill' + (pct < 20 ? ' c' : pct < 40 ? ' w' : '');
+
+  // 수치
+  set('vv', s.voltage != null ? (+s.voltage).toFixed(1) : '—');
+  const tel = document.getElementById('vt');
+  const temp = s.temp ?? 0;
+  tel.textContent = temp;
+  tel.className   = 'mval' + (temp > 80 ? ' warn' : '');
+  set('vl', s.cnt_live   ?? 0);
+  set('vo', s.cnt_object ?? 0);
+
+  // 감지 오브젝트 목록
+  const boxes = s.boxes ?? [];
+  document.getElementById('bcount').textContent = boxes.length;
+  document.getElementById('blist').innerHTML = boxes.length
+    ? boxes.slice(0, 30).map(b =>
+        `<div class="orow">
+          <div class="odot ${LIVING.has(b.class)?'l':'o'}"></div>
+          <div class="ocls">${b.class}</div>
+          <div class="oscr">${(b.score*100).toFixed(0)}%</div>
+          <div class="opos">${b.position||'—'}</div>
+        </div>`).join('')
+    : '<div style="padding:10px 12px;font-family:var(--mono);font-size:9px;color:var(--muted)">NO OBJECTS</div>';
+
+  // 사람 분석
+  const h = s.human ?? {};
+  set('hp', h.position || '—');
+  set('he', h.emotion  || '—');
+  set('hg', h.gender   || '—');
+  set('ha', h.age      || '—');
+  set('hd', h.depth != null ? (+h.depth).toFixed(2)+' m' : '—');
+
+  // AprilTag
+  const tag = s.tag ?? {};
+  set('tid',   tag.id   ?? '—');
+  set('tdist', tag.dist != null ? (+tag.dist).toFixed(2) : '—');
+
+  // DC 로그 (최근 5줄)
+  const now = new Date().toISOString().substr(11, 8);
+  dcLines.unshift(`<div class="dcrow"><span class="dct">${now}</span><span>L:${s.cnt_live??0} O:${s.cnt_object??0} BAT:${s.charge??0}%</span></div>`);
+  if (dcLines.length > 5) dcLines.pop();
+  document.getElementById('dcbody').innerHTML = dcLines.join('');
+}
+
+function set(id, val) { document.getElementById(id).textContent = val; }
+
+// ── Stats ─────────────────────────────────────────────────
+function startStats() {
+  statsTimer = setInterval(async () => {
+    if (!pc) return;
+    try {
+      const stats = await pc.getStats();
+      stats.forEach(r => {
+        if (r.type === 'candidate-pair' && r.state === 'succeeded' && r.currentRoundTripTime != null)
+          set('irtt', Math.round(r.currentRoundTripTime * 1000));
+      });
+    } catch {}
+  }, 1000);
+}
+
+function startDcRate() {
+  dcRateTimer = setInterval(() => {
+    set('idcr', dcMsgTotal - dcMsgPrev);
+    dcMsgPrev = dcMsgTotal;
+  }, 1000);
+}
+
+function stopStats() {
+  clearInterval(statsTimer); clearInterval(dcRateTimer);
+  statsTimer = dcRateTimer = null;
+}
+
+// ── 상태 표시 ─────────────────────────────────────────────
+function setStatus(s) {
+  document.getElementById('dot').className  = 'dot ' + s;
+  document.getElementById('clbl').textContent = s.toUpperCase();
+  const btn = document.getElementById('btn');
+  if (s === 'connected') {
+    connected = true; btn.textContent = 'DISCONNECT'; btn.disabled = false;
+  } else if (s === 'connecting') {
+    btn.textContent = '···'; btn.disabled = true;
+  } else {
+    connected = false; btn.textContent = 'CONNECT'; btn.disabled = false;
+  }
+}
+
+// ── FPS 카운터 ────────────────────────────────────────────
+let fpsN = 0, fpsT = performance.now();
+(function loop() {
+  requestAnimationFrame(() => {
+    fpsN++;
+    const now = performance.now();
+    if (now - fpsT >= 1000) { set('fps', fpsN + ' fps'); fpsN = 0; fpsT = now; }
+    loop();
+  });
+})();
+</script>
+</body>
+</html>
