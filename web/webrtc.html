@@ -340,7 +340,14 @@ async function connect() {
     const res = await fetch(`${BASE}/webrtc/offer?client_id=${clientId}`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     serverOffer = await res.json();
-    console.log('[WebRTC] got server offer');
+
+    // 서버 SDP에 어떤 candidate가 있는지 콘솔에 출력
+    const serverCands = serverOffer.sdp.split('\n').filter(l => l.startsWith('a=candidate'));
+    console.log(`[WebRTC] server offer received (${serverCands.length} candidates):`);
+    serverCands.forEach(c => console.log(' ', c.trim()));
+    if (serverCands.length === 0) {
+      console.error('[WebRTC] !! 서버 SDP에 candidate 없음 - ICE 연결 불가 !!');
+    }
   } catch(err) {
     console.error('Get offer failed:', err);
     setStatus('error');
@@ -357,6 +364,12 @@ async function connect() {
   // ── Step 4: 클라이언트 ICE gathering 완료 대기 ────────────
   await waitIce(pc, 3000);
 
+  // 클라이언트 candidate 로그
+  const mySDPLines = pc.localDescription.sdp.split('\n');
+  const myCands = mySDPLines.filter(l => l.startsWith('a=candidate'));
+  console.log(`[WebRTC] client answer (${myCands.length} candidates):`);
+  myCands.forEach(c => console.log(' ', c.trim()));
+
   // ── Step 5: answer → 서버 전송 ────────────────────────────
   try {
     const res = await fetch(`${BASE}/webrtc/answer`, {
@@ -369,7 +382,7 @@ async function connect() {
       })
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    console.log('[WebRTC] answer sent');
+    console.log('[WebRTC] answer sent OK');
   } catch(err) {
     console.error('Send answer failed:', err);
     setStatus('error');
