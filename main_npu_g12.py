@@ -44,7 +44,7 @@ def getHash(text):
     hash_func.update(text.encode('utf-8'))
     return hash_func.hexdigest()
 
-_IP = "192.168.21.19"
+_IP = "192.168.0.19"
 _SERVER_PORT = 59530          # FastAPI 서버 포트
 
 # ── 로컬망 전용 ICE 설정 ─────────────────────────────────────
@@ -134,20 +134,33 @@ G1_BALANCE = {"Stand_G1": 0, "Step_G1": 1}
 # [변경] MJPEG 큐 제거 → WebRTC용 latest_frames 공유 메모리로 교체
 # processed_frame_queue, frame_queue, depth_queue 는 아래로 대체됨
 # ─────────────────────────────────────────────────────────────
-raw_data_queue = Queue(maxsize=1)   # receiver_loop → processing_loop 용
+# ── receiver_loop → processing_thread 용 raw 큐 (threading) ──
+import queue as _queue
+raw_data_queue_th = _queue.Queue(maxsize=1)   # blocking Queue, 스레드 전용
 
-# ── WebRTC 프레임 전달: 트랙마다 asyncio.Queue(maxsize=1) ──────
-# put_nowait: 꽉 차 있으면 버리고 새 프레임 삽입 → 항상 최신 1장
-# recv()에서 await get() → 새 프레임 올 때까지 대기 (busy-wait 없음)
-frame_queues = {
-    "main": Queue(maxsize=1),
-    "face": Queue(maxsize=1),
-    "ppe":  Queue(maxsize=1),
+# ── processing_thread → WebRTC recv() 용 공유 버퍼 ────────────
+# 구조: 각 키마다 (버퍼 numpy, 버전카운터) 를 tuple로 보관
+# threading.Condition 으로 "새 프레임 도착" 을 recv() 에 알림
+# recv() 는 condition.wait() 로 CPU 0% 대기, 새 프레임 오면 즉시 깨어남
+import threading as _threading
+_shared = {
+    "main": None,
+    "face": None,
+    "ppe":  None,
+}
+_shared_ver = {"main": 0, "face": 0, "ppe": 0}
+_shared_cond = {
+    "main": _threading.Condition(),
+    "face": _threading.Condition(),
+    "ppe":  _threading.Condition(),
 }
 
-# face/ppe 는 항상 새 frame 이 오는 게 아니므로 마지막 저장분 캐시도 유지
-latest_frames      = {"face": None, "ppe": None}
-latest_frames_lock = threading.Lock()
+def _push_frame(key: str, bgr_frame):
+    """processing 스레드에서 호출 — 새 프레임을 공유 버퍼에 저장하고 대기자를 깨움"""
+    with _shared_cond[key]:
+        _shared[key] = bgr_frame          # 참조 교체 (numpy 배열 자체를 새로 할당)
+        _shared_ver[key] += 1
+        _shared_cond[key].notify_all()    # recv() 코루틴의 스레드를 깨움
 
 cnt_live = 0
 cnt_object = 0
@@ -337,78 +350,67 @@ def get_mask_depths(masks, depth_frame, low_percentile=5):
 # 수신 루프 (기존과 동일)
 # ─────────────────────────────────────────────────────────────
 
-async def fetch_combined_frame(session):
+def receiver_thread_func():
+    """
+    완전한 스레드 함수 — asyncio 이벤트 루프와 완전 분리.
+    requests 로 RGB+Depth 바이너리를 받아 raw_data_queue_th 에 넣음.
+    """
     W, H = 640, 480
-    RGB_SIZE = W * H * 3
+    RGB_SIZE  = W * H * 3
     DEPTH_SIZE = W * H * 2
     TOTAL_SIZE = RGB_SIZE + DEPTH_SIZE
-
-    try:
-        async with session.get(SOURCE_VIDEO_URL, timeout=aiohttp.ClientTimeout(total=1.0)) as response:
-            if response.status == 200:
-                data = await response.read()
+    print("============= Receiver Thread Started")
+    while True:
+        try:
+            resp = requests.get(SOURCE_VIDEO_URL, timeout=1.0)
+            if resp.status_code == 200:
+                data = resp.content
                 if len(data) >= TOTAL_SIZE:
-                    frame = np.frombuffer(data[:RGB_SIZE], dtype=np.uint8).reshape(H, W, 3)
-                    depth_frame = np.frombuffer(data[RGB_SIZE:TOTAL_SIZE], dtype=np.uint16).reshape(H, W)
-                    return frame, depth_frame
+                    frame = np.frombuffer(data[:RGB_SIZE],        dtype=np.uint8).reshape(H, W, 3).copy()
+                    depth = np.frombuffer(data[RGB_SIZE:TOTAL_SIZE], dtype=np.uint16).reshape(H, W).copy()
+                    # 오래된 프레임 버리고 최신만 유지
+                    if raw_data_queue_th.full():
+                        try: raw_data_queue_th.get_nowait()
+                        except: pass
+                    raw_data_queue_th.put((frame, depth))
                 else:
-                    print(f"Warning: Data incomplete ({len(data)}/{TOTAL_SIZE} bytes)")
+                    print(f"Warning: Data incomplete ({len(data)}/{TOTAL_SIZE})")
             else:
-                print(f"Server Error: HTTP {response.status}")
-    except asyncio.TimeoutError:
-        print("Fetch Timeout")
-    except Exception as e:
-        print(f"Fetch Error: {e}")
-
-    return None, None
-
-
-async def receiver_loop():
-    print("============= Receiver Loop Started")
-    connector = aiohttp.TCPConnector(limit=None, keepalive_timeout=30)
-    async with aiohttp.ClientSession(connector=connector) as session:
-        while True:
-            try:
-                frame, depth = await fetch_combined_frame(session)
-                if frame is not None:
-                    if raw_data_queue.full():
-                        raw_data_queue.get_nowait()
-                    await raw_data_queue.put((frame, depth))
-                else:
-                    await asyncio.sleep(0.001)
-            except Exception as e:
-                print(f"Receiver Error: {e}")
-                await asyncio.sleep(0.1)
+                print(f"Server Error: HTTP {resp.status_code}")
+                time.sleep(0.1)
+        except Exception as e:
+            print(f"Receiver Error: {e}")
+            time.sleep(0.1)
 
 
 # ─────────────────────────────────────────────────────────────
-# 처리 루프 — AI 로직 전부 보존, 출력 부분만 WebRTC 캐시로 교체
+# 처리 스레드 — asyncio 이벤트 루프와 완전 분리된 동기 함수
+# NPU 추론 / CV 처리 / 시각화 전부 여기서 실행
+# 결과는 _push_frame() 으로 공유 버퍼에 저장 → FrameProviderTrack 이 읽어감
 # ─────────────────────────────────────────────────────────────
 
-async def processing_loop():
+def processing_thread_func():
     global cnt_image
     global last_ppe_saved_time
     global last_face_saved_time
 
-    print("============= Processing Loop Started")
+    print("============= Processing Thread Started")
 
     while True:
-        # 1. 수신부로부터 데이터 획득
-        frame, depth_frame = await raw_data_queue.get()
+        # 1. 수신부로부터 데이터 획득 (blocking get — CPU 0% 대기)
+        try:
+            frame, depth_frame = raw_data_queue_th.get(timeout=1.0)
+        except _queue.Empty:
+            continue
         start_time = time.time()
 
-        # 2. 전처리 (기존과 동일)
+        # 2. 전처리
         frame_ai = cv2.resize(frame, (640, 640), interpolation=cv2.INTER_NEAREST)
         depth_ai = cv2.resize(depth_frame, (640, 640), interpolation=cv2.INTER_NEAREST)
 
-        # 3. NPU 추론 — run_in_executor 로 블로킹 연산을 스레드 풀에서 실행
-        # → asyncio 이벤트 루프가 NPU 대기 중에도 recv() 등 다른 코루틴 처리 가능
-        loop = asyncio.get_event_loop()
-        def run_inference():
-            r   = det_model(frame_ai, device="intel:npu", verbose=False, conf=0.25)[0]
-            rp  = ppe_model(frame_ai, device="intel:npu", verbose=False, conf=0.25)[0]
-            return r, rp
-        res, ppe_res = await loop.run_in_executor(None, run_inference)
+        # 3. NPU 추론 (동기, 스레드 안에서 직접 호출 — 이벤트 루프 블로킹 없음)
+        res     = det_model(frame_ai, device="intel:npu", verbose=False, conf=0.25)[0]
+        ppe_res = ppe_model(frame_ai, device="intel:npu", verbose=False, conf=0.25)[0]
 
         # 4. 후처리 (기존과 동일)
         if hasattr(res, 'masks') and res.masks is not None:
@@ -449,32 +451,24 @@ async def processing_loop():
                     ppe_crop = out[y1_c:y2_c, x1_c:x2_c]
 
                     if 'helmet' in label_text:
-                        # ① 스트리밍 큐 업데이트 (매 프레임, 즉시)
-                        q = frame_queues["ppe"]
-                        if q.full():
-                            try: q.get_nowait()
-                            except: pass
-                        asyncio.get_event_loop().call_soon_threadsafe(
-                            lambda f=ppe_crop.copy(): asyncio.ensure_future(_put_frame_queue("ppe", f))
-                        )
-                        # ② 파일 저장 (10초 간격, 별도 스레드)
+                        # ① 스트리밍: 공유 버퍼 즉시 교체 (스레드 안에서 직접 호출 가능)
+                        _push_frame("ppe", ppe_crop.copy())
+                        # ② 파일 저장 (10초 간격, 별도 daemon 스레드)
                         if current_time - last_ppe_saved_time > 10.0:
                             last_ppe_saved_time = current_time
-                            ppe_filename = f"ppe_{label_text}_{int(current_time)}.jpg"
-                            threading.Thread(target=save_ppe_async,
-                                             args=(ppe_crop.copy(), ppe_filename), daemon=True).start()
+                            ppe_fn = f"ppe_{label_text}_{int(current_time)}.jpg"
+                            _threading.Thread(target=save_ppe_async,
+                                              args=(ppe_crop.copy(), ppe_fn), daemon=True).start()
 
                     elif 'face' in label_text:
-                        # ① 스트리밍 큐 업데이트 (매 프레임, 즉시)
-                        asyncio.get_event_loop().call_soon_threadsafe(
-                            lambda f=ppe_crop.copy(): asyncio.ensure_future(_put_frame_queue("face", f))
-                        )
-                        # ② 파일 저장 (10초 간격, 별도 스레드)
+                        # ① 스트리밍: 공유 버퍼 즉시 교체
+                        _push_frame("face", ppe_crop.copy())
+                        # ② 파일 저장 (10초 간격, 별도 daemon 스레드)
                         if current_time - last_face_saved_time > 10.0:
                             last_face_saved_time = current_time
-                            face_filename = f"face_{int(current_time)}.jpg"
-                            threading.Thread(target=save_face_async,
-                                             args=(ppe_crop.copy(), face_filename), daemon=True).start()
+                            face_fn = f"face_{int(current_time)}.jpg"
+                            _threading.Thread(target=save_face_async,
+                                              args=(ppe_crop.copy(), face_fn), daemon=True).start()
 
                     # PPE 박스 및 텍스트 그리기 (기존과 동일)
                     cv2.rectangle(out, (x1, y1), (x2, y2), (255, 0, 0), 2)
@@ -516,18 +510,9 @@ async def processing_loop():
         fps = 1.0 / (time.time() - start_time)
         cv2.putText(out, f"FPS: {fps:.2f}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
 
-        # ─────────────────────────────────────────────────────
-        # [변경] MJPEG 큐 put → latest_frames 캐시 업데이트
-        # 기존: await processed_frame_queue.put(cv2.resize(out, (640, 480)))
-        # 변경: WebRTC FrameProviderTrack이 이 값을 읽어감
-        # ─────────────────────────────────────────────────────
-        # ── 메인 프레임 → frame_queues["main"] ──────────────────
+        # ── 결과 프레임 → 공유 버퍼 push (recv() 를 깨움) ──────
         main_frame = cv2.resize(out, (640, 480))
-        q = frame_queues["main"]
-        if q.full():
-            try: q.get_nowait()   # 소비 안 된 오래된 프레임 버림
-            except: pass
-        await q.put(main_frame)
+        _push_frame("main", main_frame)   # 새 numpy 배열 참조 교체 + notify
 
         cnt_image += 1
         if cnt_image % 100 == 0:
@@ -538,55 +523,57 @@ async def processing_loop():
 # WebRTC: VideoStreamTrack 구현
 # ─────────────────────────────────────────────────────────────
 
-async def _put_frame_queue(key: str, frame):
-    """frame_queues[key] 에 최신 프레임 삽입. 꽉 차면 오래된 것 버림."""
-    q = frame_queues[key]
-    if q.full():
-        try: q.get_nowait()
-        except: pass
-    await q.put(frame)
-
-
 class FrameProviderTrack(VideoStreamTrack):
     """
-    frame_queues[frame_key] 에서 BGR 프레임을 꺼내 WebRTC VideoFrame으로 변환.
+    processing_thread_func() 이 _push_frame() 으로 업데이트하는
+    공유 버퍼(_shared)에서 프레임을 읽어 WebRTC VideoFrame으로 변환.
 
-    구조 변경 이유:
-    - 이전: latest_frames(공유 메모리) + lock → recv()가 busy-wait하거나
-      processing_loop와 타이밍이 맞지 않아 같은 프레임 반복
-    - 변경: asyncio.Queue(maxsize=1) → recv()가 await get()으로 대기,
-      processing_loop가 새 프레임 push 시 즉시 깨어남
-      → "새 프레임이 있을 때만" VideoFrame 생성 보장
-
-    next_timestamp() 제거 이유:
-    - next_timestamp()는 내부 타이머 기반으로 일정 간격마다 await 해제
-    - Queue.get()과 이중으로 대기하면 타이밍 충돌 → 같은 프레임 반복
-    - pts를 직접 카운팅하는 방식이 더 안정적
+    핵심:
+    - asyncio.get_event_loop().run_in_executor 로
+      threading.Condition.wait() 를 await 화 → 이벤트 루프 비블로킹
+    - 새 프레임이 도착할 때마다 Condition.notify_all() → recv() 즉시 깨어남
+    - 스레드(processing)와 asyncio(WebRTC) 가 완전히 분리된 채로 동기화
     """
 
     kind = "video"
 
     def __init__(self, frame_key: str, fps: int = 15):
         super().__init__()
-        self.frame_key = frame_key
-        self._fps = fps
-        self._pts = 0
-        self._time_base = fractions.Fraction(1, 90000)  # RTP 표준 90kHz
-        self._pts_step = 90000 // fps                   # 매 프레임 pts 증분
+        self.frame_key  = frame_key
+        self._seen_ver  = -1
+        self._pts       = 0
+        self._time_base = fractions.Fraction(1, 90000)
+        self._pts_step  = 90000 // fps
+        self._loop      = None
 
     async def recv(self):
-        q = frame_queues[self.frame_key]
+        if self._loop is None:
+            self._loop = asyncio.get_event_loop()
 
-        # 새 프레임이 올 때까지 await — CPU 0%, busy-wait 없음
-        bgr = await q.get()
+        key  = self.frame_key
+        cond = _shared_cond[key]
+        seen = self._seen_ver
 
-        # BGR → RGB (aiortc/libav 는 RGB24 입력을 YUV420으로 인코딩)
+        # threading.Condition.wait 를 executor 에서 실행 → 이벤트 루프 비블로킹
+        def _wait_new():
+            with cond:
+                # 현재 버전과 같으면 새 프레임 올 때까지 대기 (timeout=1초 안전장치)
+                while _shared_ver[key] == seen:
+                    cond.wait(timeout=1.0)
+                return _shared[key], _shared_ver[key]
+
+        bgr, new_ver = await self._loop.run_in_executor(None, _wait_new)
+
+        self._seen_ver = new_ver
+
+        if bgr is None:
+            bgr = np.zeros((480, 640, 3), dtype=np.uint8)
+
         rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
         vf  = VideoFrame.from_ndarray(rgb, format="rgb24")
         vf.pts       = self._pts
         vf.time_base = self._time_base
         self._pts   += self._pts_step
-
         return vf
 
 
@@ -814,8 +801,10 @@ async def start_frame_collection():
     print("모든 큐 초기화 완료")
     is_collecting = True
 
-    asyncio.create_task(receiver_loop())
-    asyncio.create_task(processing_loop())
+    # receiver / processing 은 완전한 독립 스레드로 실행
+    # → asyncio 이벤트 루프와 격리, NPU/CV 블로킹이 WebRTC에 영향 없음
+    _threading.Thread(target=receiver_thread_func,   daemon=True).start()
+    _threading.Thread(target=processing_thread_func, daemon=True).start()
 
     return {"message": "수신 및 분석 파이프라인이 시작되었습니다."}
 
@@ -1122,3 +1111,11 @@ print("NPU", "2502010900")
 
 # ── 직접 실행 시 포트 59530으로 기동 ─────────────────────────
 # uvicorn main_webrtc:app --host 0.0.0.0 --port 59530 으로도 동일
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(
+        "main_webrtc:app",
+        host="0.0.0.0",    # 모든 NIC에서 수신 (로컬망 어느 IP로 접속해도 OK)
+        port=_SERVER_PORT,
+        reload=False,
+    )
