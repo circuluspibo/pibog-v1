@@ -264,10 +264,8 @@
 </div>
 
 <script>
-const SERVER_HOST = location.hostname;
-const SERVER_PORT = 59530;                        // 서버 포트
-const OFFER_URL   = `http://${SERVER_HOST}:${SERVER_PORT}/webrtc/offer`;
-const LIVING      = new Set(['person','cat','dog','bird','teddy bear','cow','sheep','horse']);
+const BASE   = `http://${location.hostname}:59530`;
+const LIVING = new Set(['person','cat','dog','bird','teddy bear','cow','sheep','horse']);
 
 let pc = null, connected = false, clientId = null;
 let trackCount = 0;
@@ -282,34 +280,30 @@ async function toggleConnect() {
 
 async function connect() {
   setStatus('connecting');
-  clientId  = crypto.randomUUID();
+  clientId   = crypto.randomUUID();
   trackCount = 0;
 
-  pc = new RTCPeerConnection({
-    // 로컬 폐쇄망: STUN/TURN 없이 host candidate만 사용
-    // 클라이언트와 서버가 같은 L2/L3 망이면 이것만으로 연결됨
-    iceServers: [],
-    iceTransportPolicy: 'all'   // host candidate 허용
-  });
+  // 로컬 폐쇄망: STUN/TURN 없이 host candidate만 사용
+  pc = new RTCPeerConnection({ iceServers: [] });
 
-  // 트랙 수신 매핑: 서버 addTrack 순서 main(0) → face(1) → ppe(2) 와 동일하게 처리
+  // 트랙 수신: 서버 addTrack 순서 main→face→ppe 와 동일
   const MAP = [
-    { vid: 'vm', ns: 'nsm', badge: 'bm' },
-    { vid: 'vf', ns: 'nsf', badge: 'bs' },
-    { vid: 'vp', ns: 'nsp', badge: 'bs' },
+    { vid:'vm', ns:'nsm', badge:'bm' },
+    { vid:'vf', ns:'nsf', badge:'bs' },
+    { vid:'vp', ns:'nsp', badge:'bs' },
   ];
-
   pc.ontrack = (e) => {
     const m = MAP[trackCount++];
     if (!m) return;
     document.getElementById(m.vid).srcObject = e.streams[0];
-    document.getElementById(m.ns).style.display  = 'none';
+    document.getElementById(m.ns).style.display = 'none';
     const b = document.getElementById(m.badge);
     b.textContent = 'LIVE'; b.className = 'badge live';
     document.getElementById('itrk').textContent = trackCount;
+    console.log(`[WebRTC] track ${trackCount} → #${m.vid}`);
   };
 
-  // DataChannel: 서버가 createDataChannel로 만들어 보내는 채널을 받음
+  // DataChannel: 서버가 createDataChannel로 생성해서 offer SDP에 포함시킴
   pc.ondatachannel = (e) => {
     if (e.channel.label !== 'state') return;
     const dc = e.channel;
@@ -322,7 +316,7 @@ async function connect() {
     dc.onmessage = (ev) => {
       dcMsgTotal++;
       const raw = ev.data instanceof ArrayBuffer ? new TextDecoder().decode(ev.data) : ev.data;
-      try { updateUI(JSON.parse(raw)); } catch(err) { console.warn('DC parse error', err); }
+      try { updateUI(JSON.parse(raw)); } catch(err) { console.warn('DC parse', err); }
     };
     dc.onclose = () => {
       const b = document.getElementById('bdc');
@@ -332,52 +326,70 @@ async function connect() {
 
   pc.onconnectionstatechange = () => {
     document.getElementById('ipcs').textContent = pc.connectionState;
+    console.log('[WebRTC] connectionState:', pc.connectionState);
     if (['failed','closed','disconnected'].includes(pc.connectionState)) setStatus('error');
   };
   pc.oniceconnectionstatechange = () => {
     document.getElementById('iice').textContent = pc.iceConnectionState;
+    console.log('[WebRTC] iceConnectionState:', pc.iceConnectionState);
   };
 
-  // 수신 전용 트랜시버 3개 추가 (main / face / ppe)
-  for (let i = 0; i < 3; i++) pc.addTransceiver('video', { direction: 'recvonly' });
-
-  // Offer 생성
-  const offer = await pc.createOffer();
-  await pc.setLocalDescription(offer);
-
-  // ICE gathering 완료 대기 (로컬망: STUN 없으므로 host candidate 수집 후 즉시 완료, 보통 <200ms)
-  await waitIce(pc, 2000);
-
-  // 시그널링: 단일 HTTP POST
-  let answer;
+  // ── Step 1: 서버에서 offer 받기 ───────────────────────────
+  let serverOffer;
   try {
-    const res = await fetch(OFFER_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sdp: pc.localDescription.sdp, type: pc.localDescription.type, client_id: clientId })
-    });
+    const res = await fetch(`${BASE}/webrtc/offer?client_id=${clientId}`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    answer = await res.json();
+    serverOffer = await res.json();
+    console.log('[WebRTC] got server offer');
   } catch(err) {
-    console.error('Signaling failed:', err);
+    console.error('Get offer failed:', err);
     setStatus('error');
-    document.getElementById('isrv').textContent = 'UNREACHABLE';
     return;
   }
 
-  await pc.setRemoteDescription(new RTCSessionDescription(answer));
+  // ── Step 2: 서버 offer → setRemoteDescription ─────────────
+  await pc.setRemoteDescription(new RTCSessionDescription(serverOffer));
+
+  // ── Step 3: answer 생성 ────────────────────────────────────
+  const answer = await pc.createAnswer();
+  await pc.setLocalDescription(answer);
+
+  // ── Step 4: 클라이언트 ICE gathering 완료 대기 ────────────
+  await waitIce(pc, 3000);
+
+  // ── Step 5: answer → 서버 전송 ────────────────────────────
+  try {
+    const res = await fetch(`${BASE}/webrtc/answer`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sdp:       pc.localDescription.sdp,
+        type:      pc.localDescription.type,
+        client_id: clientId,
+      })
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    console.log('[WebRTC] answer sent');
+  } catch(err) {
+    console.error('Send answer failed:', err);
+    setStatus('error');
+    return;
+  }
+
   setStatus('connected');
-  document.getElementById('isrv').textContent = `${SERVER_HOST}:${SERVER_PORT}`;
+  document.getElementById('isrv').textContent = location.hostname + ':59530';
   startStats();
 }
 
 function waitIce(pc, ms) {
-  return new Promise(res => {
-    if (pc.iceGatheringState === 'complete') return res();
-    const tid = setTimeout(res, ms);
+  return new Promise(resolve => {
+    if (pc.iceGatheringState === 'complete') return resolve();
+    const tid = setTimeout(resolve, ms);
     pc.addEventListener('icegatheringstatechange', function h() {
       if (pc.iceGatheringState === 'complete') {
-        clearTimeout(tid); pc.removeEventListener('icegatheringstatechange', h); res();
+        clearTimeout(tid);
+        pc.removeEventListener('icegatheringstatechange', h);
+        resolve();
       }
     });
   });
@@ -386,14 +398,20 @@ function waitIce(pc, ms) {
 async function disconnect() {
   stopStats();
   if (pc) {
-    fetch(`http://${SERVER_HOST}:${SERVER_PORT}/webrtc/${clientId}`, { method: 'DELETE' }).catch(()=>{});
+    fetch(`${BASE}/webrtc/${clientId}`, { method: 'DELETE' }).catch(()=>{});
     pc.close(); pc = null;
   }
-  ['vm','vf','vp'].forEach(id => { const el = document.getElementById(id); if(el) el.srcObject = null; });
+  ['vm','vf','vp'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.srcObject = null;
+  });
   ['nsm','nsf','nsp'].forEach(id => document.getElementById(id).style.display = '');
-  ['bm','bs'].forEach(id => { const b = document.getElementById(id); b.textContent = 'IDLE'; b.className = 'badge idle'; });
-  const bdc = document.getElementById('bdc');
-  bdc.textContent = 'DC —'; bdc.className = 'badge idle';
+  ['bm','bs'].forEach(id => {
+    const b = document.getElementById(id);
+    b.textContent = 'IDLE'; b.className = 'badge idle';
+  });
+  document.getElementById('bdc').textContent = 'DC —';
+  document.getElementById('bdc').className   = 'badge idle';
   document.getElementById('itrk').textContent = '0';
   trackCount = 0;
   setStatus('disconnected');
