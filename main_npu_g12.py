@@ -134,16 +134,19 @@ G1_BALANCE = {"Stand_G1": 0, "Step_G1": 1}
 # [변경] MJPEG 큐 제거 → WebRTC용 latest_frames 공유 메모리로 교체
 # processed_frame_queue, frame_queue, depth_queue 는 아래로 대체됨
 # ─────────────────────────────────────────────────────────────
-raw_data_queue = Queue(maxsize=1)   # receiver_loop → processing_loop 용 (기존과 동일)
+raw_data_queue = Queue(maxsize=1)   # receiver_loop → processing_loop 용
 
-# WebRTC 트랙이 읽어갈 최신 프레임 캐시 (lock으로 보호)
-latest_frames = {
-    "main": None,   # 메인 세그멘테이션+PPE 합성 결과 (640x480 BGR numpy)
-    "face": None,   # 얼굴 crop (BGR numpy, 가변 크기)
-    "ppe":  None,   # PPE/헬멧 crop (BGR numpy, 가변 크기)
+# ── WebRTC 프레임 전달: 트랙마다 asyncio.Queue(maxsize=1) ──────
+# put_nowait: 꽉 차 있으면 버리고 새 프레임 삽입 → 항상 최신 1장
+# recv()에서 await get() → 새 프레임 올 때까지 대기 (busy-wait 없음)
+frame_queues = {
+    "main": Queue(maxsize=1),
+    "face": Queue(maxsize=1),
+    "ppe":  Queue(maxsize=1),
 }
-# 프레임이 교체될 때마다 증가하는 카운터 → FrameProviderTrack 이 새 프레임 여부 감지
-latest_frame_ids = {"main": 0, "face": 0, "ppe": 0}
+
+# face/ppe 는 항상 새 frame 이 오는 게 아니므로 마지막 저장분 캐시도 유지
+latest_frames      = {"face": None, "ppe": None}
 latest_frames_lock = threading.Lock()
 
 cnt_live = 0
@@ -174,22 +177,12 @@ latest_ppe_frame = None   # (하위 호환용)
 # ─────────────────────────────────────────────────────────────
 
 def save_ppe_async(crop_img, filename):
-    """스트리밍 캐시 업데이트(우선) → 파일 저장(후순위)"""
+    """파일 저장 전용 스레드 함수. 스트리밍 캐시는 processing_loop에서 직접 업데이트."""
     global latest_ppe_frame
     try:
-        # ① 스트리밍 캐시 업데이트 (lock 시간 최소화: copy는 lock 밖)
-        snap = crop_img.copy()
-        with latest_frames_lock:
-            latest_frames["ppe"] = snap
-            latest_frame_ids["ppe"] += 1
-
-        # ② MJPEG 호환 캐시 (레거시)
-        _, img_encoded = cv2.imencode('.jpg', snap, [cv2.IMWRITE_JPEG_QUALITY, 70])
+        _, img_encoded = cv2.imencode('.jpg', crop_img, [cv2.IMWRITE_JPEG_QUALITY, 70])
         latest_ppe_frame = img_encoded.tobytes()
-
-        # ③ 파일 저장 (스트리밍과 무관, 느려도 됨)
-        path = os.path.join(PPE_DIR, filename)
-        cv2.imwrite(path, snap)
+        cv2.imwrite(os.path.join(PPE_DIR, filename), crop_img)
         files = sorted(glob.glob(os.path.join(PPE_DIR, "*.jpg")), key=os.path.getmtime)
         if len(files) > 20:
             for old_f in files[:-20]:
@@ -199,21 +192,12 @@ def save_ppe_async(crop_img, filename):
 
 
 def save_face_async(face_img, filename):
-    """스트리밍 캐시 업데이트(우선) → 파일 저장(후순위)"""
+    """파일 저장 전용 스레드 함수. 스트리밍 캐시는 processing_loop에서 직접 업데이트."""
     global latest_face_frame
     try:
-        # ① 스트리밍 캐시 업데이트
-        snap = face_img.copy()
-        with latest_frames_lock:
-            latest_frames["face"] = snap
-            latest_frame_ids["face"] += 1
-
-        # ② MJPEG 호환 캐시 (레거시)
-        _, img_encoded = cv2.imencode('.jpg', snap, [cv2.IMWRITE_JPEG_QUALITY, 70])
+        _, img_encoded = cv2.imencode('.jpg', face_img, [cv2.IMWRITE_JPEG_QUALITY, 70])
         latest_face_frame = img_encoded.tobytes()
-
-        # ③ 파일 저장
-        cv2.imwrite(os.path.join(FACES_DIR, filename), snap)
+        cv2.imwrite(os.path.join(FACES_DIR, filename), face_img)
     except Exception as e:
         print(f"Async Save Error: {e}")
 
@@ -464,23 +448,33 @@ async def processing_loop():
                     x1_c, x2_c = max(0, x1), min(crop_w, x2)
                     ppe_crop = out[y1_c:y2_c, x1_c:x2_c]
 
-                    if 'helmet' in label_text and current_time - last_ppe_saved_time > 10.0:
-                        print("helmet save...")
-                        last_ppe_saved_time = current_time
-                        ppe_filename = f"ppe_{label_text}_{int(current_time)}.jpg"
-                        threading.Thread(
-                            target=save_ppe_async,
-                            args=(ppe_crop.copy(), ppe_filename)
-                        ).start()
+                    if 'helmet' in label_text:
+                        # ① 스트리밍 큐 업데이트 (매 프레임, 즉시)
+                        q = frame_queues["ppe"]
+                        if q.full():
+                            try: q.get_nowait()
+                            except: pass
+                        asyncio.get_event_loop().call_soon_threadsafe(
+                            lambda f=ppe_crop.copy(): asyncio.ensure_future(_put_frame_queue("ppe", f))
+                        )
+                        # ② 파일 저장 (10초 간격, 별도 스레드)
+                        if current_time - last_ppe_saved_time > 10.0:
+                            last_ppe_saved_time = current_time
+                            ppe_filename = f"ppe_{label_text}_{int(current_time)}.jpg"
+                            threading.Thread(target=save_ppe_async,
+                                             args=(ppe_crop.copy(), ppe_filename), daemon=True).start()
 
-                    elif 'face' in label_text and current_time - last_face_saved_time > 10.0:
-                        print("face save...")
-                        last_face_saved_time = current_time
-                        face_filename = f"face_{int(current_time)}.jpg"
-                        threading.Thread(
-                            target=save_face_async,
-                            args=(ppe_crop.copy(), face_filename)
-                        ).start()
+                    elif 'face' in label_text:
+                        # ① 스트리밍 큐 업데이트 (매 프레임, 즉시)
+                        asyncio.get_event_loop().call_soon_threadsafe(
+                            lambda f=ppe_crop.copy(): asyncio.ensure_future(_put_frame_queue("face", f))
+                        )
+                        # ② 파일 저장 (10초 간격, 별도 스레드)
+                        if current_time - last_face_saved_time > 10.0:
+                            last_face_saved_time = current_time
+                            face_filename = f"face_{int(current_time)}.jpg"
+                            threading.Thread(target=save_face_async,
+                                             args=(ppe_crop.copy(), face_filename), daemon=True).start()
 
                     # PPE 박스 및 텍스트 그리기 (기존과 동일)
                     cv2.rectangle(out, (x1, y1), (x2, y2), (255, 0, 0), 2)
@@ -527,34 +521,47 @@ async def processing_loop():
         # 기존: await processed_frame_queue.put(cv2.resize(out, (640, 480)))
         # 변경: WebRTC FrameProviderTrack이 이 값을 읽어감
         # ─────────────────────────────────────────────────────
-        # lock 밖에서 resize (CPU 연산) → lock 시간 최소화
+        # ── 메인 프레임 → frame_queues["main"] ──────────────────
         main_frame = cv2.resize(out, (640, 480))
-        with latest_frames_lock:
-            latest_frames["main"] = main_frame
-            latest_frame_ids["main"] += 1
+        q = frame_queues["main"]
+        if q.full():
+            try: q.get_nowait()   # 소비 안 된 오래된 프레임 버림
+            except: pass
+        await q.put(main_frame)
 
         cnt_image += 1
         if cnt_image % 100 == 0:
             cv2.imwrite("capture.jpg", frame)
 
-        await asyncio.sleep(0)  # 이벤트 루프 양보
-
 
 # ─────────────────────────────────────────────────────────────
 # WebRTC: VideoStreamTrack 구현
-# latest_frames 딕셔너리에서 BGR 프레임을 읽어 WebRTC 비디오로 송출
 # ─────────────────────────────────────────────────────────────
+
+async def _put_frame_queue(key: str, frame):
+    """frame_queues[key] 에 최신 프레임 삽입. 꽉 차면 오래된 것 버림."""
+    q = frame_queues[key]
+    if q.full():
+        try: q.get_nowait()
+        except: pass
+    await q.put(frame)
+
 
 class FrameProviderTrack(VideoStreamTrack):
     """
-    latest_frames[frame_key] 의 BGR numpy 배열을 WebRTC VideoFrame으로 변환.
+    frame_queues[frame_key] 에서 BGR 프레임을 꺼내 WebRTC VideoFrame으로 변환.
 
-    버그 수정 포인트:
-    1. next_timestamp() 사용 → aiortc 내부 클럭과 동기화 (pts 오류 방지)
-    2. lock 안에서 .copy() 로 스냅샷만 뜨고 즉시 해제
-       → processing_loop 가 버퍼를 덮어써도 인코더가 안전하게 읽음
-    3. latest_frame_ids 로 새 프레임 여부 감지
-       → 변화 없으면 BGR→RGB 변환 생략, 이전 VideoFrame 재사용
+    구조 변경 이유:
+    - 이전: latest_frames(공유 메모리) + lock → recv()가 busy-wait하거나
+      processing_loop와 타이밍이 맞지 않아 같은 프레임 반복
+    - 변경: asyncio.Queue(maxsize=1) → recv()가 await get()으로 대기,
+      processing_loop가 새 프레임 push 시 즉시 깨어남
+      → "새 프레임이 있을 때만" VideoFrame 생성 보장
+
+    next_timestamp() 제거 이유:
+    - next_timestamp()는 내부 타이머 기반으로 일정 간격마다 await 해제
+    - Queue.get()과 이중으로 대기하면 타이밍 충돌 → 같은 프레임 반복
+    - pts를 직접 카운팅하는 방식이 더 안정적
     """
 
     kind = "video"
@@ -562,35 +569,24 @@ class FrameProviderTrack(VideoStreamTrack):
     def __init__(self, frame_key: str, fps: int = 15):
         super().__init__()
         self.frame_key = frame_key
-        self._blank_rgb = np.zeros((480, 640, 3), dtype=np.uint8)
-        self._last_vframe = None   # 직전 VideoFrame 재사용
-        self._last_id = -1         # 마지막으로 처리한 frame_id
+        self._fps = fps
+        self._pts = 0
+        self._time_base = fractions.Fraction(1, 90000)  # RTP 표준 90kHz
+        self._pts_step = 90000 // fps                   # 매 프레임 pts 증분
 
     async def recv(self):
-        # aiortc 권장 방식: 내부 클럭 기반 pts/time_base
-        pts, time_base = await self.next_timestamp()
+        q = frame_queues[self.frame_key]
 
-        # lock 안에서는 id 비교 + copy() 만 → 최소 시간 점유
-        with latest_frames_lock:
-            cur_id = latest_frame_ids.get(self.frame_key, 0)
-            if cur_id != self._last_id and latest_frames.get(self.frame_key) is not None:
-                bgr_snap = latest_frames[self.frame_key].copy()
-                self._last_id = cur_id
-            else:
-                bgr_snap = None   # 새 프레임 없음
+        # 새 프레임이 올 때까지 await — CPU 0%, busy-wait 없음
+        bgr = await q.get()
 
-        if bgr_snap is not None:
-            # BGR → RGB 변환 (lock 밖에서 수행)
-            rgb = cv2.cvtColor(bgr_snap, cv2.COLOR_BGR2RGB)
-            vf = VideoFrame.from_ndarray(rgb, format="rgb24")
-            self._last_vframe = vf
-        elif self._last_vframe is not None:
-            vf = self._last_vframe          # 이전 프레임 재사용
-        else:
-            vf = VideoFrame.from_ndarray(self._blank_rgb, format="rgb24")
+        # BGR → RGB (aiortc/libav 는 RGB24 입력을 YUV420으로 인코딩)
+        rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
+        vf  = VideoFrame.from_ndarray(rgb, format="rgb24")
+        vf.pts       = self._pts
+        vf.time_base = self._time_base
+        self._pts   += self._pts_step
 
-        vf.pts = pts
-        vf.time_base = time_base
         return vf
 
 
@@ -1126,11 +1122,4 @@ print("NPU", "2502010900")
 
 # ── 직접 실행 시 포트 59530으로 기동 ─────────────────────────
 # uvicorn main_webrtc:app --host 0.0.0.0 --port 59530 으로도 동일
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(
-        "main_webrtc:app",
-        host="0.0.0.0",    # 모든 NIC에서 수신 (로컬망 어느 IP로 접속해도 OK)
-        port=_SERVER_PORT,
-        reload=False,
-    )
+)
