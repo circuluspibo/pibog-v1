@@ -337,40 +337,56 @@ def processing_thread():
 # ─────────────────────────────────────────────────────────────
 # WebRTC VideoStreamTrack
 # ─────────────────────────────────────────────────────────────
-class FrameProviderTrack(VideoStreamTrack):
-    kind = "video"
+def _make_vf(bgr: np.ndarray, pts: int, tb) -> VideoFrame:
+    """BGR numpy → 새 VideoFrame. 매번 독립 객체 생성."""
+    rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
+    vf  = VideoFrame.from_ndarray(rgb.copy(), format="rgb24")
+    vf.pts       = pts
+    vf.time_base = tb
+    return vf
 
-    def __init__(self, q: queue.Queue, fps: int = 15):
+
+class MainTrack(VideoStreamTrack):
+    """stream_q_main 전용 트랙"""
+    kind = "video"
+    def __init__(self):
         super().__init__()
-        self._q        = q
-        self._pts      = 0
-        self._tb       = fractions.Fraction(1, 90000)
-        self._step     = 90000 // fps
-        self._last_bgr = np.zeros((480,640,3), dtype=np.uint8)
-        self._last_vf  = None
+        self._pts  = 0
+        self._tb   = fractions.Fraction(1, 90000)
+        self._step = 90000 // 15
+        self._last = np.zeros((480,640,3), dtype=np.uint8)
 
     async def recv(self):
         loop = asyncio.get_event_loop()
-
-        def _get():
-            try:
-                return self._q.get(timeout=0.1)
-            except queue.Empty:
-                return None
-
-        bgr = await loop.run_in_executor(None, _get)
-
+        bgr  = await loop.run_in_executor(None,
+                   lambda: stream_q_main.get(timeout=0.1) if not stream_q_main.empty()
+                           else None)
         if bgr is not None:
-            # 새 프레임 → RGB 변환 후 numpy 배열로 캐시
-            self._last_bgr = bgr
+            self._last = bgr
+        vf        = _make_vf(self._last, self._pts, self._tb)
+        self._pts += self._step
+        return vf
 
-        # 매번 새 VideoFrame 객체 생성 (객체 재사용 금지)
-        # VideoFrame은 mutable이라 pts 수정 시 다른 트랙에서 참조 중인 객체도 오염됨
-        rgb = cv2.cvtColor(self._last_bgr, cv2.COLOR_BGR2RGB)
-        vf  = VideoFrame.from_ndarray(rgb, format="rgb24")
-        vf.pts       = self._pts
-        vf.time_base = self._tb
-        self._pts   += self._step
+
+class DepthTrack(VideoStreamTrack):
+    """stream_q_depth 전용 트랙"""
+    kind = "video"
+    def __init__(self):
+        super().__init__()
+        self._pts  = 0
+        self._tb   = fractions.Fraction(1, 90000)
+        self._step = 90000 // 15
+        self._last = np.zeros((480,640,3), dtype=np.uint8)
+
+    async def recv(self):
+        loop = asyncio.get_event_loop()
+        bgr  = await loop.run_in_executor(None,
+                   lambda: stream_q_depth.get(timeout=0.1) if not stream_q_depth.empty()
+                           else None)
+        if bgr is not None:
+            self._last = bgr
+        vf        = _make_vf(self._last, self._pts, self._tb)
+        self._pts += self._step
         return vf
 
 # ─────────────────────────────────────────────────────────────
@@ -416,8 +432,8 @@ class WebRTCManager:
         self._pcs[client_id] = pc
 
         # mid=0: main, mid=1: depth  (addTrack 순서 = SDP mid 순서)
-        pc.addTrack(FrameProviderTrack(stream_q_main,  fps=15))
-        pc.addTrack(FrameProviderTrack(stream_q_depth, fps=15))
+        pc.addTrack(MainTrack())
+        pc.addTrack(DepthTrack())
 
         dc = pc.createDataChannel("state", ordered=False, maxRetransmits=0)
         self._dcs[client_id] = dc
