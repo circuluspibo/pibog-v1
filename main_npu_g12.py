@@ -64,8 +64,10 @@ RTC_CONFIG = RTCConfiguration(iceServers=[])
 # ─────────────────────────────────────────────────────────────
 raw_q          = queue.Queue(maxsize=1)   # receiver  → processing
 stream_q_main  = queue.Queue(maxsize=1)   # processing → WebRTC main track
+stream_q_depth = queue.Queue(maxsize=1)   # processing → WebRTC depth track
 # face/ppe 는 스트리밍 대신 캡처 이미지를 DataChannel 로 전송
 # {"type":"face"|"ppe", "b64":"...", "label":"...", "conf":0.xx}
+
 capture_q      = queue.Queue(maxsize=4)   # processing → broadcast_loop → DataChannel
 
 def q_put(q: queue.Queue, item):
@@ -241,6 +243,12 @@ def processing_thread():
         frame_ai = cv2.resize(frame, (640,640), interpolation=cv2.INTER_NEAREST)
         depth_ai = cv2.resize(depth_frame, (640,640), interpolation=cv2.INTER_NEAREST)
 
+        depth_vis = np.clip(depth_ai, 0, 4000).astype(np.float32)
+        depth_vis = (depth_vis / 4000.0 * 255).astype(np.uint8)
+        depth_colored = cv2.applyColorMap(depth_vis, cv2.COLORMAP_TURBO)  # 파→초→노→빨
+        q_put(stream_q_depth, depth_colored)
+
+      
         # NPU 추론 (동기, 스레드 안이므로 이벤트루프 블로킹 없음)
         res     = det_model(frame_ai, device="intel:npu", verbose=False, conf=0.3)[0]
         ppe_res = ppe_model(frame_ai, device="intel:npu", verbose=False, conf=0.7)[0]
@@ -436,6 +444,7 @@ class WebRTCManager:
 
         # 트랙: main 비디오만 (face/ppe 는 DataChannel 캡처로 전환)
         pc.addTrack(FrameProviderTrack(stream_q_main, fps=15))
+        pc.addTrack(FrameProviderTrack(stream_q_depth, fps=15))  # ← 추가
 
         # DataChannel: state 전송용
         dc = pc.createDataChannel("state", ordered=False, maxRetransmits=0)
