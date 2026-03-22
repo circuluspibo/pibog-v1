@@ -1,12 +1,9 @@
 """
 구조:
   Thread-1 receiver   : HTTP → raw_q (수신 전용)
-  Thread-2 processing : raw_q → AI추론/시각화 → stream_q["main"/"face"/"ppe"] (처리 전용)
+  Thread-2 processing : raw_q → AI추론/시각화 → stream_q["main"/"depth"] (처리 전용)
   asyncio  WebRTC     : stream_q → FrameProviderTrack.recv() → WebRTC 송출
   asyncio  FastAPI    : 기존 REST 엔드포인트 그대로
-
-  큐는 threading.Queue 사용 (스레드↔스레드, 스레드↔asyncio 모두 안전)
-  recv()에서는 loop.run_in_executor 로 blocking get() → 이벤트루프 비블로킹
 """
 
 import queue
@@ -54,24 +51,17 @@ _IP          = "192.168.21.19"
 _SERVER_PORT = 59530
 SOURCE_VIDEO_URL = f"http://{_IP}:59512/video_raw"
 
-# 로컬 폐쇄망: STUN/TURN 없음
-# aiortc는 서버의 모든 NIC에서 host candidate를 수집함
-# iceServers=[] 로 충분 (STUN 불필요)
 RTC_CONFIG = RTCConfiguration(iceServers=[])
 
 # ─────────────────────────────────────────────────────────────
-# 큐 선언 (모두 threading.Queue, maxsize=1 → 최신 1장만 유지)
+# 큐 선언 (threading.Queue, maxsize=1 → 최신 1장만 유지)
 # ─────────────────────────────────────────────────────────────
-raw_q          = queue.Queue(maxsize=1)   # receiver  → processing
-stream_q_main  = queue.Queue(maxsize=1)   # processing → WebRTC main track
-stream_q_depth = queue.Queue(maxsize=1)   # processing → WebRTC depth track
-# face/ppe 는 스트리밍 대신 캡처 이미지를 DataChannel 로 전송
-# {"type":"face"|"ppe", "b64":"...", "label":"...", "conf":0.xx}
-
-capture_q      = queue.Queue(maxsize=4)   # processing → broadcast_loop → DataChannel
+raw_q          = queue.Queue(maxsize=1)
+stream_q_main  = queue.Queue(maxsize=1)
+stream_q_depth = queue.Queue(maxsize=1)
+capture_q      = queue.Queue(maxsize=4)
 
 def q_put(q: queue.Queue, item):
-    """꽉 찼으면 오래된 것 버리고 새 것 넣기"""
     try:
         q.get_nowait()
     except queue.Empty:
@@ -84,16 +74,16 @@ def q_put(q: queue.Queue, item):
 DEVICE = "NPU"
 ov_core = Core()
 
-face_det_compiled  = ov_core.compile_model(
+face_det_compiled   = ov_core.compile_model(
     ov_core.read_model("./models/face-detection-retail-0005/FP16-INT8/face-detection-retail-0005.xml"), DEVICE)
 age_gender_compiled = ov_core.compile_model(
     ov_core.read_model("./models/age-gender-recognition-retail-0013/FP16-INT8/age-gender-recognition-retail-0013.xml"), DEVICE)
-emotion_compiled   = ov_core.compile_model(
+emotion_compiled    = ov_core.compile_model(
     ov_core.read_model("./models/emotions-recognition-retail-0003/FP16-INT8/emotions-recognition-retail-0003.xml"), DEVICE)
 
-face_det_h, face_det_w   = list(face_det_compiled.input(0).shape)[2:]
+face_det_h,   face_det_w   = list(face_det_compiled.input(0).shape)[2:]
 age_gender_h, age_gender_w = list(age_gender_compiled.input(0).shape)[2:]
-emotion_h, emotion_w     = list(emotion_compiled.input(0).shape)[2:]
+emotion_h,    emotion_w    = list(emotion_compiled.input(0).shape)[2:]
 
 det_model   = YOLO('./models/yolo11s-seg_int8_openvino_model')
 ppe_model   = YOLO('./models/yolo11n-helmet4_int8_openvino_model')
@@ -120,10 +110,10 @@ state = {
     "tag":{"id":None,"dist":0}
 }
 
-conn        = None
-audio_hub   = None
-lastColor   = 'cyan'
-lastCmd     = {}
+conn          = None
+audio_hub     = None
+lastColor     = 'cyan'
+lastCmd       = {}
 is_collecting = False
 
 _PORT = int(open("port.txt").read())
@@ -134,7 +124,7 @@ last_face_saved_time = 0.0
 last_ppe_saved_time  = 0.0
 
 # ─────────────────────────────────────────────────────────────
-# 파일 저장 (저장 전용 daemon 스레드에서 호출)
+# 파일 저장
 # ─────────────────────────────────────────────────────────────
 def _save_face(img, filename):
     try:
@@ -152,7 +142,7 @@ def _save_ppe(img, filename):
         print(f"ppe save error: {e}")
 
 # ─────────────────────────────────────────────────────────────
-# AI 처리 헬퍼 (기존 로직 그대로)
+# AI 처리 헬퍼
 # ─────────────────────────────────────────────────────────────
 def visualize_segmentation(frame, masks, boxes, classes, scores, depths, alpha=0.5):
     global state
@@ -163,9 +153,9 @@ def visualize_segmentation(frame, masks, boxes, classes, scores, depths, alpha=0
     cell_h, cell_w = H//3, W//3
 
     for mask, box, cls_idx, score, depth in zip(masks, boxes, classes, scores, depths):
-        cls_name = class_names[cls_idx]
+        cls_name  = class_names[cls_idx]
         is_living = cls_name in LIVING_CLASSES
-        color = (0,0,255) if is_living else (0,255,0)
+        color     = (0,0,255) if is_living else (0,255,0)
         overlay[mask==1] = (overlay[mask==1]*(1-alpha) + np.array(color)*alpha).astype(np.uint8)
         x1,y1,x2,y2 = map(int, box)
         cv2.rectangle(overlay,(x1,y1),(x2,y2),color,2)
@@ -189,7 +179,7 @@ def get_mask_depths(masks, depth_frame, low_pct=5):
     depths = []
     for mask in masks:
         if mask.sum()==0: depths.append(0.0); continue
-        vals = depth_frame[mask==1]; valid = vals[vals>0]
+        vals  = depth_frame[mask==1]; valid = vals[vals>0]
         if len(valid)>0:
             thr = np.percentile(valid, low_pct)
             f   = valid[valid>=thr]
@@ -199,10 +189,10 @@ def get_mask_depths(masks, depth_frame, low_pct=5):
     return depths
 
 # ─────────────────────────────────────────────────────────────
-# Thread-1: receiver  (HTTP 수신 전담)
+# Thread-1: receiver
 # ─────────────────────────────────────────────────────────────
 def receiver_thread():
-    W, H = 640, 480
+    W, H       = 640, 480
     RGB_SIZE   = W*H*3
     DEPTH_SIZE = W*H*2
     TOTAL      = RGB_SIZE + DEPTH_SIZE
@@ -211,10 +201,10 @@ def receiver_thread():
         try:
             resp = requests.get(SOURCE_VIDEO_URL, timeout=1.0)
             if resp.status_code == 200 and len(resp.content) >= TOTAL:
-                raw = resp.content
-                frame = np.frombuffer(raw[:RGB_SIZE],        dtype=np.uint8 ).reshape(H,W,3).copy()
-                depth = np.frombuffer(raw[RGB_SIZE:TOTAL],   dtype=np.uint16).reshape(H,W  ).copy()
-                q_put(raw_q, (frame, depth))   # 오래된 프레임 버리고 최신만 유지
+                raw   = resp.content
+                frame = np.frombuffer(raw[:RGB_SIZE],      dtype=np.uint8 ).reshape(H,W,3).copy()
+                depth = np.frombuffer(raw[RGB_SIZE:TOTAL], dtype=np.uint16).reshape(H,W  ).copy()
+                q_put(raw_q, (frame, depth))
             else:
                 time.sleep(0.01)
         except Exception as e:
@@ -222,8 +212,7 @@ def receiver_thread():
             time.sleep(0.1)
 
 # ─────────────────────────────────────────────────────────────
-# Thread-2: processing  (AI 추론/시각화 전담)
-# raw_q에서 꺼내 → 처리 → stream_q_* 에 넣기
+# Thread-2: processing
 # ─────────────────────────────────────────────────────────────
 def processing_thread():
     global last_face_saved_time, last_ppe_saved_time
@@ -231,7 +220,6 @@ def processing_thread():
     print("=== Processing thread started")
 
     while True:
-        # raw_q 에서 최신 프레임 꺼내기 (없으면 대기)
         try:
             frame, depth_frame = raw_q.get(timeout=1.0)
         except queue.Empty:
@@ -243,13 +231,16 @@ def processing_thread():
         frame_ai = cv2.resize(frame, (640,640), interpolation=cv2.INTER_NEAREST)
         depth_ai = cv2.resize(depth_frame, (640,640), interpolation=cv2.INTER_NEAREST)
 
-        depth_vis = np.clip(depth_ai, 0, 4000).astype(np.float32)
-        depth_vis = (depth_vis / 4000.0 * 255).astype(np.uint8)
-        depth_colored = cv2.applyColorMap(depth_vis, cv2.COLORMAP_TURBO)  # 파→초→노→빨
-        q_put(stream_q_depth, depth_colored)
+        # ── Depth 컬러맵 → stream_q_depth ─────────────────────
+        # [수정1] resize(640,480) — main 트랙과 크기 통일 필수
+        # FrameProviderTrack._last_bgr 가 (480,640,3) 으로 초기화되어 있어
+        # 크기가 다르면 VideoFrame 생성 시 오류 또는 검정화면 발생
+        depth_vis     = np.clip(depth_ai, 0, 4000).astype(np.float32)
+        depth_vis     = (depth_vis / 4000.0 * 255).astype(np.uint8)
+        depth_colored = cv2.applyColorMap(depth_vis, cv2.COLORMAP_TURBO)
+        q_put(stream_q_depth, cv2.resize(depth_colored, (640, 480)))
 
-      
-        # NPU 추론 (동기, 스레드 안이므로 이벤트루프 블로킹 없음)
+        # NPU 추론
         res     = det_model(frame_ai, device="intel:npu", verbose=False, conf=0.3)[0]
         ppe_res = ppe_model(frame_ai, device="intel:npu", verbose=False, conf=0.7)[0]
 
@@ -264,66 +255,69 @@ def processing_thread():
         if ppe_res.boxes is not None:
             for i, box in enumerate(ppe_res.boxes.xyxy.cpu().numpy()):
                 x1,y1,x2,y2 = map(int, box)
-                conf    = float(ppe_res.boxes.conf.cpu().numpy()[i])
-                cls_id  = int(ppe_res.boxes.cls.cpu().numpy()[i])
-                label   = ppe_names.get(cls_id, str(cls_id))
+                conf   = float(ppe_res.boxes.conf.cpu().numpy()[i])
+                cls_id = int(ppe_res.boxes.cls.cpu().numpy()[i])
+                label  = ppe_names.get(cls_id, str(cls_id))
 
                 if 'helmet' in label or 'face' in label:
-                    ch,cw = frame_ai.shape[:2]
-                    crop  = frame_ai[max(0,y1):min(ch,y2), max(0,x1):min(cw,x2)].copy()
+                    ch,cw    = frame_ai.shape[:2]
+                    crop     = frame_ai[max(0,y1):min(ch,y2), max(0,x1):min(cw,x2)].copy()
                     cap_type = "ppe" if 'helmet' in label else "face"
 
-                    # JPEG 인코딩 → base64 → capture_q (DataChannel로 클라이언트 전송)
+                    # DataChannel 캡처 전송
                     ok, buf = cv2.imencode('.jpg', crop, [cv2.IMWRITE_JPEG_QUALITY, 75])
                     if ok:
                         import base64
                         b64 = base64.b64encode(buf).decode()
-                        msg = json.dumps({"type": cap_type, "b64": b64,
-                                          "label": label, "conf": round(conf, 2)})
+                        msg = json.dumps({"type":cap_type,"b64":b64,
+                                          "label":label,"conf":round(conf,2)})
                         try:
                             capture_q.put_nowait(msg)
                         except queue.Full:
-                            pass  # 처리 못하면 그냥 버림
+                            pass
 
-                    # 파일 저장 (10초 간격)
+                    # ── [수정2] LED/TTS/파일저장 → daemon 스레드로 분리 ──
+                    # processing_thread 안에서 직접 호출하면 HTTP 요청(requests)이
+                    # 수백ms~수초 블로킹 → 프레임 드롭 심화
                     if cap_type == "ppe" and cur_time - last_ppe_saved_time > 10.0:
-                        led(255,255,255)
-                        tts_v2("오늘도 좋은 하루입니다.",31)
-                        led(255,255,255) 
                         last_ppe_saved_time = cur_time
-                        threading.Thread(target=_save_ppe,
-                            args=(crop.copy(), f"ppe_{label}_{int(cur_time)}.jpg"), daemon=True).start()
+                        def _ppe_action(img, fn):
+                            led(255, 255, 255)
+                            tts_v2("오늘도 좋은 하루입니다.", 31)
+                            _save_ppe(img, fn)
+                        threading.Thread(
+                            target=_ppe_action,
+                            args=(crop.copy(), f"ppe_{label}_{int(cur_time)}.jpg"),
+                            daemon=True
+                        ).start()
+
                     elif cap_type == "face" and cur_time - last_face_saved_time > 10.0:
-                        led(255,0,0)
-                        tts_v2("안전모를 착용해 주세요",31)
-                        led(255,0,0)
                         last_face_saved_time = cur_time
-                        threading.Thread(target=_save_face,
-                            args=(crop.copy(), f"face_{int(cur_time)}.jpg"), daemon=True).start()
+                        def _face_action(img, fn):
+                            led(255, 0, 0)
+                            tts_v2("안전모를 착용해 주세요", 31)
+                            _save_face(img, fn)
+                        threading.Thread(
+                            target=_face_action,
+                            args=(crop.copy(), f"face_{int(cur_time)}.jpg"),
+                            daemon=True
+                        ).start()
 
-                    # 박스 그리기
-                    #disp = f"{label.capitalize()}: {conf:.2f}"
-                    #cv2.rectangle(out,(x1,y1),(x2,y2),(255,0,0),2)
-                    #(tw,th),_ = cv2.getTextSize(disp, cv2.FONT_HERSHEY_SIMPLEX,0.5,1)
-                    #ty = max(y1, th+10)
-                    #cv2.rectangle(out,(x1,ty-th-10),(x1+tw,ty),(255,0,0),-1)
-                    #cv2.putText(out,disp,(x1,ty-5),cv2.FONT_HERSHEY_SIMPLEX,0.5,(255,255,255),1)
-
-
-        out = visualize_segmentation(frame_ai, masks, boxes, classes, scores, get_mask_depths(masks, depth_ai))
+        out = visualize_segmentation(frame_ai, masks, boxes, classes, scores,
+                                     get_mask_depths(masks, depth_ai))
 
         # AprilTag
         tags = detector.detect(cv2.cvtColor(frame_ai, cv2.COLOR_BGR2GRAY))
         if tags:
-            best = max(tags, key=lambda t: cv2.contourArea(t.corners.astype(np.float32)))
-            pts  = best.corners.reshape((-1,1,2)).astype(np.int32)
-            ov2  = out.copy(); cv2.fillPoly(ov2,[pts],(0,255,255))
-            out  = cv2.addWeighted(ov2,0.2,out,0.8,0)
-            tid  = best.tag_id
+            best  = max(tags, key=lambda t: cv2.contourArea(t.corners.astype(np.float32)))
+            pts   = best.corners.reshape((-1,1,2)).astype(np.int32)
+            ov2   = out.copy(); cv2.fillPoly(ov2,[pts],(0,255,255))
+            out   = cv2.addWeighted(ov2,0.2,out,0.8,0)
+            tid   = best.tag_id
             cx,cy = int(best.center[0]), int(best.center[1])
             dist  = depth_ai[cy,cx]/1000.0 if 0<=cy<640 and 0<=cx<640 else 0.0
             state["tag"]["id"] = tid; state["tag"]["dist"] = dist
-            info = f"ID:{tid} / {dist:.2f}m"
+            info  = f"ID:{tid} / {dist:.2f}m"
             (tw,th),_ = cv2.getTextSize(info,cv2.FONT_HERSHEY_SIMPLEX,0.7,2)
             tx = 640-tw-20; ty = 640-20
             cv2.rectangle(out,(tx-10,ty-th-10),(640,640),(0,0,0),-1)
@@ -333,9 +327,8 @@ def processing_thread():
         fps = 1.0/(time.time()-t0)
         cv2.putText(out,f"FPS:{fps:.1f}",(10,30),cv2.FONT_HERSHEY_SIMPLEX,0.7,(255,255,0),2)
 
-        # 메인 스트리밍 큐에 push (640x480 리사이즈)
-        main_frame = cv2.resize(out,(640,480))
-        q_put(stream_q_main, main_frame)
+        # 메인 스트리밍 큐 push
+        q_put(stream_q_main, cv2.resize(out,(640,480)))
 
         cnt_image += 1
         if cnt_image % 100 == 0:
@@ -343,7 +336,6 @@ def processing_thread():
 
 # ─────────────────────────────────────────────────────────────
 # WebRTC VideoStreamTrack
-# stream_q_* 에서 blocking get → asyncio run_in_executor로 비블로킹화
 # ─────────────────────────────────────────────────────────────
 class FrameProviderTrack(VideoStreamTrack):
     kind = "video"
@@ -354,8 +346,8 @@ class FrameProviderTrack(VideoStreamTrack):
         self._pts      = 0
         self._tb       = fractions.Fraction(1, 90000)
         self._step     = 90000 // fps
-        self._last_bgr = np.zeros((480,640,3), dtype=np.uint8)  # 마지막 프레임 보관
-        self._last_vf  = None                                    # 마지막 VideoFrame 재사용
+        self._last_bgr = np.zeros((480,640,3), dtype=np.uint8)
+        self._last_vf  = None
 
     async def recv(self):
         loop = asyncio.get_event_loop()
@@ -369,23 +361,20 @@ class FrameProviderTrack(VideoStreamTrack):
         bgr = await loop.run_in_executor(None, _get)
 
         if bgr is not None:
-            # 새 프레임 → 변환 후 캐시
             self._last_bgr = bgr
             rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
-            self._last_vf = VideoFrame.from_ndarray(rgb, format="rgb24")
+            self._last_vf  = VideoFrame.from_ndarray(rgb, format="rgb24")
         elif self._last_vf is not None:
-            # 새 프레임 없음 → 마지막 프레임 재사용 (깜빡임 없음)
-            vf = self._last_vf
+            vf           = self._last_vf
             vf.pts       = self._pts
             vf.time_base = self._tb
             self._pts   += self._step
             return vf
         else:
-            # 아직 한 번도 프레임 없음 → 검정
-            rgb = cv2.cvtColor(self._last_bgr, cv2.COLOR_BGR2RGB)
+            rgb           = cv2.cvtColor(self._last_bgr, cv2.COLOR_BGR2RGB)
             self._last_vf = VideoFrame.from_ndarray(rgb, format="rgb24")
 
-        vf = self._last_vf
+        vf           = self._last_vf
         vf.pts       = self._pts
         vf.time_base = self._tb
         self._pts   += self._step
@@ -404,26 +393,23 @@ class WebRTCManager:
         while True:
             await asyncio.sleep(interval)
 
-            open_dcs = [(cid, dc) for cid, dc in self._dcs.items()
-                        if dc.readyState == "open"]
-            dead = [cid for cid, dc in self._dcs.items()
-                    if dc.readyState not in ("open", "connecting")]
+            open_dcs = [(cid,dc) for cid,dc in self._dcs.items() if dc.readyState=="open"]
+            dead     = [cid for cid,dc in self._dcs.items()
+                        if dc.readyState not in ("open","connecting")]
 
-            # ① state 변경 시 전송
             js = json.dumps(state, ensure_ascii=False)
             h  = hash(js)
             if h != self._last_hash:
                 self._last_hash = h
                 msg = js.encode()
-                for cid, dc in open_dcs:
+                for cid,dc in open_dcs:
                     try: dc.send(msg)
                     except Exception: dead.append(cid)
 
-            # ② capture_q 에 쌓인 캡처 이미지 전송 (face/ppe)
             while not capture_q.empty():
                 try:
                     cap_msg = capture_q.get_nowait()
-                    for cid, dc in open_dcs:
+                    for cid,dc in open_dcs:
                         try: dc.send(cap_msg.encode())
                         except Exception: pass
                 except queue.Empty:
@@ -433,20 +419,13 @@ class WebRTCManager:
                 await self.close(cid)
 
     async def create_offer(self, client_id: str) -> dict:
-        """
-        서버가 offer를 만들어 반환.
-        - 트랙/DataChannel을 서버가 먼저 추가하므로 mid 순서 확정
-        - 클라이언트는 이 offer를 setRemoteDescription 후 answer 생성
-        - ICE candidate는 양쪽 SDP에 미리 포함(vanilla ICE) → Trickle 불필요
-        """
         pc = RTCPeerConnection(configuration=RTC_CONFIG)
         self._pcs[client_id] = pc
 
-        # 트랙: main 비디오만 (face/ppe 는 DataChannel 캡처로 전환)
-        pc.addTrack(FrameProviderTrack(stream_q_main, fps=15))
-        pc.addTrack(FrameProviderTrack(stream_q_depth, fps=15))  # ← 추가
+        # mid=0: main, mid=1: depth  (addTrack 순서 = SDP mid 순서)
+        pc.addTrack(FrameProviderTrack(stream_q_main,  fps=15))
+        pc.addTrack(FrameProviderTrack(stream_q_depth, fps=15))
 
-        # DataChannel: state 전송용
         dc = pc.createDataChannel("state", ordered=False, maxRetransmits=0)
         self._dcs[client_id] = dc
 
@@ -456,11 +435,9 @@ class WebRTCManager:
             if pc.connectionState in ("failed","closed","disconnected"):
                 await self.close(client_id)
 
-        # offer 생성
         offer = await pc.createOffer()
         await pc.setLocalDescription(offer)
 
-        # ICE gathering 완료까지 대기 (이벤트 기반)
         gather_done = asyncio.Event()
         @pc.on("icegatheringstatechange")
         def _on_gather():
@@ -473,18 +450,15 @@ class WebRTCManager:
         except asyncio.TimeoutError:
             logger.warning(f"ICE gather timeout [{client_id}]")
 
-        sdp = pc.localDescription.sdp
-        # candidate 라인 로그 출력 (디버깅용 - 어떤 IP가 잡혔는지 확인)
+        sdp   = pc.localDescription.sdp
         cands = [l for l in sdp.splitlines() if l.startswith("a=candidate")]
-        logger.warning(f"[ICE candidates for {client_id}]:\n" + "\n".join(cands))
         print(f"[ICE] server candidates ({len(cands)}):")
         for c in cands:
             print("  ", c)
 
-        return {"sdp": sdp, "type": pc.localDescription.type, "client_id": client_id}
+        return {"sdp":sdp,"type":pc.localDescription.type,"client_id":client_id}
 
     async def set_answer(self, client_id: str, answer_sdp: str, answer_type: str):
-        """클라이언트 answer SDP를 받아 연결 완료"""
         pc = self._pcs.get(client_id)
         if pc is None:
             raise ValueError(f"Unknown client_id: {client_id}")
@@ -519,24 +493,16 @@ async def _startup():
 async def _shutdown():
     await webrtc_manager.close_all()
 
-# ── 시그널링 ──
 class AnswerRequest(BaseModel):
-    sdp: str
-    type: str
-    client_id: str
+    sdp: str; type: str; client_id: str
 
 @app.get("/webrtc/offer")
 async def webrtc_get_offer(client_id: str):
-    """
-    클라이언트가 GET으로 요청 → 서버가 offer SDP 반환
-    클라이언트는 이걸 setRemoteDescription 후 answer 만들어 POST /webrtc/answer 로 전송
-    """
     offer = await webrtc_manager.create_offer(client_id)
     return JSONResponse(offer)
 
 @app.post("/webrtc/answer")
 async def webrtc_post_answer(req: AnswerRequest):
-    """클라이언트 answer SDP 수신 → 연결 완료"""
     await webrtc_manager.set_answer(req.client_id, req.sdp, req.type)
     return JSONResponse({"result": True})
 
@@ -545,7 +511,6 @@ async def webrtc_disconnect(client_id: str):
     await webrtc_manager.close(client_id)
     return {"result": True}
 
-# ── 기존 엔드포인트 (원본 그대로) ──
 @app.get("/")
 def main_route():
     return {"result": True, "data": "AI-CPU-V2", "ip": _IP, "port": _PORT}
@@ -619,11 +584,12 @@ def tts_v2(text="", voice=6, lang='ko'):
     path     = f"output/{filename}.wav"
     write(data=audio, rate=conf_tts.data.sampling_rate, filename=path)
     with open(path,"rb") as f:
-        requests.post(f"http://{_IP}:59521/audio", files={"audio_file":(f"{filename}.wav",f,"audio/wav")})
+        requests.post(f"http://{_IP}:59521/audio",
+                      files={"audio_file":(f"{filename}.wav",f,"audio/wav")})
     return path
 
 @app.get("/led")
-def led(r:int=0,g:int=0,b:int=0):
+def led(r:int=0, g:int=0, b:int=0):
     requests.get(f"http://{_IP}:59521/led?r={r}&g={g}&b={b}")
     return {"result": True}
 
