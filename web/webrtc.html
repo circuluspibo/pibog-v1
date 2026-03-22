@@ -193,6 +193,14 @@
     </div>
   </div>
 
+<div class="panel">
+  <div class="plabel">DEPTH (RGB) <span class="badge idle" id="bd">IDLE</span></div>
+  <div class="vwrap">
+    <video id="vd" autoplay playsinline muted></video>
+    <div class="nosig" id="nsd">NO DEPTH</div>
+  </div>
+</div>
+  
   <!-- 캡처 이미지 (face / ppe) -->
   <div class="panel">
     <div class="plabel">CAPTURE <span class="badge idle" id="bs">IDLE</span></div>
@@ -287,16 +295,19 @@ async function connect() {
   pc = new RTCPeerConnection({ iceServers: [] });
 
   // 트랙: main 비디오 1개 (face/ppe 는 DataChannel 캡처)
-  pc.ontrack = (e) => {
-    trackCount++;
-    document.getElementById('vm').srcObject = e.streams[0];
-    document.getElementById('nsm').style.display = 'none';
-    const b = document.getElementById('bm');
-    b.textContent = 'LIVE'; b.className = 'badge live';
-    document.getElementById('itrk').textContent = trackCount;
-    console.log('[WebRTC] main track received');
-  };
-
+const TRACK_MAP = [
+  { vid:'vm', ns:'nsm', badge:'bm' },
+  { vid:'vd', ns:'nsd', badge:'bd' },   // ← depth 추가
+];
+pc.ontrack = (e) => {
+  const m = TRACK_MAP[trackCount++];
+  if (!m) return;
+  document.getElementById(m.vid).srcObject = e.streams[0];
+  document.getElementById(m.ns).style.display = 'none';
+  const b = document.getElementById(m.badge);
+  b.textContent = 'LIVE'; b.className = 'badge live';
+  document.getElementById('itrk').textContent = trackCount;
+};
   // DataChannel: state JSON + face/ppe 캡처 이미지 (base64)
   pc.ondatachannel = (e) => {
     if (e.channel.label !== 'state') return;
