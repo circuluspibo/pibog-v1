@@ -43,9 +43,6 @@ from ultralytics import YOLO
 import utils
 from text import text_to_sequence
 from serverinfo import si
-from unitree_webrtc_connect.webrtc_audiohub import WebRTCAudioHub
-from unitree_webrtc_connect.webrtc_driver import UnitreeWebRTCConnection, WebRTCConnectionMethod
-from unitree_webrtc_connect.constants import RTC_TOPIC, SPORT_CMD
 
 logging.basicConfig(level=logging.ERROR)
 logger = logging.getLogger(__name__)
@@ -245,16 +242,14 @@ def processing_thread():
         depth_ai = cv2.resize(depth_frame, (640,640), interpolation=cv2.INTER_NEAREST)
 
         # NPU 추론 (동기, 스레드 안이므로 이벤트루프 블로킹 없음)
-        res     = det_model(frame_ai, device="intel:npu", verbose=False, conf=0.25)[0]
-        ppe_res = ppe_model(frame_ai, device="intel:npu", verbose=False, conf=0.25)[0]
+        res     = det_model(frame_ai, device="intel:npu", verbose=False, conf=0.3)[0]
+        ppe_res = ppe_model(frame_ai, device="intel:npu", verbose=False, conf=0.7)[0]
 
         # 세그멘테이션
         masks   = res.masks.data.cpu().numpy().astype(np.uint8) if res.masks else []
         boxes   = res.boxes.xyxy.cpu().numpy()
         classes = res.boxes.cls.cpu().numpy().astype(int)
         scores  = res.boxes.conf.cpu().numpy()
-        out     = visualize_segmentation(frame_ai, masks, boxes, classes, scores,
-                                         get_mask_depths(masks, depth_ai))
 
         # PPE 탐지
         cur_time = time.time()
@@ -266,8 +261,8 @@ def processing_thread():
                 label   = ppe_names.get(cls_id, str(cls_id))
 
                 if 'helmet' in label or 'face' in label:
-                    ch,cw = out.shape[:2]
-                    crop  = out[max(0,y1):min(ch,y2), max(0,x1):min(cw,x2)].copy()
+                    ch,cw = frame_ai.shape[:2]
+                    crop  = frame_ai[max(0,y1):min(ch,y2), max(0,x1):min(cw,x2)].copy()
                     cap_type = "ppe" if 'helmet' in label else "face"
 
                     # JPEG 인코딩 → base64 → capture_q (DataChannel로 클라이언트 전송)
@@ -284,21 +279,30 @@ def processing_thread():
 
                     # 파일 저장 (10초 간격)
                     if cap_type == "ppe" and cur_time - last_ppe_saved_time > 10.0:
+                        led(255,255,255)
+                        tts_v2("오늘도 좋은 하루입니다.",31)
+                        led(255,255,255) 
                         last_ppe_saved_time = cur_time
                         threading.Thread(target=_save_ppe,
                             args=(crop.copy(), f"ppe_{label}_{int(cur_time)}.jpg"), daemon=True).start()
                     elif cap_type == "face" and cur_time - last_face_saved_time > 10.0:
+                        led(255,0,0)
+                        tts_v2("안전모를 착용해 주세요",31)
+                        led(255,0,0)
                         last_face_saved_time = cur_time
                         threading.Thread(target=_save_face,
                             args=(crop.copy(), f"face_{int(cur_time)}.jpg"), daemon=True).start()
 
                     # 박스 그리기
-                    disp = f"{label.capitalize()}: {conf:.2f}"
-                    cv2.rectangle(out,(x1,y1),(x2,y2),(255,0,0),2)
-                    (tw,th),_ = cv2.getTextSize(disp, cv2.FONT_HERSHEY_SIMPLEX,0.5,1)
-                    ty = max(y1, th+10)
-                    cv2.rectangle(out,(x1,ty-th-10),(x1+tw,ty),(255,0,0),-1)
-                    cv2.putText(out,disp,(x1,ty-5),cv2.FONT_HERSHEY_SIMPLEX,0.5,(255,255,255),1)
+                    #disp = f"{label.capitalize()}: {conf:.2f}"
+                    #cv2.rectangle(out,(x1,y1),(x2,y2),(255,0,0),2)
+                    #(tw,th),_ = cv2.getTextSize(disp, cv2.FONT_HERSHEY_SIMPLEX,0.5,1)
+                    #ty = max(y1, th+10)
+                    #cv2.rectangle(out,(x1,ty-th-10),(x1+tw,ty),(255,0,0),-1)
+                    #cv2.putText(out,disp,(x1,ty-5),cv2.FONT_HERSHEY_SIMPLEX,0.5,(255,255,255),1)
+
+
+        out = visualize_segmentation(frame_ai, masks, boxes, classes, scores, get_mask_depths(masks, depth_ai))
 
         # AprilTag
         tags = detector.detect(cv2.cvtColor(frame_ai, cv2.COLOR_BGR2GRAY))
@@ -537,19 +541,6 @@ async def webrtc_disconnect(client_id: str):
 def main_route():
     return {"result": True, "data": "AI-CPU-V2", "ip": _IP, "port": _PORT}
 
-@app.get("/connect2")
-async def connect2():
-    global conn
-    conn = UnitreeWebRTCConnection(WebRTCConnectionMethod.LocalAP)
-    await conn.connect()
-    def lowstate_callback(message):
-        msg = message['data']
-        state["charge"]  = msg['bms_state']['soc']
-        state["temp"]    = msg['temperature_ntc1']
-        state["voltage"] = msg['power_v']
-    conn.datachannel.pub_sub.subscribe(RTC_TOPIC['LOW_STATE'], lowstate_callback)
-    return {"result": True, "data": True}
-
 @app.get("/prepare")
 async def prepare():
     return {"result": True, "data": True}
@@ -577,122 +568,9 @@ async def start_collection():
     threading.Thread(target=processing_thread, daemon=True).start()
     return {"message": "started"}
 
-@app.get("/sport")
-async def sport(cmd: str, x=0.0, y=0.0, z=0.0, data=None):
-    global conn
-    if conn is None:
-        return {"result": False, "data": "disconnected"}
-    if cmd == 'Move':
-        out = await conn.datachannel.pub_sub.publish_request_new(
-            RTC_TOPIC["SPORT_MOD"],
-            {"api_id": SPORT_CMD[cmd], "parameter": {"x":float(x),"y":float(y),"z":float(z)}})
-    elif data is not None:
-        out = await conn.datachannel.pub_sub.publish_request_new(
-            RTC_TOPIC["SPORT_MOD"],
-            {"api_id": SPORT_CMD[cmd], "parameter": {"data":float(data)}})
-    else:
-        v = not lastCmd.get(cmd, False)
-        lastCmd[cmd] = v
-        out = await conn.datachannel.pub_sub.publish_request_new(
-            RTC_TOPIC["SPORT_MOD"],
-            {"api_id": SPORT_CMD[cmd], "parameter": {"data":v}})
-    return {"result": True, "data": out}
-
 def toFloat(v):
     try: return float(v)
     except: return v
-
-@app.get("/manual")
-async def manual(cmd: str, data: str):
-    out = await conn.datachannel.pub_sub.publish_request_new(
-        RTC_TOPIC["SPORT_MOD"], {"api_id":int(cmd),"parameter":{"data":toFloat(data)}})
-    return {"result": True, "data": out}
-
-G1_ARM = {"clamp":17,"highFive":18,"shakeHands_1":27,"makeHeartBothHands":20,
-          "makeHeartSingleHands":21,"blowKiss":12,"hug":19,"hightWave":26,
-          "lowWave":25,"ultramanRay":24,"bothHandsUp":15,"singleHandsUp":23,
-          "Refuse":22,"Release_Arm":99}
-G1_STATE   = {"ZeroTorque":0,"Damp":1,"Preparation":4,"Seating":3,
-              "Walk_G1":500,"Walk2_G1":501,"Run_G1":801,"Squat_G1":706,"LieUp_G1":702}
-G1_BALANCE = {"Stand_G1":0,"Step_G1":1}
-
-@app.get("/arm")
-async def arm(cmd="clamp"):
-    await conn.datachannel.pub_sub.publish_request_new(
-        "rt/api/arm/request", {"api_id":7106,"parameter":{"data":G1_ARM[cmd]}})
-    return {"result": True}
-
-@app.get("/walkG1")
-async def walkG1(lx=0,ly=0,rx=0,ry=0):
-    conn.datachannel.pub_sub.publish_without_callback(
-        "rt/wirelesscontroller",
-        {"lx":float(lx),"ly":float(ly),"rx":float(rx),"ry":float(ry)})
-    return {"result": True}
-
-@app.get("/stateG1")
-async def stateG1(cmd="Walk_G1"):
-    await conn.datachannel.pub_sub.publish_request_new(
-        "rt/api/sport/request", {"api_id":7101,"parameter":{"data":G1_STATE[cmd]}})
-    return {"result": True}
-
-@app.get("/balanceG1")
-async def balanceG1(cmd="Stand_G1"):
-    await conn.datachannel.pub_sub.publish_request_new(
-        "rt/api/sport/request", {"api_id":7102,"parameter":{"data":G1_BALANCE[cmd]}})
-    return {"result": True}
-
-@app.get("/speech")
-async def speech(text: str, motion=None, voice=31, lang='ko'):
-    global audio_hub
-    filename = getHash(text)
-    if audio_hub is not None:
-        resp = await audio_hub.get_audio_list()
-        if resp and isinstance(resp, dict):
-            audio_list = json.loads(resp.get('data',{}).get('data','{}')).get('audio_list',[])
-            existing   = next((a for a in audio_list if a['CUSTOM_NAME']==filename), None)
-            if existing:
-                uuid = existing['UNIQUE_ID']
-            else:
-                path = tts(text=text, voice=voice, lang=lang)
-                await audio_hub.upload_audio_file(path)
-                resp2      = await audio_hub.get_audio_list()
-                audio_list = json.loads(resp2.get('data',{}).get('data','{}')).get('audio_list',[])
-                uuid       = next(a for a in audio_list if a['CUSTOM_NAME']==filename)['UNIQUE_ID']
-        await audio_hub.play_by_uuid(uuid)
-    return {"result": True}
-
-@app.get("/color")
-async def color(value='purple', warn=0):
-    global conn, lastColor
-    if lastColor == value: return {"result": True}
-    if int(warn) > 0:
-        await speech("저한테 접근하면 위험하니, 조심해 주세요.")
-    lastColor = value
-    if conn:
-        await conn.datachannel.pub_sub.publish_request_new(
-            RTC_TOPIC["VUI"], {"api_id":1007,"parameter":{"color":value}})
-    return {"result": True}
-
-@app.get("/brightness")
-async def brightness(value=10):
-    if conn:
-        await conn.datachannel.pub_sub.publish_request_new(
-            RTC_TOPIC["VUI"], {"api_id":1005,"parameter":{"brightness":int(value)}})
-    return {"result": True}
-
-@app.get("/mode")
-async def mode(value='normal'):
-    if conn:
-        conn.datachannel.pub_sub.publish_without_callback(
-            RTC_TOPIC["MOTION_SWITCHER"], {"api_id":1002,"parameter":{"name":value}})
-    return {"result": True}
-
-@app.get("/volume")
-async def volume(value=10):
-    if conn:
-        conn.datachannel.pub_sub.publish_without_callback(
-            RTC_TOPIC["VUI"], {"api_id":1003,"parameter":{"volume":int(value)}})
-    return {"result": True}
 
 @app.get("/monitor")
 def monitor():
@@ -736,12 +614,12 @@ def tts_v2(text="", voice=6, lang='ko'):
     return path
 
 @app.get("/led")
-async def led(r:int=0,g:int=0,b:int=0):
+def led(r:int=0,g:int=0,b:int=0):
     requests.get(f"http://{_IP}:59521/led?r={r}&g={g}&b={b}")
     return {"result": True}
 
-@app.get("/color_led")
-async def color_led(value:str='red'):
+@app.get("/color")
+def color(value:str='red'):
     rgb = (np.array(matplotlib.colors.to_rgb(value))*255).astype(int)
     requests.get(f"http://{_IP}:59521/led?r={rgb[0]}&g={rgb[1]}&b={rgb[2]}")
     return {"result": True}
