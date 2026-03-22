@@ -235,8 +235,8 @@ def processing_thread():
         # [수정1] resize(640,480) — main 트랙과 크기 통일 필수
         # FrameProviderTrack._last_bgr 가 (480,640,3) 으로 초기화되어 있어
         # 크기가 다르면 VideoFrame 생성 시 오류 또는 검정화면 발생
-        depth_vis     = np.clip(depth_ai, 0, 4000).astype(np.float32)
-        depth_vis     = (depth_vis / 4000.0 * 255).astype(np.uint8)
+        depth_vis     = np.clip(depth_ai, 0, 3000).astype(np.float32)
+        depth_vis     = (depth_vis / 3000.0 * 255).astype(np.uint8)
         depth_colored = cv2.applyColorMap(depth_vis, cv2.COLORMAP_TURBO)
         q_put(stream_q_depth, cv2.resize(depth_colored, (640, 480)))
 

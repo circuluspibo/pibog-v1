@@ -48,7 +48,7 @@ def getHash(text):
   hash_func.update(text.encode('utf-8'))
   return hash_func.hexdigest()
 
-_IP = "192.168.21.9" #12.128"#"192.168.12.112"
+_IP = "192.168.21.19" #12.128"#"192.168.12.112"
 
 ov = Core()
 
