@@ -361,20 +361,13 @@ class FrameProviderTrack(VideoStreamTrack):
         bgr = await loop.run_in_executor(None, _get)
 
         if bgr is not None:
+            # 새 프레임 → RGB 변환 후 numpy 배열로 캐시
             self._last_bgr = bgr
-            rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
-            self._last_vf  = VideoFrame.from_ndarray(rgb, format="rgb24")
-        elif self._last_vf is not None:
-            vf           = self._last_vf
-            vf.pts       = self._pts
-            vf.time_base = self._tb
-            self._pts   += self._step
-            return vf
-        else:
-            rgb           = cv2.cvtColor(self._last_bgr, cv2.COLOR_BGR2RGB)
-            self._last_vf = VideoFrame.from_ndarray(rgb, format="rgb24")
 
-        vf           = self._last_vf
+        # 매번 새 VideoFrame 객체 생성 (객체 재사용 금지)
+        # VideoFrame은 mutable이라 pts 수정 시 다른 트랙에서 참조 중인 객체도 오염됨
+        rgb = cv2.cvtColor(self._last_bgr, cv2.COLOR_BGR2RGB)
+        vf  = VideoFrame.from_ndarray(rgb, format="rgb24")
         vf.pts       = self._pts
         vf.time_base = self._tb
         self._pts   += self._step
