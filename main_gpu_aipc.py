@@ -443,7 +443,7 @@ def translate(prompt : str):
 
 
 @app.post("/v1/txt2img", response_class=FileResponse)
-async def txt2img(prompt: str = "", model : str = "real", seed: int = None, w : int = 512, h : int = 512, lang : str = 'ko'):
+async def txt2img(prompt: str = "", seed: int = None, w : int = 512, h : int = 512, lang : str = 'ko'):
   load_model(False)
 
   if seed is None:
