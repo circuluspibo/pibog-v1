@@ -1,4 +1,4 @@
-import openvino.runtime as ov
+import openvino as ov
 import numpy as np
 import cv2
 import torch

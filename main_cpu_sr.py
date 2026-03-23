@@ -14,13 +14,16 @@ from openvino import Core
 from fastapi.staticfiles import StaticFiles
 from queue import Queue
 import openvino as ov
-from playsound import playsound
 from fastapi.middleware.cors import CORSMiddleware
 import hashlib
 from fastapi import FastAPI
 import csv
 import os
 from datetime import datetime
+import subprocess
+import platform
+import re
+
 def getHash(text):
   hash_func = hashlib.new('md5')
   hash_func.update(text.encode('utf-8'))
@@ -55,9 +58,35 @@ pipe_tts = core.compile_model(core.read_model(model=f"{path_tts}/ko_base_ov.xml"
 conf_tts = utils.get_hparams_from_file(hf_hub_download(repo_id="rippertnt/on-vits2-multi-tts-v1", filename="ko_base.json"))
 
 
+def get_hardware_uuid():
+    os_type = platform.system()
+    uuid = "Unknown"
+    
+    try:
+        if os_type == "Windows":
+            # PowerShell을 사용하여 UUID 추출
+            cmd = "powershell -command \"(Get-CimInstance -Class Win32_ComputerSystemProduct).UUID\""
+            uuid = subprocess.check_output(cmd, shell=True).decode().strip()
+            
+        elif os_type == "Linux":
+            # Linux는 기존 방식 유지 (가장 표준적임)
+            try:
+                with open("/sys/class/dmi/id/product_uuid", "r") as f:
+                    uuid = f.read().strip()
+            except:
+                with open("/etc/machine-id", "r") as f:
+                    uuid = f.read().strip()
+        return uuid
+    except Exception as e:
+        return f"Error: {e}"
+        
+    return uuid
+
+print(f"Computer Unique ID: {get_hardware_uuid()}")
+
 @app.get("/")
 def main():
-  return { "result" : True, "data" : "AI-CPU-V2", "ip" : _IP, "port" : _PORT }      
+  return { "result" : True, "data" : "AI-CPU-V2", "ip" : _IP, "port" : _PORT, "uuid" : get_hardware_uuid() }      
 
 
 @app.get("/heartbeat")
