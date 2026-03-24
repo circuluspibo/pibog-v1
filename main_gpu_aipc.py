@@ -1,3 +1,5 @@
+# pip install -U diffusers
+# pip install git+https://github.com/openvino-dev-samples/optimum-intel.git@2f62e5aee74b4acba3836e1f26678c0db0a09c00
 # pip install --pre -U openvino-genai openvino openvino-tokenizers --extra-index-url https://storage.openvinotoolkit.org/simple/wheels/nightly
 
 from fastapi.middleware.cors import CORSMiddleware
