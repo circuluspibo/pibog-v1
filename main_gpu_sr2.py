@@ -172,7 +172,7 @@ class Chat(BaseModel):
 
 model_txt = snapshot_download(repo_id='circulus/Qwen3-VL-4B-it-ov-awq') # helenai/Qwen3-VL-4B-Instruct-int4 Echo9Zulu/gemma-3-4b-it-qat-int4_asym-ov circulus/gemma-3-4b-it-ov-awq-sym helenai/Qwen2.5-VL-3B-Instruct-ov-int4
 model_stt = snapshot_download(repo_id='circulus/whisper-large-v3-turbo-ov-awq') # translate not working, only general model
-#model_img = snapshot_download(repo_id='rippertnt/pix2pix-turbo-ov')
+model_img = snapshot_download(repo_id='circulus/Z-Image-Turbo-ov-int4')
 model_t2t = snapshot_download(repo_id='rippertnt/ko2en-ov-int4')
 
 swapper = FaceSwapOpenVINO(device_name="GPU") 
@@ -183,12 +183,11 @@ token_txt = AutoTokenizer.from_pretrained(model_txt)
 conf = AutoConfig.from_pretrained(model_t2t, trust_remote_code=True)
 token_t2t = AutoTokenizer.from_pretrained(model_t2t, trust_remote_code=True)
 model_t2t = OVModelForSeq2SeqLM.from_pretrained(model_t2t, device='GPU', ov_config={"PERFORMANCE_HINT": "LATENCY", "NUM_STREAMS": "1"}, config=conf, low_cpu_mem_usage=True, trust_remote_code=True) #"KV_CACHE_PRECISION": "u8", "DYNAMIC_QUANTIZATION_GROUP_SIZE": "32"
+ov_pipe = OVZImagePipeline.from_pretrained(model_img, device="GPU")
 pipe_t2t = pipeline("text2text-generation", model=model_t2t, tokenizer=token_t2t)
 
 pipe_stt = ov_genai.WhisperPipeline(model_stt,device="GPU", config={"PERFORMANCE_HINT": "LATENCY"})
 pipe_txt = ov_genai.VLMPipeline(model_txt, device="GPU", config={"PERFORMANCE_HINT": "LATENCY"})
-#pipe_img2anim = OVStableDiffusionPipeline.from_pretrained("circulus/on-canvers-disney-v3.9.1-int8", ov_config={"CACHE_DIR": ""})
-pipe_img2real = OVStableDiffusionPipeline.from_pretrained("circulus/on-canvers-real-v3.9.1-int8", ov_config={"CACHE_DIR": ""})
 
 
 def load_model(vlm=True):
@@ -470,26 +469,20 @@ def translate(prompt : str):
 
 
 @app.post("/txt2img", response_class=FileResponse)
-async def txt2img(prompt: str = "", model : str = "real", seed: int = None, lang : str = 'ko'):
+async def txt2img(prompt: str = "", seed: int = None, w : int = 512, h : int = 512, lang : str = 'ko'):
   load_model(False)
-  pipe = pipe_img2real
 
   if seed is None:
       seed = random.randint(0, 2**32 - 1)
   torch.manual_seed(seed)
 
-  if lang == "ko":
-     prompt =  pipe_t2t(prompt, max_new_tokens=512)[0]['generated_text']
-
-  #if model == "anim":
-  #   pipe = pipe_img2anim
-
-  image = pipe(
-      prompt=f"{prompt}. high quality.",
-      width=512,
-      height=512,
-      num_inference_steps=4,
-      guidance_scale=1.0,
+  image = ov_pipe(
+      prompt=prompt,
+      height=h,
+      width=w,
+      num_inference_steps=9,  # This actually results in 8 DiT forwards
+      guidance_scale=0.0,  # Guidance should be 0 for the Turbo models
+      generator=torch.Generator("cpu").manual_seed(42),
   ).images[0]
 
   image.save(f"outputs/out_image_{seed}.png")
@@ -501,23 +494,18 @@ async def txt2img(prompt: str = "", model : str = "real", seed: int = None, lang
 def face2img(file : UploadFile = File(...), prompt: str = "", model : str = "real", seed: int = None, lang : str = 'ko'):
   location = f"uploads/{file.filename}"
 
-  pipe = pipe_img2real
-
   if seed is None:
       seed = random.randint(0, 2**32 - 1)
   torch.manual_seed(seed)
 
-  if lang == "ko":
-     prompt =  pipe_t2t(prompt, max_new_tokens=512)[0]['generated_text']
-
-  image = pipe(
-      prompt=f"{prompt}. high quality.",
-      width=512,
+  image = ov_pipe(
+      prompt=prompt,
       height=512,
-      num_inference_steps=4,
-      guidance_scale=1.0,
+      width=512,
+      num_inference_steps=9,  # This actually results in 8 DiT forwards
+      guidance_scale=0.0,  # Guidance should be 0 for the Turbo models
+      generator=torch.Generator("cpu").manual_seed(42),
   ).images[0]
-
   image.save(f"outputs/out_image_{seed}.jpg")
 
   with open(location,"wb+") as file_object:
