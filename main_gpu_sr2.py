@@ -171,7 +171,7 @@ class Chat(BaseModel):
   max : int = 256 #16384
 
 model_txt = snapshot_download(repo_id='circulus/Qwen3-VL-4B-it-ov-awq') # helenai/Qwen3-VL-4B-Instruct-int4 Echo9Zulu/gemma-3-4b-it-qat-int4_asym-ov circulus/gemma-3-4b-it-ov-awq-sym helenai/Qwen2.5-VL-3B-Instruct-ov-int4
-model_stt = snapshot_download(repo_id='circulus/whisper-large-v3-turbo-ov-awq') # translate not working, only general model
+model_stt = snapshot_download(repo_id='circulus/whisper-large-v3-turbo-ov-int4') # translate not working, only general model
 model_img = snapshot_download(repo_id='circulus/Z-Image-Turbo-ov-int4')
 model_t2t = snapshot_download(repo_id='rippertnt/ko2en-ov-int4')
 
