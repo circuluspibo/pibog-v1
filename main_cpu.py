@@ -48,8 +48,8 @@ _PORT = int(open("port.txt", 'r').read())
 
 app = FastAPI()
 
-pw = CPUPowerMonitor(interval=1.0)
-pw.start()
+#pw = CPUPowerMonitor(interval=1.0)
+#pw.start()
 
 
 app.mount("/web", StaticFiles(directory="web"), name="web")
@@ -155,7 +155,7 @@ def tts1(text="", voice=31, lang='ko', static=0, isPlay=0):
             round(inference_time, 6),
             round(audio_duration, 6),
             round(rtf, 6),
-            pw.get_power()
+            #pw.get_power()
         ])
 
     # --------------------------
