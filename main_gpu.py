@@ -151,8 +151,8 @@ class Chat(BaseModel):
   top_k : int = 50
   max : int = 256 #16384
 
-model_txt = "./models/gemma-3-4b-it-ov-awq" #snapshot_download(repo_id='Echo9Zulu/gemma-3-4b-it-qat-int4_asym-ov') # circulus/gemma-3-4b-it-ov-awq-sym helenai/Qwen2.5-VL-3B-Instruct-ov-int4
-model_stt = "./models/whisper-large-v3-turbo-ov"#snapshot_download(repo_id='circulus/whisper-large-v3-turbo-ov')
+model_txt = "./models/Qwen3-VL-4B-it-ov-awq" #gemma-3-4b-it-ov-awq" #snapshot_download(repo_id='Echo9Zulu/gemma-3-4b-it-qat-int4_asym-ov') # circulus/gemma-3-4b-it-ov-awq-sym helenai/Qwen2.5-VL-3B-Instruct-ov-int4
+model_stt = "./models/whisper-large-v3-turbo-ov-int4"#snapshot_download(repo_id='circulus/whisper-large-v3-turbo-ov')
 
 config = {
     "PERFORMANCE_HINT": "LATENCY",
@@ -434,13 +434,13 @@ def txt2chat(prompt : str ,system = _SYSTEM, isPlay = 0, lang='en'): # gen or me
 
   config = GenerationConfig(
       max_new_tokens=256,
-      #temperature=0.5,
-      #beam_size=1,
+      temperature=0.5,
+      beam_size=1,
       do_sample=False, #fast for beam-search
       speculative_decoding=True,
       repetition_penalty=1.1,
-      #top_k=50,
-      #top_p=0.9,
+      top_k=50,
+      top_p=0.9,
   )
 
   generate_kwargs = dict(
@@ -490,13 +490,13 @@ def txt2rag(prompt : str ,system = _SYSTEM, isPlay = 0, lang='en'): # gen or med
 
   config = GenerationConfig(
       max_new_tokens=256,
-      #temperature=0.5,
-      #beam_size=1,
+      temperature=0.5,
+      beam_size=1,
       do_sample=False, #fast for beam-search
       speculative_decoding=True,
       repetition_penalty=1.1,
-      #top_k=50,
-      #top_p=0.9,
+      top_k=50,
+      top_p=0.9,
   )
 
   generate_kwargs = dict(
@@ -686,7 +686,6 @@ def stt(file : UploadFile = File(...), lang="ko", isPlay=0):
 
   print(t.time()-start, str(out))
 
-
   #chat = Chat()
   #chat.prompt = str(out)
 
@@ -701,4 +700,9 @@ upload_all_csv()
 url = "http://127.0.0.1:59531/web/pion.html"
 
 # Kiosk 모드로 Chromium 실행
-subprocess.run(['chromium', '--kiosk', url])
+subprocess.Popen(['chromium', '--kiosk', url],
+    stdin=subprocess.DEVNULL,       # Discard stdin from the child process
+    stdout=subprocess.DEVNULL,      # Discard stdout from the child process
+    stderr=subprocess.DEVNULL,      # Discard stderr from the child process
+    start_new_session=True          # Start the process in a new session (POSIX only)
+)

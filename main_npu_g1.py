@@ -48,7 +48,9 @@ def getHash(text):
   hash_func.update(text.encode('utf-8'))
   return hash_func.hexdigest()
 
-_IP = "192.168.21.19" #12.128"#"192.168.12.112"
+_IP = "192.168.12.117" #12.128"#"192.168.12.112" "192.168.21.19/g1 plus"
+
+print(_IP)
 
 ov = Core()
 
@@ -409,7 +411,7 @@ async def processing_loop():
 
         # 3. NPU 추론
         res = det_model(frame_ai, device="intel:npu", verbose=False, conf=0.25)[0]
-        ppe_res = ppe_model(frame_ai, device="intel:npu", verbose=False, conf=0.25)[0]
+        #ppe_res = ppe_model(frame_ai, device="intel:npu", verbose=False, conf=0.25)[0]
 
         # 4. 후처리 및 시각화 로직
         if hasattr(res, 'masks') and res.masks is not None:
@@ -427,7 +429,7 @@ async def processing_loop():
         # 4. PPE 결과 시각화 추가 (파란색 박스)
         # 4. PPE 결과 시각화 추가 (파란색 박스 + 클래스 이름)
 
-
+        """
         if ppe_res.boxes is not None:
           ppe_boxes = ppe_res.boxes.xyxy.cpu().numpy()
           ppe_scores = ppe_res.boxes.conf.cpu().numpy()
@@ -458,7 +460,7 @@ async def processing_loop():
                   
                   # 3) 텍스트 쓰기 (흰색)
                   cv2.putText(out, display_str, (x1, text_y - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
-          
+        """
         gray = cv2.cvtColor(frame_ai, cv2.COLOR_BGR2GRAY)
         tags = detector.detect(gray)
 

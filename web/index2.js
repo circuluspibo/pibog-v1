@@ -1,4 +1,4 @@
-alert("Nice to meet you again! 2602010900")
+alert("Nice to meet you again! 2603010000")
 // 버튼 클릭 효과 및 상태 변화 시뮬레이션
 const list_tts = []
 let audio = 0
@@ -415,15 +415,15 @@ document.addEventListener('DOMContentLoaded', function() {
                     break;        
                 case 'tts-hello':
                     cmd = `/arm?cmd=shakeHands_1`
-                    play("안녕? 나는 카이스트 테스트베드의 파이온이라고 해. 로봇의 세계에 대해 알려줄께.")
+                    play("안녕? 나는 서큘러스의 파이온이라고 해. 로봇의 세계에 대해 알려줄께.")
                     break;
                 case 'tts-intro':
                     cmd = `/arm?cmd=clamp`
-                    play("카이스트 테스트베드 방문을 환영합니다. 방문자 등록후 이용해 주세요.")
+                    play("서큘러스의 파이온을 보러 오신것을 환영합니다. 방문자 등록후 이용해 주세요.")
                     break; 
                 case 'tts-follow':
                     cmd = `/arm?cmd=lowWave`
-                    play("자 저를 따라서 테스트베드 안으로 들어 와서 놀라운 경험을 해 보세요!")
+                    play("자 저를 따라서 서큘러스 안으로 들어 와서 놀라운 경험을 해 보세요!")
                     break;
                 case 'tts-warn':
                     cmd = `/arm?cmd=highFive`
@@ -431,7 +431,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     break;
                 case 'tts-bye':
                     cmd = `/arm?cmd=lowWave`
-                    play("방문해 줘서 고마워. 다음번에 카이스트 태스트베드에서 또 만나길 기대할께. 조심히 들어가!")
+                    play("방문해 줘서 고마워. 다음번에 서큘러스의 멋진 보금자리 에서 또 만나길 기대할께. 조심히 들어가!")
                     break;
                 case 'tts-poet':
                     cmd = `/arm?cmd=Refuse`
