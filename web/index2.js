@@ -1,4 +1,4 @@
-alert("Nice to meet you again! 2603010000")
+alert("Nice to meet you again! 2603260740")
 // 버튼 클릭 효과 및 상태 변화 시뮬레이션
 const list_tts = []
 let audio = 0
@@ -327,7 +327,7 @@ document.addEventListener("keyup", (event) => {
 });
 */
 
-let mode =  true //'normal'
+let mode =  false //'normal'
 let cmdTime = 0
 
 async function autoMove(){
@@ -447,10 +447,10 @@ document.addEventListener('DOMContentLoaded', function() {
                     break;
                 case 'mode':
                     if(mode){
-                        document.getElementById("mode").textContent = 'mode'
+                        document.getElementById("mode").textContent = '수동'
                         mode = false
                     } else {
-                        document.getElementById("mode").textContent = 'auto'
+                        document.getElementById("mode").textContent = '자동'
                         mode = true      
                     }
 
@@ -515,7 +515,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                 lastTime = Date.now()
                                 fetch('http://127.0.0.1:59532/v1/rag/img2chat?isPlay=1&lang=ko&prompt="이런 상황에 어울리는 짧은 인사말을 해줘!"')
                                 
-                                if(isLive == 0 || human.depth > 2)
+                                if(isLive == 0 || human.depth > 1)
                                     fetch(`/arm?cmd=lowWave`)
                             }                        
                         },10000)
