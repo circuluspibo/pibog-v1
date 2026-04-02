@@ -85,11 +85,14 @@ face_det_h,   face_det_w   = list(face_det_compiled.input(0).shape)[2:]
 age_gender_h, age_gender_w = list(age_gender_compiled.input(0).shape)[2:]
 emotion_h,    emotion_w    = list(emotion_compiled.input(0).shape)[2:]
 
-det_model   = YOLO('./models/yolo11s-seg_int8_openvino_model')
-ppe_model   = YOLO('./models/yolo11n-helmet4_int8_openvino_model')
+#det_model   = YOLO('./models/yolo26s-seg-ov')
+#ppe_model   = YOLO('./models/yolo26s-helmet-ov')
+
+det_model = YOLO("models/yolo26s-helmet_int8_openvino_model")
+ppe_model = YOLO("models/yolo26s-seg_int8_openvino_model") 
+
 class_names = det_model.names
 ppe_names   = ppe_model.names
-print(ppe_names)
 
 detector = Detector(families="tag36h11")
 

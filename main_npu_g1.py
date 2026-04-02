@@ -48,7 +48,12 @@ def getHash(text):
   hash_func.update(text.encode('utf-8'))
   return hash_func.hexdigest()
 
-_IP = "192.168.12.117" #12.128"#"192.168.12.112" "192.168.21.19/g1 plus"
+_IP = "192.168.21.19"
+
+# "192.168.12.117" - g1 basic
+# "192.168.12.112" - g1 plus local
+# "192.168.12.128" - g1 basic pohang
+# "192.168.21.19" - g1 plus
 
 print(_IP)
 
@@ -85,8 +90,9 @@ emotion_input_layer = emotion_compiled_model.input(0)
 emotion_output_layer = emotion_compiled_model.output(0)
 emotion_height, emotion_width = list(emotion_input_layer.shape)[2:]
 
-det_model = YOLO('./models/yolo11s-seg_int8_openvino_model')
-ppe_model = YOLO('./models/yolo11n-helmet4_int8_openvino_model') #ppe_model = YOLO('./models/safety-11s_int8_openvino_model')
+det_model = YOLO("models/yolo26s-helmet_int8_openvino_model")
+ppe_model = YOLO("models/yolo26s-seg_int8_openvino_model") 
+
 class_names = det_model.names
 ppe_names = ppe_model.names
 
