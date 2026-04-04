@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ARCos · Integrated Intelligence Dashboard</title>
+<link rel="stylesheet" href="css/fonts.css">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<!-- atmosphere -->
+<div class="scanlines"></div>
+<div class="vignette"></div>
+
+<!-- ══════════════ HEADER ══════════════ -->
+<header class="hud-header">
+  <div class="header-left">
+    <div class="logo-hex">A</div>
+    <div class="header-branding">
+      <span class="brand-arcos">ARCos</span>
+      <span class="brand-sub">AUTONOMOUS ROBOT CONTROL SYSTEM</span>
+      <span class="brand-powered">INTEGRATED INTELLIGENCE DASHBOARD · <strong>v4.0</strong></span>
+    </div>
+  </div>
+
+  <div class="header-center">
+    <div class="hud-status-row">
+      <div class="hst-item">
+        <span class="hst-dot" id="hb-dot"></span>
+        <span class="hst-lbl" id="hb-lbl">HEARTBEAT</span>
+      </div>
+      <div class="hst-sep"></div>
+      <div class="hst-item">
+        <span class="hst-val" id="hb-charge">—</span>
+        <span class="hst-lbl">CHARGE</span>
+      </div>
+      <div class="hst-sep"></div>
+      <div class="hst-item">
+        <span class="hst-val" id="hb-temp">—</span>
+        <span class="hst-lbl">TEMP</span>
+      </div>
+      <div class="hst-sep"></div>
+      <div class="hst-item">
+        <span class="hst-val" id="hb-voltage">—</span>
+        <span class="hst-lbl">VOLT</span>
+      </div>
+      <div class="hst-sep"></div>
+      <div class="hst-item">
+        <span class="hst-val" id="hb-objs">—</span>
+        <span class="hst-lbl">OBJECTS</span>
+      </div>
+      <div class="hst-sep"></div>
+      <div class="hst-item">
+        <span class="hst-val" id="hb-live">—</span>
+        <span class="hst-lbl">LIVE</span>
+      </div>
+      <div class="hst-sep"></div>
+      <div class="hst-item">
+        <span class="hst-dot" id="gw-indicator" title="MQTT Gateway"></span>
+        <span class="hst-lbl">MQTT GW</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="header-right">
+    <div class="clock-block">
+      <div class="clock" id="clock">00:00:00</div>
+      <div class="clock-date" id="clock-date">—</div>
+    </div>
+    <div class="theme-badge" id="sys-badge">ONLINE</div>
+  </div>
+</header>
+
+<!-- ══════════════ MAIN 3-COLUMN LAYOUT ══════════════ -->
+<div class="dashboard-body">
+
+  <!-- ══ LEFT: PERCEPTION PANEL ══ -->
+  <aside class="panel panel-left" id="panel-left">
+    <div class="panel-label">PERCEPTION</div>
+
+    <!-- Object Detection State -->
+    <div class="sect-hdr">
+      <span class="sect-icon">◈</span>
+      <span>OBJECT DETECTION</span>
+      <span class="sect-badge" id="od-cnt">0</span>
+    </div>
+
+    <!-- Bounding boxes canvas -->
+    <div class="od-canvas-wrap">
+      <canvas id="od-canvas"></canvas>
+      <div class="od-overlay-label">DETECTION FIELD</div>
+    </div>
+
+    <!-- Live object list -->
+    <div class="od-list" id="od-list">
+      <div class="od-empty">NO OBJECTS DETECTED</div>
+    </div>
+
+    <!-- HUMAN ANALYSIS -->
+    <div class="sect-hdr" style="margin-top:10px">
+      <span class="sect-icon">◉</span>
+      <span>HUMAN ANALYSIS</span>
+      <span class="sect-badge live" id="human-badge">SCANNING</span>
+    </div>
+
+    <div class="human-grid">
+      <div class="hg-cell">
+        <div class="hg-icon">⚥</div>
+        <div class="hg-val" id="h-gender">—</div>
+        <div class="hg-lbl">GENDER</div>
+      </div>
+      <div class="hg-cell">
+        <div class="hg-icon">◷</div>
+        <div class="hg-val" id="h-age">—</div>
+        <div class="hg-lbl">AGE</div>
+      </div>
+      <div class="hg-cell">
+        <div class="hg-icon">☺</div>
+        <div class="hg-val" id="h-emotion">—</div>
+        <div class="hg-lbl">EMOTION</div>
+      </div>
+      <div class="hg-cell">
+        <div class="hg-icon">⊕</div>
+        <div class="hg-val" id="h-depth">—</div>
+        <div class="hg-lbl">DEPTH</div>
+      </div>
+    </div>
+
+    <div class="human-position-row">
+      <span class="hp-lbl">POSITION</span>
+      <span class="hp-val" id="h-position">—</span>
+    </div>
+
+    <!-- TAG/RFID -->
+    <div class="sect-hdr" style="margin-top:10px">
+      <span class="sect-icon">▣</span>
+      <span>TAG TRACKING</span>
+    </div>
+    <div class="tag-row">
+      <div class="tag-cell">
+        <div class="tag-lbl">ID</div>
+        <div class="tag-val" id="tag-id">—</div>
+      </div>
+      <div class="tag-cell">
+        <div class="tag-lbl">DISTANCE</div>
+        <div class="tag-val" id="tag-dist">—</div>
+      </div>
+    </div>
+
+    <!-- System bars (charge/temp/voltage) -->
+    <div class="sect-hdr" style="margin-top:10px">
+      <span class="sect-icon">▤</span>
+      <span>SYSTEM STATUS</span>
+    </div>
+    <div class="sys-bars">
+      <div class="sbar-row">
+        <span class="sbar-lbl">CHARGE</span>
+        <div class="sbar-track"><div class="sbar-fill charge" id="bar-charge"></div></div>
+        <span class="sbar-val" id="val-charge">—</span>
+      </div>
+      <div class="sbar-row">
+        <span class="sbar-lbl">TEMP</span>
+        <div class="sbar-track"><div class="sbar-fill temp" id="bar-temp"></div></div>
+        <span class="sbar-val" id="val-temp">—</span>
+      </div>
+      <div class="sbar-row">
+        <span class="sbar-lbl">VOLTAGE</span>
+        <div class="sbar-track"><div class="sbar-fill volt" id="bar-volt"></div></div>
+        <span class="sbar-val" id="val-volt">—</span>
+      </div>
+    </div>
+
+    <!-- ── SLAM robot_data 확장 정보 (실제 SDK 기준) ── -->
+    <div class="sect-hdr" style="margin-top:10px">
+      <span class="sect-icon">⬡</span>
+      <span>ROBOT DATA</span>
+      <span class="sect-badge" id="rd-badge" style="display:none">LIVE</span>
+    </div>
+
+    <!-- 배터리 -->
+    <div class="rd-group">
+      <div class="rd-group-title">BATTERY</div>
+      <div class="rd-row">
+        <span class="rd-lbl">LEVEL</span>
+        <div class="rd-bar-wrap"><div class="sbar-track" style="flex:1"><div class="sbar-fill charge" id="bar-bat-pct"></div></div></div>
+        <span class="rd-val" id="rd-bat-pct">—</span><span class="rd-unit">%</span>
+      </div>
+      <div class="rd-row"><span class="rd-lbl">VOLTAGE</span><span class="rd-val" id="rd-bat-vol">—</span><span class="rd-unit">mV</span></div>
+      <div class="rd-row"><span class="rd-lbl">CURRENT</span><span class="rd-val" id="rd-bat-amp">—</span><span class="rd-unit">mA</span></div>
+      <div class="rd-row"><span class="rd-lbl">BAT TEMP</span><span class="rd-val" id="rd-bat-temp">—</span><span class="rd-unit">°C</span></div>
+    </div>
+
+    <!-- CPU / 시스템 -->
+    <div class="rd-group">
+      <div class="rd-group-title">CPU / SYSTEM</div>
+      <div class="rd-row">
+        <span class="rd-lbl">USAGE</span>
+        <div class="rd-bar-wrap"><div class="sbar-track" style="flex:1"><div class="sbar-fill temp" id="bar-cpu-usage"></div></div></div>
+        <span class="rd-val" id="rd-cpu-usage">—</span><span class="rd-unit">%</span>
+      </div>
+      <div class="rd-row">
+        <span class="rd-lbl">MEMORY</span>
+        <div class="rd-bar-wrap"><div class="sbar-track" style="flex:1"><div class="sbar-fill volt" id="bar-cpu-mem"></div></div></div>
+        <span class="rd-val" id="rd-cpu-mem">—</span><span class="rd-unit">%</span>
+      </div>
+      <div class="rd-row"><span class="rd-lbl">CPU TEMP</span><span class="rd-val" id="rd-cpu-temp">—</span><span class="rd-unit">°C</span></div>
+      <div class="rd-row"><span class="rd-lbl">FREQ</span><span class="rd-val" id="rd-cpu-freq">—</span><span class="rd-unit">MHz</span></div>
+    </div>
+
+    <!-- 모터 온도 -->
+    <div class="rd-group">
+      <div class="rd-group-title">
+        MOTOR TEMP
+        <span class="rd-err-badge" id="rd-motor-err-badge" style="display:none">ERR!</span>
+      </div>
+      <div class="rd-row">
+        <span class="rd-lbl">MAX</span>
+        <div class="rd-bar-wrap"><div class="sbar-track" style="flex:1"><div class="sbar-fill temp" id="bar-motor-temp"></div></div></div>
+        <span class="rd-val" id="rd-motor-temp-max">—</span><span class="rd-unit">°C</span>
+      </div>
+      <div class="rd-row"><span class="rd-lbl">AVG</span><span class="rd-val" id="rd-motor-temp-avg">—</span><span class="rd-unit">°C</span></div>
+      <!-- 모터별 온도 히트맵 (최대 29관절) -->
+      <div class="rd-motor-grid" id="rd-motor-grid"></div>
+    </div>
+
+  </aside>
+
+  <!-- ══ CENTER: SLAM MAP (상단) + 5개 스트림 (하단) ══ -->
+  <main class="panel panel-center" id="panel-center">
+
+    <!-- ── 상단: SLAM 내비게이션 맵 (전체 너비) ── -->
+    <div class="slam-section">
+      <div class="nav-map-label">
+        <span class="nm-badge">SLAM</span>
+        <span>NAVIGATION MAP</span>
+        <span class="nm-coords" id="nm-coords">— · —</span>
+        <div class="nav-map-controls-inline">
+          <button class="nmc-btn" id="nmc-grid" title="Grid">⊞</button>
+          <button class="nmc-btn" id="nmc-trail" title="Trail">⌇</button>
+          <button class="nmc-btn" id="nmc-2d5" title="2.5D">◫</button>
+          <button class="nmc-btn" id="nmc-fit" title="Fit">⊙</button>
+          <div class="nmc-sep"></div>
+          <button class="nmc-btn nmc-rot" id="nmc-r0">N</button>
+          <button class="nmc-btn nmc-rot" id="nmc-r90">E</button>
+          <button class="nmc-btn nmc-rot" id="nmc-r180">S</button>
+          <button class="nmc-btn nmc-rot" id="nmc-r270">W</button>
+          <div class="nmc-sep"></div>
+          <span class="nmc-pos">X:<span id="ns-x">0.000</span> Y:<span id="ns-y">0.000</span> <span id="ns-hdg">0.0°</span></span>
+        </div>
+      </div>
+      <div class="slam-map-viewport" id="nav-map-viewport">
+        <canvas id="map-canvas"></canvas>
+      </div>
+    </div>
+
+    <!-- ── 수직 드래그 리사이저 (slam↔streams) ── -->
+    <div class="h-resizer" id="h-resizer"></div>
+
+    <!-- ── 하단: 5개 스트림 가로 배치 ── -->
+    <div class="streams-section" id="streams-section">
+
+      <!-- Stream 1: 일반 카메라 (MJPEG) -->
+      <div class="stream-cell" id="sc-1">
+        <div class="stream-label">
+          <span class="fl-dot fl-dot-cyan"></span>CAM · PRIMARY
+          <span class="stream-badge" id="sbadge-1">:59531</span>
+        </div>
+        <div class="stream-body">
+          <img class="stream-img" id="img-feed1" id="img-cam" src="" alt="">
+          <div class="stream-nosig" id="nosig-1">NO SIGNAL</div>
+          <div class="feed-scanline"></div>
+          <div class="feed-corner fc-tl"></div><div class="feed-corner fc-tr"></div>
+          <div class="feed-corner fc-bl"></div><div class="feed-corner fc-br"></div>
+        </div>
+      </div>
+
+      <!-- 수직 구분선 1 -->
+      <div class="v-divider"></div>
+
+      <!-- Stream 2: WebRTC 메인 스트림 (세그멘테이션+PPE합성) -->
+      <div class="stream-cell" id="sc-2">
+        <div class="stream-label">
+          <span class="fl-dot fl-dot-green"></span>WEBRTC · SEG+PPE
+          <span class="stream-badge idle" id="sbadge-2">IDLE</span>
+        </div>
+        <div class="stream-body">
+          <video class="stream-video" id="vm" autoplay playsinline muted></video>
+          <div class="stream-nosig" id="nsm">NO SIGNAL</div>
+          <div class="vfps-overlay" id="fps">— fps</div>
+          <div class="feed-corner fc-tl fc-green"></div><div class="feed-corner fc-tr fc-green"></div>
+          <div class="feed-corner fc-bl fc-green"></div><div class="feed-corner fc-br fc-green"></div>
+        </div>
+        <!-- WebRTC 연결 버튼 -->
+        <div class="webrtc-bar">
+          <div class="wrtc-status">
+            <div class="wrtc-dot" id="wrtc-dot"></div>
+            <span id="wrtc-lbl">DISCONNECTED</span>
+          </div>
+          <div class="wrtc-stats">
+            <span class="wrtc-stat-lbl">RTT</span><span class="wrtc-stat-val" id="wrtc-rtt">—</span>
+            <span class="wrtc-stat-lbl">DC</span><span class="wrtc-stat-val" id="wrtc-dcr">—</span>
+            <span class="wrtc-stat-lbl">TRK</span><span class="wrtc-stat-val" id="itrk">0</span>
+            <span class="wrtc-stat-lbl">ICE</span><span class="wrtc-stat-val" id="iice">—</span>
+          </div>
+          <button class="wrtc-btn" id="wrtc-btn" onclick="toggleWebRTC()">CONNECT</button>
+        </div>
+        <div class="dc-log-box">
+          <div class="dc-log-hdr">DC LOG</div>
+          <div id="dc-log-body"></div>
+        </div>
+      </div>
+
+      <!-- 수직 구분선 2 -->
+      <div class="v-divider"></div>
+
+      <!-- Stream 3: Face detection 캡처 -->
+      <div class="stream-cell" id="sc-3">
+        <div class="stream-label">
+          <span class="fl-dot fl-dot-green"></span>FACE · DETECT
+          <span class="stream-badge idle" id="sbadge-3">DC</span>
+        </div>
+        <div class="stream-body">
+          <img class="stream-img" id="img-face" src="" alt="">
+          <div class="face-scan-overlay">
+            <div class="fso-line"></div>
+            <div class="fso-corner fso-tl"></div><div class="fso-corner fso-tr"></div>
+            <div class="fso-corner fso-bl"></div><div class="fso-corner fso-br"></div>
+          </div>
+          <div class="stream-nosig" id="nsig-face">NO FACE</div>
+          <div class="feed-corner fc-tl fc-green"></div><div class="feed-corner fc-tr fc-green"></div>
+          <div class="feed-corner fc-bl fc-green"></div><div class="feed-corner fc-br fc-green"></div>
+        </div>
+      </div>
+
+      <!-- 수직 구분선 3 -->
+      <div class="v-divider"></div>
+
+      <!-- Stream 4: PPE / Helmet detection -->
+      <div class="stream-cell" id="sc-4">
+        <div class="stream-label">
+          <span class="fl-dot fl-dot-orange"></span>PPE · HELMET
+          <span class="stream-badge idle" id="sbadge-4">DC</span>
+        </div>
+        <div class="stream-body">
+          <img class="stream-img" id="img-ppe" src="" alt="">
+          <div class="stream-nosig" id="nsig-ppe">NO PPE</div>
+          <div class="feed-scanline feed-scanline-orange"></div>
+          <div class="feed-corner fc-tl fc-orange"></div><div class="feed-corner fc-tr fc-orange"></div>
+          <div class="feed-corner fc-bl fc-orange"></div><div class="feed-corner fc-br fc-orange"></div>
+        </div>
+      </div>
+
+      <!-- 수직 구분선 4 -->
+      <div class="v-divider"></div>
+
+      <!-- Stream 5: Depth map -->
+      <div class="stream-cell" id="sc-5">
+        <div class="stream-label">
+          <span class="fl-dot fl-dot-blue"></span>DEPTH · WebRTC
+          <span class="stream-badge idle" id="sbadge-5">IDLE</span>
+        </div>
+        <div class="stream-body">
+          <video class="stream-img" id="vd" autoplay playsinline muted></video>
+          <div class="stream-nosig" id="nosig-6">NO SIGNAL</div>
+          <div class="feed-scanline feed-scanline-blue"></div>
+          <div class="feed-corner fc-tl fc-blue"></div><div class="feed-corner fc-tr fc-blue"></div>
+          <div class="feed-corner fc-bl fc-blue"></div><div class="feed-corner fc-br fc-blue"></div>
+        </div>
+      </div>
+
+    </div><!-- /streams-section -->
+
+    <!-- ── 하단 네비게이션 상태 바 ── -->
+    <div class="nav-status-bar">
+      <div class="nsb-item"><span class="nsb-lbl">NAV STATE</span><span class="nsb-val" id="ns-mode">IDLE</span></div>
+      <div class="nsb-sep"></div>
+      <div class="nsb-item"><span class="nsb-lbl">TARGET NODE</span><span class="nsb-val mono" id="ns-seq-name">—</span></div>
+      <div class="nsb-sep"></div>
+      <div class="nsb-item"><span class="nsb-lbl">PROGRESS</span><span class="nsb-val mono" id="idcr">—</span></div>
+      <div class="nsb-sep"></div>
+      <div class="nsb-item"><span class="nsb-lbl">TIME</span><span class="nsb-val mono" id="ns-seq-step">—</span></div>
+      <div class="nsb-sep"></div>
+      <div class="nsb-item"><span class="nsb-lbl">Vx/Vy/Ω</span><span class="nsb-val mono" id="irtt">—</span></div>
+      <div class="nsb-sep"></div>
+      <div class="nsb-item"><span class="nsb-lbl">TARGET XY</span><span class="nsb-val mono"><span id="ns-x">—</span>,<span id="ns-y">—</span></span></div>
+      <div class="nsb-sep"></div>
+      <div class="nsb-item"><span class="nsb-lbl">YAW</span><span class="nsb-val mono" id="ns-hdg">—</span></div>
+      <div class="nsb-sep"></div>
+      <div class="nsb-item">
+        <div class="nsb-prog-track"><div class="nsb-prog-fill" id="ns-seq-bar"></div></div>
+      </div>
+      <div class="nsb-sep"></div>
+      <div class="nsb-wplist" id="ns-wp-list-bar"></div>
+      <div class="nsb-item" style="margin-left:auto">
+        <span class="nsb-lbl">SRV</span><span class="nsb-val mono" id="isrv">—</span>
+      </div>
+      <div class="nsb-cmds">
+        <button class="ncb ncb-stop"   id="ncb-estop">⊘ E-STOP</button>
+        <button class="ncb ncb-home"   id="ncb-home">⌂ HOME</button>
+        <button class="ncb ncb-pause"  id="ncb-pause">⏸ PAUSE</button>
+        <button class="ncb ncb-resume" id="ncb-resume">▷ RESUME</button>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- ══ RIGHT: AGENT CHAT ══ -->
+  <aside class="panel panel-right" id="panel-right">
+    <div class="panel-label">INTELLIGENCE</div>
+
+    <!-- Agent header -->
+    <div class="agent-header">
+      <div class="agent-avatar">
+        <div class="aa-ring"></div>
+        <span class="aa-icon">⬡</span>
+      </div>
+      <div class="agent-info">
+        <div class="agent-name">ARCos AGENT</div>
+        <div class="agent-model">Vision-Language Model · Active</div>
+      </div>
+      <div class="agent-status-dot" id="agent-dot"></div>
+    </div>
+
+    <!-- TTS toggle -->
+    <div class="tts-bar">
+      <span class="tts-lbl">TTS</span>
+      <button class="tts-toggle" id="tts-toggle" data-on="false">
+        <span class="tt-off">OFF</span>
+        <span class="tt-on">ON</span>
+      </button>
+      <select class="tts-voice" id="tts-voice">
+        <option value="31">Voice 31</option>
+        <option value="20">Voice 20</option>
+        <option value="10">Voice 10</option>
+        <option value="5">Voice 5</option>
+      </select>
+      <select class="tts-lang" id="tts-lang">
+        <option value="ko">KO</option>
+        <option value="en">EN</option>
+      </select>
+    </div>
+
+    <!-- Chat messages -->
+    <div class="chat-messages" id="chat-messages">
+      <div class="chat-msg agent">
+        <div class="cm-avatar">⬡</div>
+        <div class="cm-bubble">
+          <div class="cm-text">안녕하세요. ARCos 통합 지능 시스템이 준비되었습니다. 텍스트 또는 음성으로 명령을 입력하세요.</div>
+          <div class="cm-time">SYSTEM</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Input bar -->
+    <div class="chat-input-bar">
+      <!-- Voice input button -->
+      <button class="mic-btn" id="mic-btn" title="음성 입력">
+        <span class="mic-icon" id="mic-icon">🎙</span>
+        <div class="mic-ring" id="mic-ring"></div>
+      </button>
+
+      <div class="chat-input-wrap">
+        <textarea class="chat-input" id="chat-input" placeholder="메시지 입력 또는 음성 버튼 사용..." rows="1"></textarea>
+      </div>
+
+      <button class="send-btn" id="send-btn">
+        <span>▶</span>
+      </button>
+    </div>
+
+    <!-- System prompt display -->
+    <div class="sys-prompt-bar">
+      <span class="sp-lbl">CONTEXT</span>
+      <span class="sp-val">Visual perception + robot state injected</span>
+    </div>
+
+  </aside>
+
+</div><!-- /dashboard-body -->
+
+<!-- Scripts -->
+<script src="vendor/socket.io.min.js"></script>
+<script src="js/map.js"></script>
+<script src="js/dashboard.js"></script>
+</body>
+</html>
