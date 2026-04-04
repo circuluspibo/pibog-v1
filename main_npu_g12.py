@@ -85,11 +85,8 @@ face_det_h,   face_det_w   = list(face_det_compiled.input(0).shape)[2:]
 age_gender_h, age_gender_w = list(age_gender_compiled.input(0).shape)[2:]
 emotion_h,    emotion_w    = list(emotion_compiled.input(0).shape)[2:]
 
-#det_model   = YOLO('./models/yolo26s-seg-ov')
-#ppe_model   = YOLO('./models/yolo26s-helmet-ov')
-
-det_model = YOLO("models/yolo26s-helmet_int8_openvino_model")
-ppe_model = YOLO("models/yolo26s-seg_int8_openvino_model") 
+det_model = YOLO("models/yolo11m-seg_int8_openvino_model") #yolo26s-helmet_int8_openvino_model
+ppe_model = YOLO("models/yolo11n-helmet4_int8_openvino_model")  #yolo26s-seg_int8_openvino_model
 
 class_names = det_model.names
 ppe_names   = ppe_model.names
@@ -282,23 +279,27 @@ def processing_thread():
                     # ── [수정2] LED/TTS/파일저장 → daemon 스레드로 분리 ──
                     # processing_thread 안에서 직접 호출하면 HTTP 요청(requests)이
                     # 수백ms~수초 블로킹 → 프레임 드롭 심화
-                    if cap_type == "ppe" and cur_time - last_ppe_saved_time > 10.0:
+                    if cap_type == "ppe" and cur_time - last_ppe_saved_time > 15.0:
                         last_ppe_saved_time = cur_time
                         def _ppe_action(img, fn):
                             led(255, 255, 255)
                             tts_v2("오늘도 좋은 하루입니다.", 31)
                             _save_ppe(img, fn)
+                            arm("lowWave")
+                            arm("Release_Arm")
                         threading.Thread(
                             target=_ppe_action,
                             args=(crop.copy(), f"ppe_{label}_{int(cur_time)}.jpg"),
                             daemon=True
                         ).start()
 
-                    elif cap_type == "face" and cur_time - last_face_saved_time > 10.0:
+                    elif cap_type == "face" and cur_time - last_face_saved_time > 15.0:
                         last_face_saved_time = cur_time
                         def _face_action(img, fn):
                             led(255, 0, 0)
                             tts_v2("안전모를 착용해 주세요", 31)
+                            arm("Refuse")
+                            arm("Release_Arm")
                             _save_face(img, fn)
                         threading.Thread(
                             target=_face_action,
@@ -527,14 +528,6 @@ async def webrtc_disconnect(client_id: str):
 def main_route():
     return {"result": True, "data": "AI-CPU-V2", "ip": _IP, "port": _PORT}
 
-@app.get("/prepare")
-async def prepare():
-    return {"result": True, "data": True}
-
-@app.get("/prepare2")
-async def prepare2():
-    return {"result": True, "data": True}
-
 @app.get("/hand")
 async def hand(cmd: str):
     requests.get(f"http://{_IP}:59521/hands?cmd={cmd}")
@@ -545,7 +538,7 @@ async def heartbeat():
     return {"result": True, "data": state}
 
 @app.get("/start_collection")
-async def start_collection():
+def start_collection():
     global is_collecting
     if is_collecting:
         return {"message": "already running"}
@@ -611,8 +604,10 @@ def color(value:str='red'):
     requests.get(f"http://{_IP}:59521/led?r={rgb[0]}&g={rgb[1]}&b={rgb[2]}")
     return {"result": True}
 
-print("NPU", "2502010900")
+@app.get("/arm")
+def arm(cmd:str='lowWave'):
+    requests.get(f"http://{_IP}:58521/arm?cmd={cmd}")
+    return {"result": True}
 
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run("main_webrtc_new:app", host="0.0.0.0", port=_SERVER_PORT, reload=False)
+start_collection()
+print("NPU", "2502010900")

@@ -90,8 +90,8 @@ emotion_input_layer = emotion_compiled_model.input(0)
 emotion_output_layer = emotion_compiled_model.output(0)
 emotion_height, emotion_width = list(emotion_input_layer.shape)[2:]
 
-det_model = YOLO("models/yolo26s-helmet_int8_openvino_model")
-ppe_model = YOLO("models/yolo26s-seg_int8_openvino_model") 
+det_model = YOLO("models/yolo11m-seg_int8_openvino_model") #yolo26s-helmet_int8_openvino_model
+ppe_model = YOLO("models/yolo11n-helmet4_int8_openvino_model")  #yolo26s-seg_int8_openvino_model
 
 class_names = det_model.names
 ppe_names = ppe_model.names
@@ -559,15 +559,6 @@ async def connect2():
 
   return { "result" : True, "data" : True }     
 
-
-@app.get("/prepare")
-async def prepare():
-  return { "result" : True, "data" : True }      
-
-@app.get("/prepare2")
-async def prepare2():
-  return { "result" : True, "data" : True }    
-  
 @app.get("/hand")
 async def hand(cmd : str):
   requests.get(f"http://{_IP}:59521/hands?cmd={cmd}")

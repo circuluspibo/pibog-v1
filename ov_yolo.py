@@ -13,4 +13,4 @@ ov_model = YOLO("models/yolo26s-helmet_int8_openvino_model")
 results = ov_model("https://ultralytics.com/images/bus.jpg")
 
 # Run inference with specified device, available devices: ["intel:gpu", "intel:npu", "intel:cpu"]
-results = ov_model("https://ultralytics.com/images/bus.jpg", device="intel:gpu")
+results = ov_model("https://ultralytics.com/images/bus.jpg", device="intel:npu")

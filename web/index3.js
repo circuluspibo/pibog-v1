@@ -1,4 +1,7 @@
-alert("Nice to meet you again! 2602010700")
+alert("Nice to meet you again! 260401200")
+
+const _URL = 'http://192.168.21.19:58521'
+
 // 버튼 클릭 효과 및 상태 변화 시뮬레이션
 const list_tts = []
 let audio = 0
@@ -85,6 +88,7 @@ let lastPlay = 0
 let lastText = 0
 
 function play(text){
+    fetch(`http://127.0.0.1:59531/led?r=0&g=255&b=0`)
     if(text == lastText && Date.now() - lastPlay < 3000)
         return
 
@@ -99,7 +103,7 @@ function play(text){
 }
 
 function playNext(chunk) {
-    fetch(`/led?r=0&g=0&b=255`)
+    fetch(`http://127.0.0.1:59531/led?r=0&g=255&b=0`)
 
     let cmd = ''
 
@@ -126,7 +130,7 @@ function playNext(chunk) {
             playNext()  // Play next audio when current one ends
         })
     } else { // end of audio
-        fetch(`/led?r=0&g=255&b=255`)
+        fetch(`http://127.0.0.1:59531/led?r=0&g=255&b=255`)
     }
 }
 
@@ -271,7 +275,7 @@ function getDirection() {
         rx = smooth(multi)
     
     // 명령어 생성 // pion 은 정지 명령도 필요하여 무조건 전송 - 다만 기존과 다를때만
-
+    /*
     if(up && isLive > 0 && human.depth < 2){
         play("사람이 있어서, 안전상 이유로 정리할께.")
         console.log("emergency stop!!!!  a1")
@@ -281,7 +285,7 @@ function getDirection() {
         ry = 0
 
     }
-
+    */
 
     const cmd = `lx=${lx}&rx=${rx}&ly=${ly}&ry=${ry}`
 
@@ -295,15 +299,15 @@ function getDirection() {
         
         if(cmd == 'lx=0&rx=0&ly=0&ry=0' && lastState == 'up' && multi > 1){
             lastState = 'stop'
-            fetch(`/walkG1?lx=0&rx=0&ly=0.5&ry=0.5`)
+            fetch(`${_URL}/walkG1?lx=0&rx=0&ly=0.5&ry=0.5`)
 
             intv = setTimeout(function(){
                 console.log('smooth stop....')
-                fetch(`/walkG1?lx=0&rx=0&ly=0&ry=0`)
+                fetch(`${_URL}/walkG1?lx=0&rx=0&ly=0&ry=0`)
             },1000)
             
         } else
-            fetch(`/walkG1?${cmd}`)
+            fetch(`${_URL}/walkG1?${cmd}`)
     }
 }
 
@@ -326,11 +330,11 @@ document.addEventListener("keyup", (event) => {
 });
 */
 
-let mode =  true //'normal'
+let mode =  false //'normal'
 let cmdTime = 0
 
 async function autoMove(){
-    cmd = `/walkG1?lx=0&rx=0&ly=0.5&ry=0.5`
+    cmd = `${_URL}/walkG1?lx=0&rx=0&ly=0.5&ry=0.5`
 
     const response = await fetch(cmd)
     if (!response.ok) {
@@ -376,7 +380,7 @@ document.addEventListener('DOMContentLoaded', function() {
             switch(this.id){
                 case 'rotation-center':
                 case 'move-center':
-                    cmd = '/walkG1?lx=0&rx=0&ly=0&ry=0'
+                    cmd = `${_URL}/walkG1?lx=0&rx=0&ly=0&ry=0`
                     break;                
                 case 'move-up':
 
@@ -384,56 +388,56 @@ document.addEventListener('DOMContentLoaded', function() {
 
                         play("사람이 있어서, 안전상 이유로 정리할께.")
                         console.log("emergency stop!!!!")
-                        cmd = `/walkG1?lx=0&rx=0&ly=0&ry=0`
+                        cmd = `${_URL}/walkG1?lx=0&rx=0&ly=0&ry=0`
                     } else 
-                        cmd = `/walkG1?lx=0&rx=0&ly=${1 * multi}&ry=${1 * multi}`
+                        cmd = `${_URL}/walkG1?lx=0&rx=0&ly=${1 * multi}&ry=${1 * multi}`
 
                     break;
                 case 'move-down':
-                    cmd = `/walkG1?lx=0&rx=0&ly=${-1 * multi}&ry=${-1 * multi}`
+                    cmd = `${_URL}/walkG1?lx=0&rx=0&ly=${-1 * multi}&ry=${-1 * multi}`
                     break;                                        
                 case 'move-left':
-                    cmd = `/walkG1?lx=${-1 * multi}&rx=0&ly=0&ry=0`
+                    cmd = `${_URL}/walkG1?lx=${-1 * multi}&rx=0&ly=0&ry=0`
                     break;
                 case 'move-right':
-                    cmd = `/walkG1?lx=${1 * multi}&rx=0&ly=0&ry=0`
+                    cmd = `${_URL}/walkG1?lx=${1 * multi}&rx=0&ly=0&ry=0`
                     break;
                 case 'rotate-left':
-                    cmd = `/walkG1?lx=0&rx=${-1 * multi}&ly=0&ry=0`
+                    cmd = `${_URL}/walkG1?lx=0&rx=${-1 * multi}&ly=0&ry=0`
                     //cmd = `/walkG1?lx=${-0.5 * multi}&rx=${-0.5 * multi}&ly=0&ry=0`
                     break;
                 case 'rotate-right':
-                    cmd = `/walkG1?lx=0&rx=${1 * multi}&ly=0&ry=0`
+                    cmd = `${_URL}/walkG1?lx=0&rx=${1 * multi}&ly=0&ry=0`
                     //cmd = `/walkG1?lx=${0.5 * multi}&rx=${0.5 * multi}&ly=0&ry=0`
                     break;                    
                 case 'tilt-up':
-                    cmd = `/walkG1?lx=0&rx=0&ly=${1.5 * multi}&ry=${1.5 * multi}`
+                    cmd = `${_URL}/walkG1?lx=0&rx=0&ly=${1.5 * multi}&ry=${1.5 * multi}`
                     break;
                 case 'tilt-down':
-                    cmd = `/walkG1?lx=0&rx=0&ly=${-1.5 * multi}&ry=${-1.5 * multi}`
+                    cmd = `${_URL}/walkG1?lx=0&rx=0&ly=${-1.5 * multi}&ry=${-1.5 * multi}`
                     break;        
                 case 'tts-hello':
-                    cmd = `/arm?cmd=shakeHands_1`
-                    play("안녕? 나는 경북수학문화관의 파이온이라고 해. 수학의 세계에 대해 알려줄께.")
+                    cmd = `${_URL}/arm?cmd=shakeHands_1`
+                    play("안녕? 나는 서큘러스의 파이온이라고 해. 로봇의 세계에 대해 알려줄께.")
                     break;
                 case 'tts-intro':
-                    cmd = `/arm?cmd=clamp`
-                    play("경상북도교육청 수학문화관 방문을 환영합니다. 방문자 등록후 이용해 주세요.")
+                    cmd = `${_URL}/arm?cmd=clamp`
+                    play("서큘러스의 파이온을 보러 오신것을 환영합니다. 방문자 등록후 이용해 주세요.")
                     break; 
                 case 'tts-follow':
-                    cmd = `/arm?cmd=lowWave`
-                    play("자 저를 따라서 수학문화원 안으로 들어 와서 놀라운 경험을 해 보세요!")
+                    cmd = `${_URL}/arm?cmd=lowWave`
+                    play("자 저를 따라서 서큘러스 안으로 들어 와서 놀라운 경험을 해 보세요!")
                     break;
                 case 'tts-warn':
-                    cmd = `/arm?cmd=highFive`
+                    cmd = `${_URL}/arm?cmd=highFive`
                     play("안녕하세요. 로봇중에 인싸인 저와 함께 멋지게 사진좀 찍어보실래요?")
                     break;
                 case 'tts-bye':
-                    cmd = `/arm?cmd=lowWave`
-                    play("방문해 줘서 고마워. 다음번에 수학문화원에서 또 만나길 기대할께. 조심히 들어가!")
+                    cmd = `${_URL}/arm?cmd=lowWave`
+                    play("방문해 줘서 고마워. 다음번에 서큘러스의 멋진 보금자리 에서 또 만나길 기대할께. 조심히 들어가!")
                     break;
                 case 'tts-poet':
-                    cmd = `/arm?cmd=Refuse`
+                    cmd = `${_URL}/arm?cmd=Refuse`
                     //cmd = 'http://127.0.0.1:59532/v2/img2chat?isPlay=1&lang=ko&prompt="이 장면에 적합한 인사말을 해 주겠니?"'
                     play("저는 막중한 업무를 처리중이므로, 가까이 오시면 위험합니다.")
                     break;
@@ -446,10 +450,10 @@ document.addEventListener('DOMContentLoaded', function() {
                     break;
                 case 'mode':
                     if(mode){
-                        document.getElementById("mode").textContent = 'mode'
+                        document.getElementById("mode").textContent = '수동'
                         mode = false
                     } else {
-                        document.getElementById("mode").textContent = 'auto'
+                        document.getElementById("mode").textContent = '자동'
                         mode = true      
                     }
 
@@ -477,50 +481,43 @@ document.addEventListener('DOMContentLoaded', function() {
                         
                     })
               
+                    
+                
+                    clearInterval(interval)
+                    interval = setInterval(async ()=>{
+                        const resp = await fetch(`http://127.0.0.1:59531/heartbeat`)
+                        const data = (await resp.json()).data
 
-                    fetch(`/connect2`).then(async response=>{
-                        if (!response.ok) {
-                            throw new Error(`Response status: ${response.status}`)
-                        }
+                        console.log(data.human.position,data)
 
-                        const json = await response.json()
-                        console.log('connect ok',json)
+                        isLive = data.cnt_live
+                        human = data.human // copy value
+                        tag = data.tag
 
-                        clearInterval(interval)
-                        interval = setInterval(async ()=>{
-                            const resp = await fetch(`http://127.0.0.1:59531/heartbeat`)
-                            const data = (await resp.json()).data
+                        const pos = data.human.position
+                        /*
+                        if(pos.startsWith('T'))
+                            fetch(`http://127.0.0.1:8000/head/down`)
+                        else if(pos.startsWith('B')) 
+                            fetch(`http://127.0.0.1:8000/head/up`)
+                        
+                        if(pos.endsWith('L'))
+                            fetch(`http://127.0.0.1:8000/head/right`)
+                        else if(pos.endsWith('R'))
+                            fetch(`http://127.0.0.1:8000/head/left`)
+                        */
 
-                            console.log(data.human.position,data)
-
-                            isLive = data.cnt_live
-                            human = data.human // copy value
-                            tag = data.tag
-
-                            const pos = data.human.position
-                            /*
-                            if(pos.startsWith('T'))
-                                fetch(`http://127.0.0.1:8000/head/down`)
-                            else if(pos.startsWith('B')) 
-                                fetch(`http://127.0.0.1:8000/head/up`)
+                        if(Date.now() - lastTime > 30000 && data.cnt_live > 0 && mode){
+                            lastTime = Date.now()
+                            fetch('http://127.0.0.1:59532/v1/rag/img2chat?isPlay=1&lang=ko&prompt="이런 상황에 어울리는 짧은 인사말을 해줘!"')
                             
-                            if(pos.endsWith('L'))
-                                fetch(`http://127.0.0.1:8000/head/right`)
-                            else if(pos.endsWith('R'))
-                                fetch(`http://127.0.0.1:8000/head/left`)
-                            */
-
-                            if(Date.now() - lastTime > 30000 && data.cnt_live > 0 && mode){
-                                lastTime = Date.now()
-                                fetch('http://127.0.0.1:59532/v1/rag/img2chat?isPlay=1&lang=ko&prompt="이런 상황에 어울리는 짧은 인사말을 해줘!"')
-                                
-                                if(isLive == 0 || human.depth > 2)
-                                    fetch(`/arm?cmd=lowWave`)
-                            }                        
-                        },10000)
+                            if(isLive == 0 || human.depth > 1)
+                                fetch(`${_URL}/arm?cmd=lowWave`)
+                        }                        
+                    },10000)
 
 
-                    })
+                    
                     break;
                 case 'prepare':
                     cmd = '/prepare'
@@ -531,9 +528,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     else if(this.classList.contains('states')){
                         state = this.id
                         multi = 0.5
-                        cmd = `/stateG1?cmd=${this.id}`                    
+                        cmd = `${_URL}/stateG1?cmd=${this.id}`                    
                     } else
-                        cmd = `/arm?cmd=${this.id}`
+                        cmd = `${_URL}/arm?cmd=${this.id}`
             }
 
 
@@ -711,13 +708,17 @@ document.addEventListener('DOMContentLoaded', function() {
             const color = this.getAttribute('data-color');
             const theme = themeColors[color];
 
-            const response = await fetch(`/color?=value=${color}`)
+            fetch(`http://127.0.0.1:59531/led?r=255&g=0&b=0`)
+            /*
+            const response = await fetch(`/color?value=${color}`)
             if (!response.ok) {
                 throw new Error(`Response status: ${response.status}`)
             }
+            */
         
-            const json = await response.json()
-            console.log(color ,json)
+            
+            //const json = await response.json()
+            //console.log(color ,json)
 
             
             root.style.setProperty('--primary-color', theme.primary);
@@ -849,7 +850,7 @@ document.addEventListener('DOMContentLoaded', function() {
         else 
             rLevel == 0
 
-        const response = await fetch(`/sport?cmd=SpeedLevel&data=${rLevel}`)
+        const response = await fetch(`${_URL}/sport?cmd=SpeedLevel&data=${rLevel}`)
         if (!response.ok) {
             throw new Error(`Response status: ${response.status}`)
         }
@@ -864,7 +865,7 @@ document.addEventListener('DOMContentLoaded', function() {
         else
             rHeight == 0.5
 
-        const response = await fetch(`/sport?cmd=BodyHeight&data=${rHeight}`)
+        const response = await fetch(`${_URL}/sport?cmd=BodyHeight&data=${rHeight}`)
         if (!response.ok) {
             throw new Error(`Response status: ${response.status}`)
         }
