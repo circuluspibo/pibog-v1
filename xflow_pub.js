@@ -3,8 +3,25 @@ const readline = require("readline");
 
 // 1. MQTT 및 설정 값
 const brokerUrl = "mqtt://127.0.0.1:1883";
-const robotId = "r1";
+const robotId = "H1";
 let sequence = 1;
+const statusData = {
+  id: robotId,
+  x: 1.5, y: 1.5, z: 1.5,
+  sequence: 4,
+  workingState: "patrol",
+  soc: 0,
+  errorCode: [],
+  deviceHealth: "",
+  custom: {
+    q_x: 0.0, q_y: 0.0, q_z: 0.0, q_w: 1.0,
+    bat_pct: 73.0, bat_vol: 50871.0, bat_amp: 1944.0, bat_temp: 27.0,
+    cpu_temp: 51.77, cpu_usage: 36.13, cpu_mem: 33.87, cpu_freq: 960.0,
+    motor_temp_max: 50.0, motor_temp_avg: 39.21, motor_err_cnt: 0,
+    motor_temps: [32.0, 32.0, 32.0, 32.0, 37.0, 39.0, 32.0, 33.0, 32.0, 32.0, 40.0, 40.0, 33.0, 39.0, 42.0, 44.0, 45.0, 44.0, 42.0, 45.0, 40.0, 41.0, 50.0, 45.0, 45.0, 45.0, 43.0, 40.0, 41.0],
+    motor_errors: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+  },
+};
 
 const client = mqtt.connect(brokerUrl, {
   clientId: "xms-host-manager",
@@ -81,7 +98,7 @@ function publishCommand(command) {
     payload.recipeId = "1";
   } else if (command === "status") {
     // 기존에 작성하셨던 복잡한 상태 데이터를 여기에 할당
-    payload = { id: robotId, workingState: "patrol", custom: { bat_pct: 73.0 } }; 
+    payload = { id: robotId, workingState: "patrol", custom: statusData }; 
   }
 
   client.publish(topic, JSON.stringify(payload), { qos: 1 }, (err) => {
