@@ -285,8 +285,8 @@ def processing_thread():
                             led(255, 255, 255)
                             tts_v2("오늘도 좋은 하루입니다.", 31)
                             _save_ppe(img, fn)
-                            arm("lowWave")
-                            arm("Release_Arm")
+                            #arm("lowWave")
+                            #arm("Release_Arm")
                         threading.Thread(
                             target=_ppe_action,
                             args=(crop.copy(), f"ppe_{label}_{int(cur_time)}.jpg"),

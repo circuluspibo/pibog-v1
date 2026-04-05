@@ -39,6 +39,7 @@ const rl = readline.createInterface({
 
 // 2. 명령어 메뉴 정의
 const COMMAND_INFO = {
+  sync : "작업 준비",
   start: "작업 시작 (jobId: 1, recipeId: 1)",
   stop: "작업 중지",
   end: "작업 종료",
@@ -117,7 +118,8 @@ function publishCommand(command) {
         console.log(`\n📤 [PUBLISH] rcp Topic: ${topic}`);
         console.log(`📦 Payload: ${JSON.stringify(payload)}`);
       }
-    })    
+    })   
+  } 
 }
 
-client.on("error", (err) => console.error("⚠️ MQTT Error:", err));
+client.on("error", (err) => console.error("⚠️ MQTT Error:", err))
