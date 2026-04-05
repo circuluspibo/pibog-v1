@@ -9,10 +9,14 @@ const statusData = {
   id: robotId,
   x: 1.5, y: 1.5, z: 1.5,
   sequence: 4,
-  workingState: "patrol",
+  workingState : "R", // I, C, P
+  taskType: "Patrol", // Return // Null
+  detectionEvent : "", //ObstacleDetected PersonWithHelmet PersonWithoutHelmet
+  motionState : "", // T C X A
+  heading : "",
   soc: 0,
   errorCode: [],
-  deviceHealth: "",
+  deviceHealth: "Ok", // fault
   custom: {
     q_x: 0.0, q_y: 0.0, q_z: 0.0, q_w: 1.0,
     bat_pct: 73.0, bat_vol: 50871.0, bat_amp: 1944.0, bat_temp: 27.0,
@@ -100,13 +104,20 @@ function publishCommand(command) {
     // 기존에 작성하셨던 복잡한 상태 데이터를 여기에 할당
     payload = { id: robotId, workingState: "patrol", custom: statusData }; 
   }
-
-  client.publish(topic, JSON.stringify(payload), { qos: 1 }, (err) => {
-    if (!err) {
-      console.log(`\n📤 [PUBLISH] Topic: ${topic}`);
-      console.log(`📦 Payload: ${JSON.stringify(payload)}`);
-    }
-  });
+  if (command === "status") {
+    client.publish(`xflow/hcp/v1/${robotId}/cmd/${command}`, JSON.stringify(payload), { qos: 1 }, (err) => {
+      if (!err) {
+        console.log(`\n📤 [PUBLISH] hcp Topic: ${topic}`);
+        console.log(`📦 Payload: ${JSON.stringify(payload)}`);
+      }
+    })
+  } else {
+    client.publish(topic, JSON.stringify(payload), { qos: 1 }, (err) => {
+      if (!err) {
+        console.log(`\n📤 [PUBLISH] rcp Topic: ${topic}`);
+        console.log(`📦 Payload: ${JSON.stringify(payload)}`);
+      }
+    })    
 }
 
 client.on("error", (err) => console.error("⚠️ MQTT Error:", err));
