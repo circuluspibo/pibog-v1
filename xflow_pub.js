@@ -5,6 +5,14 @@ const readline = require("readline");
 const brokerUrl = "mqtt://127.0.0.1:1883";
 const robotId = "H1";
 let sequence = 1;
+
+/*
+📩 arcos/robot/pion/robot_data -> {"batteryPower":36,"batteryVol":46965,"batteryAmp":-1877,"batteryTemp":31,"cpuUsage":44.61,"cpuMemory":37.62,"cpuTemp":54.54,"cpuFrequency":1356,"motorTempMax":52,"motorTempAvg":39.66,"motorErrCnt":0,"motorTemp":[32,32,32,33,40,41,33,34,33,33,43,42,34,40,44,46,46,45,42,42,33,33,52,47,48,47,44,39,40],"motorError":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"_ts":1775437932370}
+📩 arcos/robot/pion/position -> {"x":0.0306,"y":-0.0135,"z":-0.0479,"q_x":-0.003,"q_y":-0.0641,"q_z":0.0489,"q_w":0.9967,"_ts":1775437932370}
+
+*/
+
+
 const statusData = {
   id: robotId,
   x: 1.5, y: 1.5, z: 1.5,
