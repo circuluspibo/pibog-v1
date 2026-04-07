@@ -1,10 +1,11 @@
 const mqtt = require("mqtt");
 
 // 브로커 주소 수정
-const brokerUrl = "mqtt://127.0.0.1:1883";
-const _ID = '5480f373-e20c-4db9-90cb-9d49f56aac70'
-const _IP = '192.168.21.19'
-const _SEQ = '669cd346-2b89-4eda-93bc-4e833d711d63'
+//const brokerUrl = "mqtt://192.168.0.34:1883";
+const brokerUrl = "mqtt://192.168.10.202:1883";
+const _ID = '531e143e-fc73-4f4d-b772-27883ccb4e19'
+const _IP = '192.168.0.34'
+const _SEQ = '6cd69007-9a60-47e3-b7b2-a64630888371'
 
 const client = mqtt.connect(brokerUrl, {
   clientId: "monitor-client",
@@ -13,6 +14,7 @@ const client = mqtt.connect(brokerUrl, {
 
 client.on("connect", () => {
   console.log("✅ Connected to broker");
+  
   client.subscribe("xflow/rcp/v1/H1/cmd/+", (err) => {
     if (err) {
       console.error("❌ Subscribe error:", err);
@@ -20,6 +22,7 @@ client.on("connect", () => {
       console.log("📡 Subscribed to xflow");
     }
   });
+  
 });
 
 client.on("message", async (topic, message) => {
@@ -50,6 +53,7 @@ client.on("message", async (topic, message) => {
       break;
     default:
       console.log('not allowed',cmd)
+      return
   }
 
   try {

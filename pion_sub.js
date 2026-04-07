@@ -77,7 +77,7 @@ console.log(statusData);
 const mqtt = require("mqtt");
 
 // 브로커 주소 수정
-const brokerUrl = "mqtt://192.168.21.19:1883";
+const brokerUrl = "mqtt://192.168.0.34:1883";
 
 const client = mqtt.connect(brokerUrl, {
   clientId: "monitor-client",

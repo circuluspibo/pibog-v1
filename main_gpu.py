@@ -697,7 +697,7 @@ subprocess.Popen(["play", 'intel_inside.mp3']) # async
 upload_all_csv()
 
 # Kiosk 모드로 띄울 URL
-url = "http://127.0.0.1:59531/web/pion.html"
+url = "http://127.0.0.1:59531/web/pion2.html"
 
 # Kiosk 모드로 Chromium 실행
 subprocess.Popen(['chromium', '--kiosk', url],

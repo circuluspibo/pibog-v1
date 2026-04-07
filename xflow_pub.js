@@ -2,7 +2,8 @@ const mqtt = require("mqtt");
 const readline = require("readline");
 
 // 1. MQTT 및 설정 값
-const brokerUrl = "mqtt://127.0.0.1:1883";
+//const brokerUrl = "mqtt://192.168.0.34:1883";
+const brokerUrl = "mqtt://192.168.10.202:1883";
 const robotId = "H1";
 let sequence = 1;
 
@@ -114,9 +115,10 @@ function publishCommand(command) {
     payload = { id: robotId, workingState: "patrol", custom: statusData }; 
   }
   if (command === "status") {
+    const st = `xflow/hcp/v1/${robotId}/cmd/${command}`
     client.publish(`xflow/hcp/v1/${robotId}/cmd/${command}`, JSON.stringify(payload), { qos: 1 }, (err) => {
       if (!err) {
-        console.log(`\n📤 [PUBLISH] hcp Topic: ${topic}`);
+        console.log(`\n📤 [PUBLISH] hcp Topic: ${st}`);
         console.log(`📦 Payload: ${JSON.stringify(payload)}`);
       }
     })

@@ -1,6 +1,6 @@
 alert("Nice to meet you again! 260401200")
 
-const _URL = 'http://192.168.21.19:58521'
+const _URL = 'http://192.168.0.34:58521'
 
 // 버튼 클릭 효과 및 상태 변화 시뮬레이션
 const list_tts = []

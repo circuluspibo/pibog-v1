@@ -48,12 +48,12 @@ def getHash(text):
   hash_func.update(text.encode('utf-8'))
   return hash_func.hexdigest()
 
-_IP = "192.168.21.19"
+_IP = "192.168.0.34"
 
 # "192.168.12.117" - g1 basic
 # "192.168.12.112" - g1 plus local
 # "192.168.12.128" - g1 basic pohang
-# "192.168.21.19" - g1 plus
+# "192.168.0.34" - g1 plus
 
 print(_IP)
 
