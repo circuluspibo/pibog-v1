@@ -58,7 +58,7 @@ client.on("message", async (topic, message) => {
   const msg = message.toString() || "(null)";
   console.log(`📩 ${topic} -> ${msg}`);
 
-  const cmd = topic.replace('xflow/rcp/v1/H1/cmd/','')
+  let cmd = topic.replace('xflow/rcp/v1/H1/cmd/','')
   console.log('cmd',cmd)
   let url = ''
 
