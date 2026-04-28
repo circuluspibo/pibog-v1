@@ -64,7 +64,7 @@ capture_q      = queue.Queue(maxsize=4)
 def play(path):
     with open(path,"rb") as f:
         requests.post(f"http://{_IP}:59521/audio",
-                      files={"audio_file":(f"{filename}.wav",f,"audio/wav")})
+                      files={"audio_file":(f"{path}",f,"audio/mp3")})
 
 def q_put(q: queue.Queue, item):
     try:
