@@ -61,6 +61,11 @@ stream_q_main  = queue.Queue(maxsize=1)
 stream_q_depth = queue.Queue(maxsize=1)
 capture_q      = queue.Queue(maxsize=4)
 
+def play(path):
+    with open(path,"rb") as f:
+        requests.post(f"http://{_IP}:59521/audio",
+                      files={"audio_file":(f"{filename}.wav",f,"audio/wav")})
+
 def q_put(q: queue.Queue, item):
     try:
         q.get_nowait()
@@ -284,6 +289,7 @@ def processing_thread():
                         def _ppe_action(img, fn):
                             led(255, 255, 255)
                             tts_v2("오늘도 좋은 하루입니다.", 31)
+                            play('welcome.mp3')                          
                             _save_ppe(img, fn)
                             #arm("lowWave")
                             #arm("Release_Arm")
@@ -298,6 +304,7 @@ def processing_thread():
                         def _face_action(img, fn):
                             led(255, 0, 0)
                             tts_v2("안전모를 착용해 주세요", 31)
+                            play('alarm.mp3')
                             arm("Refuse")
                             arm("Release_Arm")
                             _save_face(img, fn)
