@@ -155,12 +155,25 @@ model_txt = "./models/Qwen3-VL-4B-it-ov-awq" #gemma-3-4b-it-ov-awq" #snapshot_do
 model_stt = "./models/whisper-large-v3-turbo-ov-int4"#snapshot_download(repo_id='circulus/whisper-large-v3-turbo-ov')
 
 config = {
+    # 1. 지연시간 최소화 및 자원 집중
     "PERFORMANCE_HINT": "LATENCY",
-    "NUM_STREAMS": "AUTO", 
-    "CACHE_DIR": "./ov_cache",
-    "GPU_HOST_TASK_PRIORITY": "HIGH"
-}
+    "EXECUTION_MODE_HINT" : "PERFORMANCE", # 추가 햇는데 나을지는
+    "DYNAMIC_QUANTIZATION_GROUP_SIZE": "32",
+    "MODEL_PRIORITY": "HIGH",
+    "NUM_STREAMS": "1",
 
+    # 2. 메모리 및 정밀도 최적화
+    "KV_CACHE_PRECISION": "u8",# KV 캐시 압축 (TPS 향상 핵심)
+    "INFERENCE_PRECISION_HINT": "f16", # GPU 연산 가속
+
+    # 3. 실행 우선순위 극대화
+    "GPU_QUEUE_PRIORITY": "HIGH",
+    "GPU_HOST_TASK_PRIORITY": "HIGH",
+    "GPU_QUEUE_THROTTLE": "LOW",
+
+    "CACHE_DIR": "./ov_cache",
+    #"ENABLE_CPU_PINNING": "YES",# CPU-GPU 협업 효율 증대 -CPU 로 추론할때 전용으로 묶는것.. 
+}
 pipe_stt = ov_genai.WhisperPipeline(model_stt,device="GPU", config={"PERFORMANCE_HINT": "LATENCY"})
 
 token_txt = AutoTokenizer.from_pretrained(model_txt)
