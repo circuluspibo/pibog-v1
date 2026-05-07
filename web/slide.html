@@ -411,7 +411,7 @@
     <div class="corner corner-br"></div>
     <div class="panel-label">◈ Digital Twin Live Feed</div>
     <iframe id="digital-twin-iframe"
-      src="about:blank"
+      src="http://192.168.68.116:50003/robot-only"
       title="Digital Twin Feed"
       allow="autoplay; fullscreen"
       sandbox="allow-scripts allow-same-origin allow-forms allow-popups">
@@ -717,13 +717,14 @@ function setMode(m) {
   document.body.className = `mode-${m}`;
   document.getElementById('btn-window').classList.toggle('active', m === 'window');
   document.getElementById('btn-full').classList.toggle('active', m === 'full');
-
+  /*
   // Load digital twin iframe only in window mode
   if (m === 'window') {
     if (iframe.src === 'about:blank') {
       iframe.src = CONFIG.digitalTwin;
     }
   }
+  */
 }
 
 // ── UI UPDATES ────────────────────────────────────────────────
