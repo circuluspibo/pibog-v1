@@ -36,7 +36,7 @@ def _hash(text: str) -> str:
     return h.hexdigest()
 
 
-def _generate_audio(text: str, pipe_tts, conf_tts, voice: int = 31, lang: str = "en") -> str:
+def _generate_audio(text: str, pipe_tts, conf_tts, voice: int = 6, lang: str = "en") -> str:
     """TTS 추론 → WAV 저장 → 파일 경로 반환"""
     filename = _hash(text)
     out_path = f"{OUTPUT_DIR}/{filename}.wav"
@@ -96,7 +96,7 @@ def create_slide_router(pipe_tts, conf_tts) -> APIRouter:
         page:   int  = 1,
         text:   str  = "",
         motion: str  = "",
-        voice:  int  = 31,
+        voice:  int  = 6,
         lang:   str  = "en",
     ):
         start = t.time()
