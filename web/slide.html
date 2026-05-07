@@ -475,12 +475,12 @@
 
 <script>
 // ── CONFIG ───────────────────────────────────────────────────
-const _IP = '192.168.68.116'; // ← IP:PORT only — change here
+const DIGITAL_TWIN_IP = '192.168.68.116:50002'; // ← IP:PORT only — change here
 
 const CONFIG = {
   pdfUrl:      'redhat.pdf',
-  apiBase:     `http://${_IP}:59530`,
-  digitalTwin: `http://${_IP}:50002/dashboard`,
+  apiBase:     'http://192.168.68.116:59530',
+  digitalTwin: `http://${DIGITAL_TWIN_IP}/dashboard`,
   pollMs:      2000,  // polling interval (ms)
   scale:       2.0,   // render resolution multiplier
 };
@@ -591,12 +591,12 @@ const MOTIONS = {
 
 
 const state = {
-  pdf:         null,
-  totalPages:  0,
-  currentPage: 1,
-  mode:        'window',  // 'window' | 'full'
-  rendering:   false,
-  pollTimer:   null,
+  pdf:          null,
+  totalPages:   0,
+  currentPage:  1,
+  mode:         'window',
+  rendering:    false,
+  autoRunning:  true,   // false = 수동 조작으로 자동 진행 중단됨
 };
 
 // ── DOM REFS ─────────────────────────────────────────────────
@@ -655,19 +655,29 @@ async function renderPage(pageNum, animate = false) {
 }
 
 // ── NAVIGATION ───────────────────────────────────────────────
-async function goToSlide(n, animate = true) {
+// manualOverride: true → 버튼/키보드 조작, false → 자동 진행
+async function goToSlide(n, manualOverride = false) {
   const target = Math.max(1, Math.min(n, state.totalPages));
-  if (target === state.currentPage && animate) return;
+
+  // 같은 페이지 재진입은 수동 조작일 때만 막음 (자동 진행은 항상 실행)
+  if (manualOverride && target === state.currentPage) return;
+
   state.currentPage = target;
-  await renderPage(target, animate);
+  await renderPage(target, true);
   updateUI();
+
+  // 수동 조작 시 진행 중인 자동 시퀀스 중단
+  if (manualOverride) state.autoRunning = false;
+
   notifyApi(target);
 }
 
-function prevSlide() { goToSlide(state.currentPage - 1); }
-function nextSlide() { goToSlide(state.currentPage + 1); }
+function prevSlide() { goToSlide(state.currentPage - 1, true); }
+function nextSlide() { goToSlide(state.currentPage + 1, true); }
 
-// ── API NOTIFY ───────────────────────────────────────────────
+// ── API NOTIFY + 자동 페이지 진행 ────────────────────────────
+// 흐름: /slide 호출 → 서버가 TTS 재생 + 3초 대기 후 응답
+//       → result:true 받으면 다음 페이지로 자동 전진
 async function notifyApi(page) {
   const text   = SCRIPTS[page] ?? SCRIPTS.default;
   const motion = MOTIONS[page] ?? MOTIONS.default;
@@ -675,44 +685,31 @@ async function notifyApi(page) {
   let url = `${CONFIG.apiBase}/slide?page=${page}&text=${encodeURIComponent(text)}`;
   if (motion) url += `&motion=${encodeURIComponent(motion)}`;
 
+  showSpeech(text, motion);   // 즉시 UI에 발화 내용 표시
+  setStatus('waiting', 'Speaking...');
+
   try {
-    await fetch(url, { method: 'GET', mode: 'cors' });
+    const res  = await fetch(url, { method: 'GET', mode: 'cors' });
+    const data = await res.json();
     setStatus('live', 'API Connected');
-  } catch {
-    setStatus('error', 'API Unreachable');
-  }
-  showSpeech(text, motion);
-}
 
-// ── POLLING ───────────────────────────────────────────────────
-// Poll the API; if response contains a page number, auto-advance
-async function pollApi() {
-  try {
-    const res = await fetch(`${CONFIG.apiBase}/slide?page=${state.currentPage}`, {
-      method: 'GET', mode: 'cors'
-    });
-    setStatus('live', 'Live');
-
-    if (res.ok) {
-      // API may optionally return JSON { page: N } to drive slide change
-      const ct = res.headers.get('content-type') || '';
-      if (ct.includes('json')) {
-        const data = await res.json();
-        if (data.page && data.page !== state.currentPage) {
-          await goToSlide(data.page);
-          showToast(`Auto-advanced to slide ${data.page}`);
-        }
+    // 서버 응답 후 자동으로 다음 페이지 진행
+    // (수동 조작으로 이미 다른 페이지로 이동했으면 중단)
+    if (data.result && state.currentPage === page) {
+      const next = page + 1;
+      if (next <= state.totalPages) {
+        await goToSlide(next, false);   // 자동 진행
+      } else {
+        setStatus('live', 'Presentation Complete');
       }
     }
   } catch {
-    setStatus('waiting', 'Waiting for API');
+    setStatus('error', 'API Unreachable');
   }
 }
 
-function startPolling() {
-  if (state.pollTimer) clearInterval(state.pollTimer);
-  state.pollTimer = setInterval(pollApi, CONFIG.pollMs);
-}
+// polling 제거 — notifyApi 응답 기반으로 자동 진행하므로 불필요
+function startPolling() { /* no-op */ }
 
 // ── MODE ──────────────────────────────────────────────────────
 function setMode(m) {
