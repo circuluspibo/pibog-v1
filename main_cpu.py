@@ -25,6 +25,7 @@ import os
 from datetime import datetime
 from monitor import CPUPowerMonitor
 import subprocess
+from slide import create_slide_router
 
 def play_sound(file_path):
     subprocess.run(["play", file_path])
@@ -54,6 +55,7 @@ app = FastAPI()
 
 app.mount("/web", StaticFiles(directory="web"), name="web")
 app.mount("/webfonts", StaticFiles(directory="webfonts"), name="webfonts")
+app.include_router(create_slide_router(pipe_tts, conf_tts))
 
 app.add_middleware(
     CORSMiddleware,
