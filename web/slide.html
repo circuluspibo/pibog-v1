@@ -475,12 +475,12 @@
 
 <script>
 // ── CONFIG ───────────────────────────────────────────────────
-const DIGITAL_TWIN_IP = '192.168.68.116:50002'; // ← IP:PORT only — change here
+const DIGITAL_TWIN_IP = '192.168.68.116'; // ← IP:PORT only — change here
 
 const CONFIG = {
   pdfUrl:      'redhat.pdf',
-  apiBase:     'http://127.0.0.1:59530',
-  digitalTwin: `http://${DIGITAL_TWIN_IP}/dashboard`,
+  apiBase:     `http://${_IP}:59530`,
+  digitalTwin: `http://${_IP}:50002/dashboard`,
   pollMs:      2000,  // polling interval (ms)
   scale:       2.0,   // render resolution multiplier
 };
