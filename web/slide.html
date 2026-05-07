@@ -438,7 +438,13 @@
         </div>
       </div>
       <div style="flex:1; min-width:0;">
-        <div id="speech-label">◈ Robot Speech</div>
+        <div id="speech-label" style="display:flex;align-items:center;gap:8px;">
+          ◈ Robot Speech
+          <span id="motion-badge" style="display:none;font-size:9px;letter-spacing:0.12em;
+            text-transform:uppercase;background:rgba(238,0,0,0.15);border:1px solid rgba(238,0,0,0.4);
+            color:var(--rh-accent);padding:2px 7px;border-radius:3px;font-family:inherit;">
+          </span>
+        </div>
         <div id="speech-text"></div>
       </div>
     </div>
@@ -469,11 +475,14 @@
 
 <script>
 // ── CONFIG ───────────────────────────────────────────────────
+const DIGITAL_TWIN_IP = '192.168.68.116:50002'; // ← IP:PORT only — change here
+
 const CONFIG = {
-  pdfUrl:    'redhat.pdf',
-  apiBase:   'http://127.0.0.1:59530',
-  pollMs:    2000,   // polling interval (ms)
-  scale:     2.0,    // render resolution multiplier
+  pdfUrl:      'redhat.pdf',
+  apiBase:     'http://127.0.0.1:59530',
+  digitalTwin: `http://${DIGITAL_TWIN_IP}/dashboard`,
+  pollMs:      2000,  // polling interval (ms)
+  scale:       2.0,   // render resolution multiplier
 };
 
 // ── SLIDE SCRIPTS (robot utterance per page) ─────────────────
@@ -558,7 +567,29 @@ const SCRIPTS = {
       "We look forward to building this future together.",
 };
 
-// ── STATE ────────────────────────────────────────────────────
+// ── SLIDE MOTIONS (robot body motion per page) ───────────────
+// Available: both_pose | clap | curious | greet | left_pose | look_around | right_pose
+// Set to null to send no motion for that slide.
+const MOTIONS = {
+  default:  null,
+  1:        'greet',        // Opening — wave hello to the audience
+  2:        'look_around',  // Scanning the environment, explaining requirements
+  3:        'both_pose',    // Presenting three partners with open arms
+  4:        'curious',      // Pondering the brain analogy
+  5:        'right_pose',   // Pointing to the WINTEL standard concept
+  6:        'left_pose',    // Gesturing to the architecture diagram
+  7:        'both_pose',    // Confident pose — highlighting the performance leap
+  8:        'look_around',  // Surveying all the specialized engines
+  9:        'right_pose',   // Pointing to the AI Suite pipeline
+  10:       'left_pose',    // Presenting the full runtime stack
+  11:       'greet',        // Inviting audience to watch the demo
+  12:       'curious',      // Looking at the digital twin feed
+  13:       'both_pose',    // Open arms — RHEL as the foundation
+  14:       'look_around',  // Explaining two key RHEL capabilities
+  15:       'clap',         // Closing — thank you and applause
+};
+
+
 const state = {
   pdf:         null,
   totalPages:  0,
@@ -638,15 +669,19 @@ function nextSlide() { goToSlide(state.currentPage + 1); }
 
 // ── API NOTIFY ───────────────────────────────────────────────
 async function notifyApi(page) {
-  const text = SCRIPTS[page] || SCRIPTS.default;
-  const url  = `${CONFIG.apiBase}/slide?page=${page}&text=${encodeURIComponent(text)}`;
+  const text   = SCRIPTS[page] ?? SCRIPTS.default;
+  const motion = MOTIONS[page] ?? MOTIONS.default;
+
+  let url = `${CONFIG.apiBase}/slide?page=${page}&text=${encodeURIComponent(text)}`;
+  if (motion) url += `&motion=${encodeURIComponent(motion)}`;
+
   try {
     await fetch(url, { method: 'GET', mode: 'cors' });
     setStatus('live', 'API Connected');
   } catch {
     setStatus('error', 'API Unreachable');
   }
-  showSpeech(text);
+  showSpeech(text, motion);
 }
 
 // ── POLLING ───────────────────────────────────────────────────
@@ -689,7 +724,7 @@ function setMode(m) {
   // Load digital twin iframe only in window mode
   if (m === 'window') {
     if (iframe.src === 'about:blank') {
-      iframe.src = `${CONFIG.apiBase}/digital-twin`;
+      iframe.src = CONFIG.digitalTwin;
     }
   }
 }
@@ -723,12 +758,23 @@ function showToast(msg) {
 }
 
 // ── SPEECH DISPLAY ────────────────────────────────────────────
-function showSpeech(text) {
-  const bar  = document.getElementById('speech-bar');
-  const textEl = document.getElementById('speech-text');
-  // reset then animate in
+function showSpeech(text, motion) {
+  const bar     = document.getElementById('speech-bar');
+  const textEl  = document.getElementById('speech-text');
+  const motionEl = document.getElementById('motion-badge');
+
   bar.classList.remove('visible');
   textEl.textContent = '';
+
+  if (motionEl) {
+    if (motion) {
+      motionEl.textContent = `▶ ${motion}`;
+      motionEl.style.display = 'inline-block';
+    } else {
+      motionEl.style.display = 'none';
+    }
+  }
+
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
       textEl.textContent = text;
