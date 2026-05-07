@@ -741,7 +741,8 @@ function showSpeech(text) {
 
 function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
 
-// ── KEYBOARD SHORTCUTS ────────────────────────────────────────document.addEventListener('keydown', e => {
+// ── KEYBOARD SHORTCUTS ────────────────────────────────────────
+document.addEventListener('keydown', e => {
   if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === ' ') {
     e.preventDefault(); nextSlide();
   } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
