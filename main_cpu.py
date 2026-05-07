@@ -55,7 +55,6 @@ app = FastAPI()
 
 app.mount("/web", StaticFiles(directory="web"), name="web")
 app.mount("/webfonts", StaticFiles(directory="webfonts"), name="webfonts")
-app.include_router(create_slide_router(pipe_tts, conf_tts))
 
 app.add_middleware(
     CORSMiddleware,
@@ -73,6 +72,7 @@ path_tts = snapshot_download(repo_id="rippertnt/on-vits2-multi-tts-v1", allow_pa
 pipe_tts = core.compile_model(core.read_model(model=f"{path_tts}/all_base_ov.xml"), device_name="CPU", config={"PERFORMANCE_HINT": "LATENCY", "INFERENCE_NUM_THREADS" : 4 })
 conf_tts = utils.get_hparams_from_file(hf_hub_download(repo_id="rippertnt/on-vits2-multi-tts-v1", filename="all_base.json"))
 
+app.include_router(create_slide_router(pipe_tts, conf_tts))
 
 @app.get("/")
 def main():
