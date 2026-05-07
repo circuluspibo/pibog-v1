@@ -62,7 +62,7 @@ def _generate_audio(text: str, pipe_tts, conf_tts, voice: int = 6, lang: str = "
 
 async def _fire_motion(motion: str) -> None:
     """모션 서버에 비동기 POST — 실패해도 slide 흐름에 영향 없음"""
-    url  = f"{MOTION_SERVER}/motions/run"
+    url  = f"{MOTION_SERVER}/motions/run/{motion}.json"
     body = {"filename": f"{motion}.json"}
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
