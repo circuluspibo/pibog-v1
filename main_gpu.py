@@ -246,7 +246,7 @@ async def process_stream(streamer, isStream=True, isPlay=0, lang='en'):
         # ---------------------
         # 🔥 Sentence 모드 처리
         # ---------------------
-        elif "." in new_token or "\n" in new_token:
+        elif "." in new_token or "\n" in new_token or "?" in new_token or "!" in new_token: 
             sentence += new_token
             if len(sentence) > 3:
 
@@ -260,7 +260,7 @@ async def process_stream(streamer, isStream=True, isPlay=0, lang='en'):
 
                 print(sentence)
                 yield sentence
-                await asyncio.sleep(0)
+                await asyncio.sleep(10)
                 sentence = ""
 
         else:
@@ -274,7 +274,7 @@ async def process_stream(streamer, isStream=True, isPlay=0, lang='en'):
                 params={"text": sentence, "lang": lang, "voice": 31}
             )        
         yield sentence
-        await asyncio.sleep(0)
+        await asyncio.sleep(10)
 
     # ---------------------------------
     # 🔥 token/s 계산
@@ -481,7 +481,7 @@ def txt2chat(prompt : str ,system = _SYSTEM, isPlay = 0, lang='en'): # gen or me
   t1.start()
 
   out = process_stream(streamer, False, isPlay,lang)
-  return StreamingResponse(out, media_type='text/event-stream')
+  return StreamingResponse(out, media_type='text/plain; charset=utf-8', headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Content-Type-Options": "nosniff"})
 
 @app.get("/v1/rag/txt2chat", summary="문장 기반의 chatgpt 스타일 구현")
 def txt2rag(prompt : str ,system = _SYSTEM, isPlay = 0, lang='en'): # gen or med
@@ -537,8 +537,8 @@ def txt2rag(prompt : str ,system = _SYSTEM, isPlay = 0, lang='en'): # gen or med
   t1.start()
 
   out = process_stream(streamer, False, isPlay,lang)
-  return StreamingResponse(out, media_type='text/event-stream')
-
+  #return StreamingResponse(out, media_type='text/event-stream')
+  return StreamingResponse(out, media_type='text/plain; charset=utf-8', headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Content-Type-Options": "nosniff"})
 
 
 @app.get("/v2/img2chat", summary="문장 기반의 chatgpt 스타일 구현")
@@ -586,7 +586,8 @@ def img2chat2(prompt = "" ,system = _SYSTEM, isPlay = 0, lang='en'): # gen or me
   t1.start()
 
   out = process_stream(streamer, False, isPlay,lang)
-  return StreamingResponse(out, media_type='text/event-stream')
+  #return StreamingResponse(out, media_type='text/event-stream')
+  return StreamingResponse(out, media_type='text/plain; charset=utf-8', headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Content-Type-Options": "nosniff"})
 
 @app.post("/v1/img2chat", summary="문장 기반의 chatgpt 스타일 구현")
 def img2chat(file : UploadFile = File(...), prompt = "" ,system = _SYSTEM, isPlay = 0, lang='en'): # gen or med
@@ -630,7 +631,8 @@ def img2chat(file : UploadFile = File(...), prompt = "" ,system = _SYSTEM, isPla
   t1.start()
 
   out = process_stream(streamer, False, isPlay, lang)
-  return StreamingResponse(out, media_type='text/event-stream')
+  #return StreamingResponse(out, media_type='text/event-stream')
+  return StreamingResponse(out, media_type='text/plain; charset=utf-8', headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Content-Type-Options": "nosniff"})    
 
 @app.get("/v1/rag/img2chat", summary="RAG + Image Chat")
 @app.post("/v1/rag/img2chat", summary="RAG + Image Chat")
@@ -674,8 +676,8 @@ def img2rag( prompt="", system=_SYSTEM, isPlay=0, lang='en',):
 
     # 🔥 기존 streaming 유지
     out = process_stream(streamer, False, isPlay, lang)
-    return StreamingResponse(out, media_type="text/event-stream")
-
+    #return StreamingResponse(out, media_type="text/event-stream")
+    return StreamingResponse(out, media_type='text/plain; charset=utf-8', headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Content-Type-Options": "nosniff"})
 
 @app.post("/v1/stt", summary="음성을 인식합니다.")
 def stt(file : UploadFile = File(...), lang="ko", isPlay=0):
