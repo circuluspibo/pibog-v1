@@ -469,7 +469,7 @@ def mic_thread_func():
 
                     if results:
                         top = results[0]
-                        print(f"[AEC] 🔥 {top['cls']} ({top['prob']:.2f})"
+                        print(f"[AEC] 🔥 {top['cls']} ({top['prob']:.2f})")
 
                         state["audio"] = {
                             "results": results,
