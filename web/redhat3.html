@@ -1576,7 +1576,7 @@ async function sendTxtMsg(message){
   lastTime=Date.now();addMsg(message,'user');
   const b=addMsg('','ai');b.classList.add('streaming');
   try{
-    const resp=await fetch(`${API_BASE}/txt2chat?`+new URLSearchParams({prompt:message,system:currentSystem,isPlay:'0',lang:currentLang}));
+    const resp=await fetch(`${API_BASE}/rag/txt2chat?`+new URLSearchParams({prompt:message,system:currentSystem,isPlay:'1',lang:currentLang}));
     if(!resp.ok)throw new Error();
     const reader=resp.body.getReader(),dec=new TextDecoder();let full='',lastEnd=0;
     while(true){
@@ -1596,7 +1596,7 @@ async function sendImgMsg(message='이미지를 설명해주세요'){
   const b=addMsg('','ai');b.classList.add('streaming');
   try{
     const fd=new FormData();fd.append('file',currentImage);
-    const resp=await fetch(`${API_BASE}/img2chat?`+new URLSearchParams({prompt:message,system:currentSystem,isPlay:'0',lang:currentLang}),{method:'POST',body:fd});
+    const resp=await fetch(`${API_BASE}/rag/img2chat?`+new URLSearchParams({prompt:message,system:currentSystem,isPlay:'1',lang:currentLang}),{method:'POST',body:fd});
     if(!resp.ok)throw new Error();
     const reader=resp.body.getReader(),dec=new TextDecoder();let full='',lastEnd=0;
     while(true){
