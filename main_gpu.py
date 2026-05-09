@@ -254,7 +254,7 @@ async def process_stream(streamer, isStream=True, isPlay=0, lang='en', voice=6):
                 sentence = sentence.strip()
 
                 if int(isPlay) > 0:
-                    get("http://127.0.0.1:59530/v1/tts",params={"text": sentence, "lang": lang, "voice": voice})
+                    get("http://127.0.0.1:59530/v1/tts",params={"text": sentence, "lang": lang, "voice": voice, "isPlay" : 1})
 
                 print(sentence)
                 yield sentence
@@ -267,7 +267,7 @@ async def process_stream(streamer, isStream=True, isPlay=0, lang='en', voice=6):
     # 마지막 문장 처리
     if len(sentence) > 3:
         if int(isPlay) > 0:
-            get( "http://127.0.0.1:59530/v1/tts",params={"text": sentence, "lang": lang, "voice": voice})        
+            get( "http://127.0.0.1:59530/v1/tts",params={"text": sentence, "lang": lang, "voice": voice, "isPlay" : 1})        
         yield sentence
         await asyncio.sleep(0)
 
