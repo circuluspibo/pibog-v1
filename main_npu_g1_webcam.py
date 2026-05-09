@@ -432,6 +432,7 @@ def mic_thread_func():
     audio  = pyaudio.PyAudio()
     stream = audio.open(format=AUDIO_FORMAT, channels=AUDIO_CHANNELS,
                         rate=AUDIO_RATE,input_device_index=0, input=True, frames_per_buffer=AUDIO_CHUNK)
+    st = None
     try:
         CHUNK = 44100  # 1초 분량을 한 번에 읽음 (에러 방지용)
         while True:
@@ -439,7 +440,7 @@ def mic_thread_func():
 # 읽기 부분
             data = stream.read(CHUNK, exception_on_overflow=False)
             mono = audioop.tomono(data, 2, 1, 1)
-            converted, state = audioop.ratecv(mono, 2, 1, 44100, 16000, state)
+            converted, st = audioop.ratecv(mono, 2, 1, 44100, 16000, st)
           
             #chunk      = np.frombuffer(stream.read(AUDIO_CHUNK, exception_on_overflow=False), dtype=np.int16)
             chunk      = np.frombuffer(converted, dtype=np.int16)
