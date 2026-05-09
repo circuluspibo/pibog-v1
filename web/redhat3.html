@@ -1527,7 +1527,7 @@ const LANG_SYSTEMS={
 const LANG_VOICES={ar:2,de:6,en:8,es:11,fr:19,ja:29,ko:34,zh:66};
 const LANG_GREETINGS={en:"Hey! How's it going?",ko:'안녕! 잘 지내?',ja:'やあ！元気？',zh:'嘿！最近怎么样？',de:'Hey! Alles klar?',fr:'Salut! Ça va?',es:'¡Hola!',ar:'مرحبًا!'};
 
-let currentLang='ko',currentVoice=34,currentSystem=LANG_SYSTEMS['en'];
+let currentLang='en',currentVoice=6,currentSystem=LANG_SYSTEMS['en'];
 let isTts=true,autoSend=false;
 let ttsQueue=[],ttsPlaying=false;
 let isRec=false,mRec=null,gumStream=null,audioObj=null;
@@ -1576,7 +1576,7 @@ async function sendTxtMsg(message){
   lastTime=Date.now();addMsg(message,'user');
   const b=addMsg('','ai');b.classList.add('streaming');
   try{
-    const resp=await fetch(`${API_BASE}/rag/txt2chat?`+new URLSearchParams({prompt:message,system:currentSystem,isPlay:'1',lang:currentLang}));
+    const resp=await fetch(`${API_BASE}/rag/txt2chat?`+new URLSearchParams({prompt:message,system:currentSystem,isPlay:'1',lang:currentLang, voice:currentVoice}));
     if(!resp.ok)throw new Error();
     const reader=resp.body.getReader(),dec=new TextDecoder();let full='',lastEnd=0;
     while(true){
@@ -1596,7 +1596,7 @@ async function sendImgMsg(message='이미지를 설명해주세요'){
   const b=addMsg('','ai');b.classList.add('streaming');
   try{
     const fd=new FormData();fd.append('file',currentImage);
-    const resp=await fetch(`${API_BASE}/rag/img2chat?`+new URLSearchParams({prompt:message,system:currentSystem,isPlay:'1',lang:currentLang}),{method:'POST',body:fd});
+    const resp=await fetch(`${API_BASE}/rag/img2chat?`+new URLSearchParams({prompt:message,system:currentSystem,isPlay:'1',lang:currentLang, voice:currentVoice}),{method:'POST',body:fd});
     if(!resp.ok)throw new Error();
     const reader=resp.body.getReader(),dec=new TextDecoder();let full='',lastEnd=0;
     while(true){
