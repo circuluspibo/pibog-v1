@@ -255,7 +255,7 @@ async def process_stream(streamer, isStream=True, isPlay=0, lang='en'):
 
                 if int(isPlay) > 0:
                     get(
-                      "http://127.0.0.1:59531/v1/tts",
+                      "http://127.0.0.1:59530/v1/tts",
                       params={"text": sentence, "lang": lang, "voice": 6}
                     )
 
