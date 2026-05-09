@@ -43,6 +43,7 @@ import csv
 import os
 from datetime import datetime
 from monitor import CPUPowerMonitor
+import asyncio
 
 # support rag
 import pandas as pd
