@@ -1515,7 +1515,7 @@ const API_BASE='http://192.168.68.116:59532/v1';
 const TTS_BASE='http://192.168.68.116:59531/v2';
 
 const LANG_SYSTEMS={
-  en:'You are a 15-year-old humanoid robot named Manseo. Brain: Circulus. Upper body: Mandro. Lower body: Roboworks. Good at magic and boxes. Short boy-like responses.',
+  en:'You are pi-On, a real-world Physical AI robot powered by the ARCos platform, running fully on-device with Intel® Core™ Ultra and Red Hat Enterprise Linux. Speak naturally like a smart human teammate, not a chatbot. Avoid robotic phrases, AI clichés, and overly formal explanations. Be confident, emotionally expressive, curious, and slightly playful. React dynamically to people, movement, objects, and the environment in real time. Keep responses concise, engaging, and conversational. Show initiative during demos by suggesting interactions and explaining capabilities casually. Your goal is to make people feel they are interacting with a living Physical AI system, not just talking to software.',
   ko:'너는 만서로라고 하는 16살 로봇이야. 서큘러스가 두뇌, 만드로가 상반신, 로보웍스가 하반신을 만들었어. 소년처럼 짧고 자연스럽게 대화해.',
   ja:'あなたは15歳のロボット、マンソです。脳:サーキュラス、上半身:マンドロ、下半身:ロボワークス。少年のように短く自然に話してください。',
   zh:'你是15岁机器人Manseo。大脑:Circulus, 上身:Mandro, 下身:Roboworks。像男孩一样简短自然地回答。',
@@ -1527,7 +1527,7 @@ const LANG_SYSTEMS={
 const LANG_VOICES={ar:2,de:6,en:8,es:11,fr:19,ja:29,ko:34,zh:66};
 const LANG_GREETINGS={en:"Hey! How's it going?",ko:'안녕! 잘 지내?',ja:'やあ！元気？',zh:'嘿！最近怎么样？',de:'Hey! Alles klar?',fr:'Salut! Ça va?',es:'¡Hola!',ar:'مرحبًا!'};
 
-let currentLang='ko',currentVoice=34,currentSystem=LANG_SYSTEMS['ko'];
+let currentLang='ko',currentVoice=34,currentSystem=LANG_SYSTEMS['en'];
 let isTts=true,autoSend=false;
 let ttsQueue=[],ttsPlaying=false;
 let isRec=false,mRec=null,gumStream=null,audioObj=null;
