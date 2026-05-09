@@ -562,28 +562,28 @@ header::after {
 .dstrip-cell .du { font-family:var(--f-mono); font-size:7px; color:var(--tx-dim); }
 
 /* ══════════════════════════════════════════════
-   HUMAN PANEL — COMPLETELY REDESIGNED
+   HUMAN PANEL — 2-ROW LAYOUT
+   ROW1: [face] | [attrs 4row] | [tag 4row]
+   ROW2: [bat ——track——] [volt] [temp] [ice]
 ══════════════════════════════════════════════ */
-.human-panel {
-  flex: 0 0 auto;
-  /* taller to give face more room */
-}
+.human-panel { flex: 0 0 auto; }
 
+/* outer wrapper: column = row1 tall + row2 thin strip */
 .human-body {
-  display: flex; flex-direction: column; overflow: hidden;
-  flex-shrink: 0;
+  display: flex; flex-direction: column;
+  gap: 1px; background: var(--bdr);
+  overflow: hidden;
 }
 
-/* FACE SECTION: large face + side attrs */
-.face-section {
-  display: flex; gap: 1px; background: var(--bdr);
-  height: 200px; /* big! */
-  flex-shrink: 0;
+/* ── ROW 1: face | attrs | tags ── */
+.human-row1 {
+  display: flex; flex-direction: row; gap: 1px; background: var(--bdr);
+  height: 168px; flex-shrink: 0;
 }
 
-/* FACE IMAGE — now much larger */
+/* FACE */
 .face-box {
-  flex: 0 0 180px; position: relative; overflow: hidden;
+  flex: 0 0 160px; position: relative; overflow: hidden;
   background: var(--bg);
 }
 .face-box img {
@@ -597,36 +597,27 @@ header::after {
   font-family: var(--f-mono); font-size: 9px; color: var(--tx-dim);
   gap: 8px; letter-spacing: 2px; z-index: 2;
 }
-.face-box .fno .fi { font-size: 40px; opacity: 0.15; animation: nosig-pulse 3s ease-in-out infinite; }
-
-/* Tron scan on face */
+.face-box .fno .fi { font-size: 36px; opacity: 0.15; animation: nosig-pulse 3s ease-in-out infinite; }
 .face-box::after {
   content: ''; position: absolute; left: 0; right: 0; height: 2px; z-index: 10;
   background: linear-gradient(90deg, transparent, var(--accent-l), var(--accent), var(--accent-l), transparent);
   animation: face-scan 4s linear infinite;
-  box-shadow: 0 0 12px var(--glow4), 0 0 24px var(--glow2);
-  pointer-events: none;
+  box-shadow: 0 0 12px var(--glow4), 0 0 24px var(--glow2); pointer-events: none;
 }
 @keyframes face-scan { 0%{top:-2px;opacity:0} 5%{opacity:1} 95%{opacity:1} 100%{top:100%;opacity:0} }
-
-/* Face overlay — crosshair reticule */
-.face-reticule {
-  position: absolute; inset: 0; z-index: 9; pointer-events: none;
-}
+.face-reticule { position: absolute; inset: 0; z-index: 9; pointer-events: none; }
 .face-reticule svg { width: 100%; height: 100%; }
 
-/* ATTRS — vertical on the right */
+/* ATTRS — 4 equal rows */
 .attrs-col {
-  flex: 1 1 0;
-  display: grid;
-  grid-template-rows: 1fr 1fr 1fr 1fr;
+  flex: 0 0 150px;
+  display: grid; grid-template-rows: 1fr 1fr 1fr 1fr;
   gap: 1px; background: var(--bdr);
 }
 .attr-cell {
-  background: var(--surf2); padding: 0 14px;
+  background: var(--surf2); padding: 0 10px;
   display: flex; align-items: center; justify-content: space-between;
-  overflow: hidden; position: relative;
-  transition: background 0.2s;
+  overflow: hidden; position: relative; transition: background 0.2s;
 }
 .attr-cell::before {
   content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 2px;
@@ -635,59 +626,68 @@ header::after {
 .attr-cell:hover::before { opacity: 1; }
 .attr-cell:hover { background: rgba(0,229,255,0.04); }
 .attr-k {
-  font-family: var(--f-mono); font-size: 8px; letter-spacing: 3px;
-  color: var(--tx-dim); text-transform: uppercase;
+  font-family: var(--f-mono); font-size: 8px; letter-spacing: 2px;
+  color: var(--tx-dim); text-transform: uppercase; flex-shrink: 0;
 }
 .attr-v {
-  font-family: var(--f-head); font-size: 18px; font-weight: 700;
-  color: var(--accent-l); text-shadow: 0 0 12px var(--glow2);
+  font-family: var(--f-head); font-size: 15px; font-weight: 700;
+  color: var(--accent-l); text-shadow: 0 0 10px var(--glow2);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  text-align: right;
-  transition: text-shadow 0.3s;
+  text-align: right; transition: text-shadow 0.3s;
 }
-.attr-v.ok   { color: var(--ok);   text-shadow: 0 0 12px var(--ok-glow); }
-.attr-v.warn { color: var(--warn); text-shadow: 0 0 12px var(--warn-glow); }
+.attr-v.ok   { color: var(--ok);   text-shadow: 0 0 10px var(--ok-glow); }
+.attr-v.warn { color: var(--warn); text-shadow: 0 0 10px var(--warn-glow); }
 
-/* SYSTEM ROWS */
-.sys-rows { flex-shrink: 0; }
-.sys-row {
-  height: 26px;
-  display: flex; align-items: center; gap: 10px; padding: 0 12px;
-  background: var(--surf2); border-top: 1px solid var(--bdr);
-  font-family: var(--f-mono); font-size: 9px;
-  position: relative; overflow: hidden;
-}
-.sys-row::before {
-  content:''; position:absolute; right:0; top:0; bottom:0; width:1px;
-  background:linear-gradient(180deg,transparent,var(--accent),transparent); opacity:0.15;
-}
-.sys-row .sk { color:var(--tx-low); letter-spacing:1px; min-width:54px; font-size:8px; }
-.sys-row .sv { color:var(--accent-l); letter-spacing:1px; }
-.bat-track { flex:1; height:5px; background:var(--surf3); border:1px solid var(--bdr2); position:relative; overflow:hidden; }
-.bat-track::before { content:''; position:absolute; inset:0; background:repeating-linear-gradient(90deg,transparent,transparent 6px,rgba(0,0,0,0.3) 6px,rgba(0,0,0,0.3) 7px); z-index:1; }
-.bat-fill { height:100%; background: linear-gradient(90deg, var(--ok-glow), var(--ok)); transition:width 0.8s; }
-.bat-fill.w { background:linear-gradient(90deg,var(--warn-glow),var(--warn)); }
-.bat-fill.c { background:linear-gradient(90deg,var(--danger-glow),var(--danger)); }
-.bat-pct { color:var(--accent-l); font-size:10px; min-width:32px; text-align:right; }
-
-/* TAG ROW */
-.tag-row {
-  flex-shrink: 0;
-  display: flex; gap: 1px; background: var(--bdr);
+/* TAG COL — 4 equal rows */
+.tag-col {
+  flex: 1 1 0; min-width: 0;
+  display: grid; grid-template-rows: 1fr 1fr 1fr 1fr;
+  gap: 1px; background: var(--bdr);
 }
 .tag-cell {
-  flex: 1; background: var(--surf); padding: 6px 10px;
-  display: flex; flex-direction: column; gap: 1px;
-  border-right: 1px solid var(--bdr); position: relative; overflow: hidden;
+  background: var(--surf); padding: 0 10px;
+  display: flex; align-items: center; justify-content: space-between;
+  position: relative; overflow: hidden; transition: background 0.2s;
 }
-.tag-cell:last-child { border-right: none; }
-.tag-cell::after {
-  content:''; position:absolute; bottom:0; left:0; right:0; height:1px;
+.tag-cell::before {
+  content:''; position:absolute; left:0; top:0; bottom:0; width:2px;
+  background:var(--accent); opacity:0.15; transition:opacity 0.3s;
+}
+.tag-cell:hover::before { opacity: 0.7; }
+.tag-cell:hover { background: rgba(0,229,255,0.03); }
+.tag-k { font-family:var(--f-mono); font-size:8px; color:var(--tx-dim); letter-spacing:2px; flex-shrink:0; }
+.tag-v {
+  font-family:var(--f-head); font-size:15px; font-weight:700;
+  color:var(--accent-l); text-align:right;
+  text-shadow: 0 0 10px var(--glow2);
+}
+.tag-u { font-family:var(--f-mono); font-size:8px; color:var(--tx-low); margin-left:2px; }
+
+/* ── ROW 2: sys strip — bat | volt | temp | ice ── */
+.human-row2 {
+  display: flex; flex-direction: row; gap: 1px; background: var(--bdr);
+  height: 34px; flex-shrink: 0;
+}
+.sys-cell {
+  flex: 1 1 0; min-width: 0;
+  display: flex; align-items: center; gap: 7px; padding: 0 10px;
+  background: var(--surf2); position: relative; overflow: hidden;
+}
+.sys-cell::before {
+  content:''; position:absolute; top:0; left:0; right:0; height:1px;
   background:linear-gradient(90deg,transparent,var(--accent),transparent); opacity:0.15;
 }
-.tag-k { font-family:var(--f-mono); font-size:8px; color:var(--tx-dim); letter-spacing:2px; }
-.tag-v { font-family:var(--f-head); font-size:18px; font-weight:700; color:var(--accent-l); line-height:1; }
-.tag-u { font-family:var(--f-mono); font-size:8px; color:var(--tx-low); }
+/* battery cell gets extra flex for the track */
+.sys-cell.bat { flex: 2 1 0; }
+.sys-k { font-family:var(--f-mono); font-size:8px; color:var(--tx-dim); letter-spacing:2px; flex-shrink:0; }
+.sys-v { font-family:var(--f-head); font-size:15px; font-weight:700; color:var(--accent-l); text-shadow:0 0 8px var(--glow2); }
+.sys-u { font-family:var(--f-mono); font-size:7px; color:var(--tx-low); margin-left:1px; }
+.bat-track { flex:1; height:5px; background:var(--surf3); border:1px solid var(--bdr2); position:relative; overflow:hidden; }
+.bat-track::before { content:''; position:absolute; inset:0; background:repeating-linear-gradient(90deg,transparent,transparent 6px,rgba(0,0,0,0.3) 6px,rgba(0,0,0,0.3) 7px); z-index:1; }
+.bat-fill { height:100%; background:linear-gradient(90deg,var(--ok-glow),var(--ok)); transition:width 0.8s; }
+.bat-fill.w { background:linear-gradient(90deg,var(--warn-glow),var(--warn)); }
+.bat-fill.c { background:linear-gradient(90deg,var(--danger-glow),var(--danger)); }
+.bat-pct { font-family:var(--f-mono); font-size:10px; color:var(--accent-l); min-width:28px; text-align:right; flex-shrink:0; }
 
 /* ══════════════════════════════════════════════
    CHAT PANEL
@@ -1053,58 +1053,73 @@ body { display:flex; flex-direction:column; }
       <div class="panel human-panel">
         <div class="plabel"><strong>HUMAN ANALYSIS</strong> — BIOMETRIC SCAN <span class="badge idle" id="bfc">IDLE</span></div>
 
+        <!-- HUMAN BODY: row1(face|attrs|tags) + row2(sys strip) -->
         <div class="human-body">
-          <!-- FACE SECTION -->
-          <div class="face-section">
-            <!-- big face image -->
+
+          <!-- ROW 1 -->
+          <div class="human-row1">
+
+            <!-- FACE -->
             <div class="face-box">
               <img id="img-face" src="" alt="" style="display:none">
               <div class="fno" id="nsf"><div class="fi">👤</div><span>NO FACE</span></div>
-              <!-- SVG reticule overlay -->
               <div class="face-reticule">
-                <svg viewBox="0 0 180 200" fill="none" xmlns="http://www.w3.org/2000/svg" opacity="0.5">
-                  <circle cx="90" cy="100" r="60" stroke="var(--accent)" stroke-width="0.5" stroke-dasharray="4 6"/>
-                  <line x1="90" y1="10" x2="90" y2="190" stroke="var(--accent)" stroke-width="0.3" opacity="0.4"/>
-                  <line x1="10" y1="100" x2="170" y2="100" stroke="var(--accent)" stroke-width="0.3" opacity="0.4"/>
-                  <rect x="60" y="70" width="60" height="60" stroke="var(--accent)" stroke-width="0.8" fill="none" stroke-dasharray="8 4"/>
-                  <circle cx="90" cy="100" r="4" stroke="var(--accent)" stroke-width="0.8" fill="none"/>
-                  <circle cx="90" cy="100" r="1.5" fill="var(--accent)" opacity="0.8"/>
+                <svg viewBox="0 0 160 168" fill="none" xmlns="http://www.w3.org/2000/svg" opacity="0.45">
+                  <circle cx="80" cy="84" r="52" stroke="var(--accent)" stroke-width="0.5" stroke-dasharray="4 6"/>
+                  <line x1="80" y1="6"  x2="80"  y2="162" stroke="var(--accent)" stroke-width="0.3" opacity="0.35"/>
+                  <line x1="6"  y1="84" x2="154" y2="84"  stroke="var(--accent)" stroke-width="0.3" opacity="0.35"/>
+                  <rect x="48" y="58" width="64" height="52" stroke="var(--accent)" stroke-width="0.8" fill="none" stroke-dasharray="8 4"/>
+                  <circle cx="80" cy="84" r="4"   stroke="var(--accent)" stroke-width="0.8" fill="none"/>
+                  <circle cx="80" cy="84" r="1.5" fill="var(--accent)" opacity="0.8"/>
                 </svg>
               </div>
             </div>
 
-            <!-- attrs vertical -->
+            <!-- ATTRS: position / emotion / gender / age -->
             <div class="attrs-col">
-              <div class="attr-cell"><div class="attr-k">POSITION</div><div class="attr-v" id="hp">—</div></div>
-              <div class="attr-cell"><div class="attr-k">EMOTION</div><div class="attr-v ok" id="he">—</div></div>
-              <div class="attr-cell"><div class="attr-k">GENDER</div><div class="attr-v" id="hg">—</div></div>
-              <div class="attr-cell"><div class="attr-k">AGE</div><div class="attr-v warn" id="ha">—</div></div>
+              <div class="attr-cell"><div class="attr-k">POSITION</div><div class="attr-v"      id="hp">—</div></div>
+              <div class="attr-cell"><div class="attr-k">EMOTION</div> <div class="attr-v ok"   id="he">—</div></div>
+              <div class="attr-cell"><div class="attr-k">GENDER</div>  <div class="attr-v"      id="hg">—</div></div>
+              <div class="attr-cell"><div class="attr-k">AGE</div>     <div class="attr-v warn" id="ha">—</div></div>
             </div>
-          </div>
 
-          <!-- sys rows -->
-          <div class="sys-rows">
-            <div class="sys-row">
-              <span class="sk">BATTERY</span>
+            <!-- TAG COL: tagid / dist / rtt / dcs -->
+            <div class="tag-col">
+              <div class="tag-cell"><div class="tag-k">APRILTAG ID</div><div class="tag-v" id="tid">—</div></div>
+              <div class="tag-cell"><div class="tag-k">TAG DIST</div>   <div class="tag-v"><span id="tdist">—</span><span class="tag-u">m</span></div></div>
+              <div class="tag-cell"><div class="tag-k">RTT</div>        <div class="tag-v"><span id="irtt">—</span><span class="tag-u">ms</span></div></div>
+              <div class="tag-cell"><div class="tag-k">DC/s</div>       <div class="tag-v" id="idcr">—</div></div>
+            </div>
+
+          </div><!-- /human-row1 -->
+
+          <!-- ROW 2: sys strip -->
+          <div class="human-row2">
+            <!-- battery (wide) -->
+            <div class="sys-cell bat">
+              <div class="sys-k">BAT</div>
               <div class="bat-track"><div class="bat-fill" id="bfill" style="width:0%"></div></div>
-              <span class="bat-pct" id="bpct">—%</span>
+              <div class="bat-pct" id="bpct">—%</div>
             </div>
-            <div class="sys-row">
-              <span class="sk">VOLTAGE</span><span class="sv" id="vv">—</span>
-              <span style="font-family:var(--f-mono);font-size:7px;color:var(--tx-dim)">V</span>
-              <span class="sk" style="margin-left:12px">TEMP</span><span class="sv" id="vt">—</span>
-              <span style="font-family:var(--f-mono);font-size:7px;color:var(--tx-dim)">°C</span>
-              <span class="sk" style="margin-left:12px">ICE</span><span class="sv" id="iice">—</span>
+            <!-- voltage -->
+            <div class="sys-cell">
+              <div class="sys-k">VOLT</div>
+              <div class="sys-v" id="vv">—</div>
+              <div class="sys-u">V</div>
             </div>
-          </div>
+            <!-- temp -->
+            <div class="sys-cell">
+              <div class="sys-k">TEMP</div>
+              <div class="sys-v" id="vt">—</div>
+              <div class="sys-u">°C</div>
+            </div>
+            <!-- ice -->
+            <div class="sys-cell">
+              <div class="sys-k">ICE</div>
+              <div class="sys-v" id="iice">—</div>
+            </div>
+          </div><!-- /human-row2 -->
 
-          <!-- tag row -->
-          <div class="tag-row">
-            <div class="tag-cell"><div class="tag-k">APRILTAG ID</div><div class="tag-v" id="tid">—</div></div>
-            <div class="tag-cell"><div class="tag-k">TAG DIST</div><div class="tag-v"><span id="tdist">—</span><span class="tag-u"> m</span></div></div>
-            <div class="tag-cell"><div class="tag-k">RTT</div><div class="tag-v"><span id="irtt">—</span><span class="tag-u"> ms</span></div></div>
-            <div class="tag-cell"><div class="tag-k">DC/s</div><div class="tag-v" id="idcr">—</div></div>
-          </div>
         </div>
       </div>
 
