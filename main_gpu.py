@@ -175,10 +175,10 @@ config = {
     "CACHE_DIR": "./ov_cache",
     #"ENABLE_CPU_PINNING": "YES",# CPU-GPU 협업 효율 증대 -CPU 로 추론할때 전용으로 묶는것.. 
 }
-pipe_stt = ov_genai.WhisperPipeline(model_stt,device="GPU", config={"PERFORMANCE_HINT": "LATENCY"})
+pipe_stt = ov_genai.WhisperPipeline(model_stt,device="GPU", config={"PERFORMANCE_HINT": "LATENCY", "CACHE_DIR": "./ov_cache"})
 
 token_txt = AutoTokenizer.from_pretrained(model_txt)
-pipe_txt = ov_genai.VLMPipeline(model_txt, device="GPU", config={"PERFORMANCE_HINT": "LATENCY"})
+pipe_txt = ov_genai.VLMPipeline(model_txt, device="GPU", config=config)
 
 def get_rag_context(
     query: str,
