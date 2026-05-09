@@ -207,7 +207,7 @@ def get_rag_context(
 
 
 # for genai
-async def process_stream(streamer, isStream=True, isPlay=0, lang='en'):
+async def process_stream(streamer, isStream=True, isPlay=0, lang='en', voice=6):
     cnt = 0
     latency = 0
     isStart = False
@@ -254,7 +254,7 @@ async def process_stream(streamer, isStream=True, isPlay=0, lang='en'):
                 sentence = sentence.strip()
 
                 if int(isPlay) > 0:
-                    get("http://127.0.0.1:59530/v1/tts",params={"text": sentence, "lang": lang, "voice": 6})
+                    get("http://127.0.0.1:59530/v1/tts",params={"text": sentence, "lang": lang, "voice": voice})
 
                 print(sentence)
                 yield sentence
@@ -267,7 +267,7 @@ async def process_stream(streamer, isStream=True, isPlay=0, lang='en'):
     # 마지막 문장 처리
     if len(sentence) > 3:
         if int(isPlay) > 0:
-            get( "http://127.0.0.1:59530/v1/tts",params={"text": sentence, "lang": lang, "voice": 6})        
+            get( "http://127.0.0.1:59530/v1/tts",params={"text": sentence, "lang": lang, "voice": voice})        
         yield sentence
         await asyncio.sleep(0)
 
@@ -423,7 +423,7 @@ def upload_all_csv():
     }
 
 @app.get("/v1/txt2chat", summary="문장 기반의 chatgpt 스타일 구현")
-def txt2chat(prompt : str ,system = _SYSTEM, isPlay = 0, lang='en'): # gen or med
+def txt2chat(prompt : str ,system = _SYSTEM, isPlay = 0, lang='en', voice=6): # gen or med
   streamer = IterableStreamer(pipe_txt.get_tokenizer())
 
   messages = [
@@ -475,11 +475,11 @@ def txt2chat(prompt : str ,system = _SYSTEM, isPlay = 0, lang='en'): # gen or me
   t1 = Thread(target=pipe_txt.generate, kwargs=generate_kwargs)
   t1.start()
 
-  out = process_stream(streamer, False, isPlay,lang)
+  out = process_stream(streamer, False, isPlay,lang,voice)
   return StreamingResponse(out, media_type='text/plain; charset=utf-8', headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Content-Type-Options": "nosniff"})
 
 @app.get("/v1/rag/txt2chat", summary="문장 기반의 chatgpt 스타일 구현")
-def txt2rag(prompt : str ,system = _SYSTEM, isPlay = 0, lang='en'): # gen or med
+def txt2rag(prompt : str ,system = _SYSTEM, isPlay = 0, lang='en', voice=6): # gen or med
   streamer = IterableStreamer(pipe_txt.get_tokenizer())
 
   rag_context = get_rag_context(prompt)
@@ -531,14 +531,14 @@ def txt2rag(prompt : str ,system = _SYSTEM, isPlay = 0, lang='en'): # gen or med
   t1 = Thread(target=pipe_txt.generate, kwargs=generate_kwargs)
   t1.start()
 
-  out = process_stream(streamer, False, isPlay,lang)
+  out = process_stream(streamer, False, isPlay,lang,voice)
   #return StreamingResponse(out, media_type='text/event-stream')
   return StreamingResponse(out, media_type='text/plain; charset=utf-8', headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Content-Type-Options": "nosniff"})
 
 
 @app.get("/v2/img2chat", summary="문장 기반의 chatgpt 스타일 구현")
 @app.post("/v2/img2chat", summary="문장 기반의 chatgpt 스타일 구현")
-def img2chat2(prompt = "" ,system = _SYSTEM, isPlay = 0, lang='en'): # gen or med
+def img2chat2(prompt = "" ,system = _SYSTEM, isPlay = 0, lang='en', voice=6): # gen or med
   streamer = IterableStreamer(pipe_txt.get_tokenizer())
 
 
@@ -580,12 +580,12 @@ def img2chat2(prompt = "" ,system = _SYSTEM, isPlay = 0, lang='en'): # gen or me
   t1 = Thread(target=pipe_txt.generate, kwargs=generate_kwargs)
   t1.start()
 
-  out = process_stream(streamer, False, isPlay,lang)
+  out = process_stream(streamer, False, isPlay,lang,voice)
   #return StreamingResponse(out, media_type='text/event-stream')
   return StreamingResponse(out, media_type='text/plain; charset=utf-8', headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Content-Type-Options": "nosniff"})
 
 @app.post("/v1/img2chat", summary="문장 기반의 chatgpt 스타일 구현")
-def img2chat(file : UploadFile = File(...), prompt = "" ,system = _SYSTEM, isPlay = 0, lang='en'): # gen or med
+def img2chat(file : UploadFile = File(...), prompt = "" ,system = _SYSTEM, isPlay = 0, lang='en', voice=6): # gen or med
   streamer = IterableStreamer(pipe_txt.get_tokenizer())
 
   messages = [
@@ -625,13 +625,13 @@ def img2chat(file : UploadFile = File(...), prompt = "" ,system = _SYSTEM, isPla
   t1 = Thread(target=pipe_txt.generate, kwargs=generate_kwargs)
   t1.start()
 
-  out = process_stream(streamer, False, isPlay, lang)
+  out = process_stream(streamer, False, isPlay, lang, voice)
   #return StreamingResponse(out, media_type='text/event-stream')
   return StreamingResponse(out, media_type='text/plain; charset=utf-8', headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Content-Type-Options": "nosniff"})    
 
 @app.get("/v1/rag/img2chat", summary="RAG + Image Chat")
 @app.post("/v1/rag/img2chat", summary="RAG + Image Chat")
-def img2rag( prompt="", system=_SYSTEM, isPlay=0, lang='en',):
+def img2rag( prompt="", system=_SYSTEM, isPlay=0, lang='en', voice=6):
     streamer = IterableStreamer(pipe_txt.get_tokenizer())
 
     # ===============================
@@ -670,7 +670,7 @@ def img2rag( prompt="", system=_SYSTEM, isPlay=0, lang='en',):
     t1.start()
 
     # 🔥 기존 streaming 유지
-    out = process_stream(streamer, False, isPlay, lang)
+    out = process_stream(streamer, False, isPlay, lang,voice)
     #return StreamingResponse(out, media_type="text/event-stream")
     return StreamingResponse(out, media_type='text/plain; charset=utf-8', headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Content-Type-Options": "nosniff"})
 
