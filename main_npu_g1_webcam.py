@@ -31,7 +31,7 @@ import pyaudio
 
 from scipy.io.wavfile import write as write_wav
 from scipy.io.wavfile import write as wav_write
-from openwakeword.model import Model as WakeWordModel
+#from openwakeword.model import Model as WakeWordModel
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -430,7 +430,7 @@ def mic_thread_func():
 
     audio  = pyaudio.PyAudio()
     stream = audio.open(format=AUDIO_FORMAT, channels=AUDIO_CHANNELS,
-                        rate=AUDIO_RATE, input=True, frames_per_buffer=AUDIO_CHUNK)
+                        rate=AUDIO_RATE,input_device_index=0, input=True, frames_per_buffer=AUDIO_CHUNK)
     try:
         while True:
             chunk      = np.frombuffer(
