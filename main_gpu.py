@@ -261,7 +261,7 @@ async def process_stream(streamer, isStream=True, isPlay=0, lang='en'):
 
                 print(sentence)
                 yield sentence
-                await asyncio.sleep(10)
+                await asyncio.sleep(0)
                 sentence = ""
 
         else:
@@ -275,7 +275,7 @@ async def process_stream(streamer, isStream=True, isPlay=0, lang='en'):
                 params={"text": sentence, "lang": lang, "voice": 31}
             )        
         yield sentence
-        await asyncio.sleep(10)
+        await asyncio.sleep(0)
 
     # ---------------------------------
     # 🔥 token/s 계산
