@@ -86,8 +86,8 @@ STT_LANG                 = "ko"
 STT_IS_PLAY              = 0
 RAG_URL                  = "http://127.0.0.1:59532/v1/rag/txt2chat"
 AUDIO_FORMAT             = pyaudio.paInt16
-AUDIO_CHANNELS           = 1
-AUDIO_RATE               = 16000
+AUDIO_CHANNELS           = 2 #1
+AUDIO_RATE               = 44100 #16000
 AUDIO_CHUNK              = 16000
 
 os.makedirs(RECORDING_OUTPUT_DIR, exist_ok=True)
