@@ -1125,7 +1125,7 @@ async function connectWs() {
     });
     if (!ar.ok) throw new Error();
   } catch { setConnStatus('err'); return; }
-  setConnStatus('ok'); set('isrv', '127.0.0.1:59530'); startStats();
+  setConnStatus('ok'); set('isrv', '192.168.68.116:59530'); startStats();
 }
 
 function waitIce(pc, ms) {
@@ -1239,16 +1239,16 @@ let webcamStream=null, lastTime=0, currentImage=null;
 
 document.getElementById('startWebcam').addEventListener('click', async () => {
   try {
-    const resp = await fetch('http://127.0.0.1:59531/start_collection');
+    const resp = await fetch('http://192.168.68.116:59531/start_collection');
     if (!resp.ok) throw new Error();
     webcamStream = true;
-    document.getElementById('wcamFeed').src = 'http://127.0.0.1:59531/video_feed';
+    document.getElementById('wcamFeed').src = 'http://192.168.68.116:59531/video_feed';
     document.getElementById('wcamFeed').style.display = 'block';
     document.getElementById('nsm').style.display = 'none';
     document.getElementById('startWebcam').style.display = 'none';
     document.getElementById('captureImage').style.display = 'flex';
     document.getElementById('stopWebcam').style.display = 'flex';
-    await fetch('http://127.0.0.1:8000/init_mcr').catch(()=>{});
+    await fetch('http://192.168.68.116:8000/init_mcr').catch(()=>{});
     statusMsg('CAMERA ONLINE');
   } catch { statusMsg('CAMERA INIT FAILED'); }
 });
@@ -1274,8 +1274,8 @@ document.getElementById('stopWebcam').addEventListener('click', () => {
 /* ══════════════════════════════════
    CHAT / AI
 ══════════════════════════════════ */
-const API_BASE='http://127.0.0.1:59532/v1';
-const TTS_BASE='http://127.0.0.1:59530/v2';
+const API_BASE='http://192.168.68.116:59532/v1';
+const TTS_BASE='http://192.168.68.116:59530/v2';
 
 const LANG_SYSTEMS = {
   en:'You are a 15-year-old humanoid robot named Manseo. Brain: Circulus. Upper body: Mandro. Lower body: Roboworks. Good at magic and boxes. Short boy-like responses.',
@@ -1343,7 +1343,7 @@ async function sendTxtMsg(message) {
     if(!resp.ok) throw new Error();
     const reader=resp.body.getReader(), dec=new TextDecoder(); let full='',lastEnd=0;
     while(true){
-      const{done,value}=await reader.read(); if(done){fetch('http://127.0.0.1:8000/stop').catch(()=>{}); break;}
+      const{done,value}=await reader.read(); if(done){fetch('http://192.168.68.116:8000/stop').catch(()=>{}); break;}
       full+=dec.decode(value,{stream:true})+'\n'; b.innerHTML=md(full); scrollChat();
       if(isTts){const sents=full.slice(lastEnd).match(/[^.!?]*[.!?]/g); if(sents){sents.forEach(s=>{if(s.trim())addTts(s.trim())}); lastEnd=full.length;}}
     }
@@ -1363,7 +1363,7 @@ async function sendImgMsg(message='이미지를 설명해주세요') {
     if(!resp.ok) throw new Error();
     const reader=resp.body.getReader(), dec=new TextDecoder(); let full='',lastEnd=0;
     while(true){
-      const{done,value}=await reader.read(); if(done){fetch('http://127.0.0.1:8000/stop').catch(()=>{}); break;}
+      const{done,value}=await reader.read(); if(done){fetch('http://192.168.68.116:8000/stop').catch(()=>{}); break;}
       full+=dec.decode(value,{stream:true})+'\n'; b.innerHTML=md(full); scrollChat();
       if(isTts){const sents=full.slice(lastEnd).match(/[^.!?]*[.!?]/g); if(sents){sents.forEach(s=>{if(s.trim())addTts(s.trim())}); lastEnd=full.length;}}
     }
@@ -1377,9 +1377,9 @@ function addTts(text){lastTime=Date.now(); ttsQueue.push(text); processTts();}
 async function processTts(){
   if(ttsPlaying||!ttsQueue.length) return; ttsPlaying=true;
   const t=Date.now(); const motions=['','test1','test2','test3'];
-  fetch(`http://127.0.0.1:8000/motion?name=${motions[t%4]}`).catch(()=>{});
+  fetch(`http://192.168.68.116:8000/motion?name=${motions[t%4]}`).catch(()=>{});
   while(ttsQueue.length>0) await playTts(ttsQueue.shift());
-  fetch('http://127.0.0.1:8000/stop').catch(()=>{}); ttsPlaying=false; lastTime=Date.now();
+  fetch('http://192.168.68.116:8000/stop').catch(()=>{}); ttsPlaying=false; lastTime=Date.now();
 }
 function playTts(text){
   return new Promise(resolve=>{
@@ -1420,17 +1420,17 @@ async function toggleVoice(){
 ══════════════════════════════════ */
 setInterval(async()=>{
   try{
-    const resp=await fetch('http://127.0.0.1:59531/heartbeat');
+    const resp=await fetch('http://192.168.68.116:59531/heartbeat');
     const data=(await resp.json()).data;
     const pos=data.human.position;
     if(pos){
-      if(pos.startsWith('T')) fetch('http://127.0.0.1:8000/head/down').catch(()=>{});
-      else if(pos.startsWith('B')) fetch('http://127.0.0.1:8000/head/up').catch(()=>{});
-      if(pos.endsWith('L')) fetch('http://127.0.0.1:8000/head/right').catch(()=>{});
-      else if(pos.endsWith('R')) fetch('http://127.0.0.1:8000/head/left').catch(()=>{});
+      if(pos.startsWith('T')) fetch('http://192.168.68.116:8000/head/down').catch(()=>{});
+      else if(pos.startsWith('B')) fetch('http://192.168.68.116:8000/head/up').catch(()=>{});
+      if(pos.endsWith('L')) fetch('http://192.168.68.116:8000/head/right').catch(()=>{});
+      else if(pos.endsWith('R')) fetch('http://192.168.68.116:8000/head/left').catch(()=>{});
     }
     if(Date.now()-lastTime>35000 && data.cnt_live>0 && autoSend){
-      lastTime=Date.now(); fetch('http://127.0.0.1:8000/stop').catch(()=>{});
+      lastTime=Date.now(); fetch('http://192.168.68.116:8000/stop').catch(()=>{});
       const canvas=document.createElement('canvas'); canvas.width=512; canvas.height=512;
       const img=document.getElementById('wcamFeed');
       if(img&&img.style.display!=='none'){
@@ -1449,8 +1449,8 @@ setInterval(async()=>{
 /* ══════════════════════════════════
    MOTION / SONG
 ══════════════════════════════════ */
-function play(name){fetch(`http://127.0.0.1:8000/motion?name=${name}`).catch(()=>{});}
-function song(name){if(audioObj)audioObj.pause(); audioObj=new Audio(`http://127.0.0.1:59531/web/${name}.mp3`); audioObj.volume=0.2; audioObj.play().catch(()=>{});}
+function play(name){fetch(`http://192.168.68.116:8000/motion?name=${name}`).catch(()=>{});}
+function song(name){if(audioObj)audioObj.pause(); audioObj=new Audio(`http://192.168.68.116:59531/web/${name}.mp3`); audioObj.volume=0.2; audioObj.play().catch(()=>{});}
 function stopSong(){if(audioObj)audioObj.pause();}
 
 /* ══════════════════════════════════
