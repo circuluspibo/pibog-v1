@@ -709,7 +709,7 @@ def stt(file : UploadFile = File(...), lang="ko", isPlay=0):
   return { "result" : True, "data" : str(out) } #txt2chat(chat, isPlay)
 
 print("Loading Complete","GPU")
-subprocess.Popen(["play", 'intel_inside.mp3']) # async
+#subprocess.Popen(["play", 'intel_inside.mp3']) # async
 
 upload_all_csv()
 
@@ -717,9 +717,11 @@ upload_all_csv()
 url = "http://127.0.0.1:59531/web/pion2.html"
 
 # Kiosk 모드로 Chromium 실행
+"""
 subprocess.Popen(['chromium', '--kiosk', url],
     stdin=subprocess.DEVNULL,       # Discard stdin from the child process
     stdout=subprocess.DEVNULL,      # Discard stdout from the child process
     stderr=subprocess.DEVNULL,      # Discard stderr from the child process
     start_new_session=True          # Start the process in a new session (POSIX only)
 )
+"""
