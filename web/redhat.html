@@ -1043,7 +1043,7 @@ function setTheme(t) {
    IFRAME
 ══════════════════════════════════ */
 const DEFAULT_IFRAME_URL = 'http://192.168.68.116:50003/';
-const BASE = 'http://192.168.68.116:59530';
+const BASE = 'http://192.168.68.116:59531';
 
 function loadDefaultIframe() {
   _loadIframe(DEFAULT_IFRAME_URL);
@@ -1125,7 +1125,7 @@ async function connectWs() {
     });
     if (!ar.ok) throw new Error();
   } catch { setConnStatus('err'); return; }
-  setConnStatus('ok'); set('isrv', '192.168.68.116:59530'); startStats();
+  setConnStatus('ok'); set('isrv', '192.168.68.116:59531'); startStats();
 }
 
 function waitIce(pc, ms) {
@@ -1275,7 +1275,7 @@ document.getElementById('stopWebcam').addEventListener('click', () => {
    CHAT / AI
 ══════════════════════════════════ */
 const API_BASE='http://192.168.68.116:59532/v1';
-const TTS_BASE='http://192.168.68.116:59530/v2';
+const TTS_BASE='http://192.168.68.116:59531/v2';
 
 const LANG_SYSTEMS = {
   en:'You are a 15-year-old humanoid robot named Manseo. Brain: Circulus. Upper body: Mandro. Lower body: Roboworks. Good at magic and boxes. Short boy-like responses.',
