@@ -44,7 +44,7 @@ import os
 from datetime import datetime
 from monitor import CPUPowerMonitor
 import asyncio
-
+import platform
 # support rag
 import pandas as pd
 from langchain_community.embeddings import OpenVINOBgeEmbeddings
@@ -360,6 +360,24 @@ async def upload_csv_rag(file: UploadFile = File(...)):
         "chunks": len(docs)
     }
 
+def check_distro():
+    try:
+        # OS 정보를 딕셔너리로 반환
+        info = platform.freedesktop_os_release()
+        distro_id = info.get('ID', '').lower()
+        
+        if 'ubuntu' in distro_id:
+            return "Ubuntu"
+        elif 'rhel' in distro_id or 'centos' in distro_id:
+            return "RHEL/CentOS"
+        else:
+            return f"Unknown Distro: {distro_id}"
+    except AttributeError:
+        return "Python version is lower than 3.10"
+    except FileNotFoundError:
+        return "Not a Linux system or /etc/os-release missing"
+
+print(f"Detected OS: {check_distro()}")
 
 @app.post("/v1/rag/upload_all_csv")
 def upload_all_csv():
@@ -368,6 +386,9 @@ def upload_all_csv():
 
     # 파일 경로 설정: /media/{시스템 사용자명}
     directory = f"/media/{user_name}"
+
+    if check_distro() !== 'ubuntu':
+        directory = "/mnt/usb"
 
     # 지정된 폴더 내의 모든 CSV 파일을 glob을 사용하여 하위 디렉토리까지 검색
     # '**'는 하위 디렉토리까지 포함하겠다는 의미입니다.
