@@ -26,6 +26,12 @@ from datetime import datetime
 from monitor import CPUPowerMonitor
 import subprocess
 from slide import create_slide_router
+import threading
+import queue
+# 기존 임포트 항목들 (numpy, time, scipy.io.wavfile 등)
+
+app = FastAPI()
+
 
 def play_sound(file_path):
     subprocess.run(["play", file_path])
@@ -173,35 +179,61 @@ def tts1(text="", voice=31, lang='ko', static=0, isPlay=0):
     write(data=audio, rate=sampling_rate, filename=f"output/{filename}.wav")
     return f"output/{filename}.wav"
     
-    # 31 korean
+# 1. 재생할 파일 경로를 담을 큐 생성
+playback_queue = queue.Queue()
+
+# 2. 음성 재생을 담당할 워커 함수
+def audio_player_worker():
+    while True:
+        # 큐에서 파일 경로를 하나씩 꺼냄 (없으면 대기)
+        file_path = playback_queue.get()
+        if file_path is None: # 종료 시그널
+            break
+        
+        try:
+            # subprocess.run은 실행이 완료될 때까지 블로킹됩니다.
+            # 따라서 자연스럽게 다음 파일은 이전 파일 재생이 끝난 뒤 실행됩니다.
+            subprocess.run(["play", file_path])
+        except Exception as e:
+            print(f"Playback error: {e}")
+        finally:
+            # 작업 완료 알림
+            playback_queue.task_done()
+
+# 3. 워커 스레드 시작 (데몬 스레드로 설정하여 프로그램 종료 시 자동 종료)
+worker_thread = threading.Thread(target=audio_player_worker, daemon=True)
+worker_thread.start()
+
 @app.get("/v2/tts", response_class=FileResponse, summary="음성 생성 후 로봇에서 재생")
 def tts2(text = "", voice=6, lang='ko', static=0):
-    #org_text = parse.quote(text, safe='', encoding="cp949")
     start = t.time()
-    print(text, static)
     filename = getHash(text)
+    file_full_path = f"output/{filename}.wav"
 
-    #phoneme_ids = text_to_sequence(text, conf_tts.data.text_cleaners)
+    # --- TTS 변환 로직 (기존과 동일) ---
     phoneme_ids = text_to_sequence(text, [f'canvers_{lang}_cleaners'])
-    text = np.expand_dims(np.array(phoneme_ids, dtype=np.int64), 0)
+    text_input = np.expand_dims(np.array(phoneme_ids, dtype=np.int64), 0)
 
     inputs = {
-        "input": text,
-        "input_lengths":  np.array([text.shape[1]], dtype=np.int64),
+        "input": text_input,
+        "input_lengths":  np.array([text_input.shape[1]], dtype=np.int64),
         "scales": np.array([0.667, 1.0, 0.8], dtype=np.float16),
         "sid" : np.array([int(voice)], dtype=np.int64) if voice is not None else None
     }
 
-    start_time = t.time()
     result = pipe_tts(inputs)
-    print(f"Inference time: {t.time() - start_time:.4f} seconds")
-
     audio = list(result.values())[0].squeeze((0, 1))  
-
-    print(t.time() - start)
-    write(data=audio, rate=conf_tts.data.sampling_rate, filename=f"output/{filename}.wav")
-    #play_sound(f"output/{filename}.wav")
     
-    return f"output/{filename}.wav"
+    # 파일 저장
+    write(data=audio, rate=conf_tts.data.sampling_rate, filename=file_full_path)
+    # -------------------------------
+
+    # 4. 재생 큐에 파일 경로 추가
+    # API 응답은 즉시 반환되지만, 재생은 워커 스레드에 의해 순차적으로 진행됩니다.
+    playback_queue.put(file_full_path)
+    
+    print(f"Total time: {t.time() - start:.4f}s - Queued for playback: {filename}")
+    
+    return file_full_path
 
 print("Loading Complete","CPU")
