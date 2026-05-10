@@ -387,7 +387,7 @@ def upload_all_csv():
     # 파일 경로 설정: /media/{시스템 사용자명}
     directory = f"/media/{user_name}"
 
-    if check_distro() !== 'ubuntu':
+    if check_distro() != 'ubuntu':
         directory = "/mnt/usb"
 
     # 지정된 폴더 내의 모든 CSV 파일을 glob을 사용하여 하위 디렉토리까지 검색
