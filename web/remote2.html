@@ -343,7 +343,12 @@ body::after {
     <div class="sdot"></div>
     <div class="ssys">SYSTEM ONLINE</div>
   </div>
-  <div class="scenter">ARCos</div>
+  <div class="scenter" style="font-size:11px;letter-spacing:4px;line-height:1.2;text-align:center">
+    ARCos &nbsp;·&nbsp;
+    <span style="color:var(--pri-l);font-size:9px;letter-spacing:3px;font-family:var(--f-mono);opacity:0.85">
+      REDHAT &times; CIRCULUS &times; INTEL
+    </span>
+  </div>
   <div class="sbar-right">
     <div class="theme-pills">
       <button class="tpill rh on" onclick="setTheme('redhat','rh')">RH</button>
@@ -363,7 +368,7 @@ body::after {
   <div class="home-logo">
     <div class="hlt" data-text="ARCos">ARCos</div>
     <div class="hls">Advanced Robot Control System · RedHat Summit 2025</div>
-    <div class="hlc">Circulus · Mandro · Roboworks &nbsp;|&nbsp; Collaboration</div>
+    <div class="hlc">RedHat &nbsp;×&nbsp; Circulus &nbsp;×&nbsp; Intel &nbsp;|&nbsp; Collaboration</div>
   </div>
   <div class="mode-buttons">
     <div class="mode-btn" onclick="enterDeliver()">
@@ -441,7 +446,7 @@ body::after {
   </div>
 </div>
 
-<div class="bbar">ARCos ROBOT CONTROL · CIRCULUS · MANDRO · ROBOWORKS · REDHAT SUMMIT 2025</div>
+<div class="bbar">ARCos · REDHAT × CIRCULUS × INTEL COLLABORATION · REDHAT SUMMIT 2025</div>
 
 <script>
 /* ─── CONFIG ─── */
@@ -661,7 +666,20 @@ async function toggleMic() {
     try {
       gumStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
     } catch(e) {
-      setMS('', '⚠  Mic denied — check browser permissions'); return;
+      // Distinguish common failure modes
+      let hint = '';
+      if (e.name === 'NotAllowedError' || e.name === 'PermissionDeniedError') {
+        const isHttp = location.protocol === 'http:' && location.hostname !== 'localhost';
+        hint = isHttp
+          ? '⚠  HTTP blocks mic — open chrome://flags and enable "Insecure origins treated as secure" for this IP, or use HTTPS'
+          : '⚠  Mic permission denied — tap the 🔒 icon in the address bar and allow microphone';
+      } else if (e.name === 'NotFoundError') {
+        hint = '⚠  No microphone found on this device';
+      } else {
+        hint = `⚠  Mic error: ${e.name} — ${e.message}`;
+      }
+      setMS('', hint);
+      return;
     }
 
     audioChunks = [];
