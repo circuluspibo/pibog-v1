@@ -179,61 +179,146 @@ def tts1(text="", voice=31, lang='ko', static=0, isPlay=0):
     write(data=audio, rate=sampling_rate, filename=f"output/{filename}.wav")
     return f"output/{filename}.wav"
     
-# 1. 재생할 파일 경로를 담을 큐 생성
-playback_queue = queue.Queue()
 
-# 2. 음성 재생을 담당할 워커 함수
-def audio_player_worker():
-    while True:
-        # 큐에서 파일 경로를 하나씩 꺼냄 (없으면 대기)
-        file_path = playback_queue.get()
-        if file_path is None: # 종료 시그널
-            break
-        
-        try:
-            # subprocess.run은 실행이 완료될 때까지 블로킹됩니다.
-            # 따라서 자연스럽게 다음 파일은 이전 파일 재생이 끝난 뒤 실행됩니다.
-            subprocess.run(["play", file_path])
-        except Exception as e:
-            print(f"Playback error: {e}")
-        finally:
-            # 작업 완료 알림
-            playback_queue.task_done()
 
 # 3. 워커 스레드 시작 (데몬 스레드로 설정하여 프로그램 종료 시 자동 종료)
 worker_thread = threading.Thread(target=audio_player_worker, daemon=True)
 worker_thread.start()
 
-@app.get("/v2/tts", response_class=FileResponse, summary="음성 생성 후 로봇에서 재생")
-def tts2(text = "", voice=6, lang='ko', static=0):
+MOTION_SERVER = "http://127.0.0.1:50003"
+
+
+playback_queue = queue.Queue()
+
+# 현재 오디오 재생 여부
+is_playing = False
+
+# 현재 모션 수행 여부
+motion_running = False
+
+# thread-safe lock
+state_lock = threading.Lock()
+
+
+async def fire_motion(motion: str):
+    url = f"{MOTION_SERVER}/motions/run/{motion}.json"
+    body = {"filename": f"{motion}.json"}
+
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            await client.post(url, json=body)
+    except Exception as e:
+        print(f"[motion] failed: {e}")
+
+
+def trigger_motion_once(motion: str):
+    global motion_running
+
+    with state_lock:
+        # 이미 모션 중이면 중복 호출 안함
+        if motion_running:
+            return
+
+        motion_running = True
+
+    # asyncio loop 생성해서 실행
+    def _run():
+        asyncio.run(fire_motion(motion))
+
+    threading.Thread(target=_run, daemon=True).start()
+
+
+def audio_player_worker():
+    global is_playing
+    global motion_running
+
+    while True:
+        item = playback_queue.get()
+
+        if item is None:
+            break
+
+        file_path, motion = item
+
+        try:
+            with state_lock:
+                is_playing = True
+
+            # 재생 시작 시 모션 1회만 호출
+            if motion:
+                trigger_motion_once(motion)
+
+            print(f"[play] {file_path}")
+            subprocess.run(["play", file_path], stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,)
+
+        except Exception as e:
+            print(f"Playback error: {e}")
+
+        finally:
+            playback_queue.task_done()
+
+            # queue 가 비었으면 상태 초기화
+            if playback_queue.empty():
+                with state_lock:
+                    is_playing = False
+                    motion_running = False
+
+                print("[playback] queue finished")
+
+
+import random
+
+# 랜덤 기본 모션 리스트
+DEFAULT_MOTIONS = [
+    'greet',
+    'look_around',
+    'both_pose',
+    'curious',
+    'right_pose',
+    'left_pose',
+    'both_pose',
+    'look_around',
+    'right_pose',
+    'left_pose',
+    'greet',
+    'curious',
+    'both_pose',
+    'look_around',
+    'clap',
+    'calm_down'
+]
+
+@app.get("/v2/tts", response_class=FileResponse)
+def tts2(text="",voice=6,lang="en",motion="auto"):
+
     start = t.time()
+
     filename = getHash(text)
     file_full_path = f"output/{filename}.wav"
 
-    # --- TTS 변환 로직 (기존과 동일) ---
+    # motion 없으면 랜덤 선택
+    if motion == "auto":
+        motion = random.choice(DEFAULT_MOTIONS)
+
+    
     phoneme_ids = text_to_sequence(text, [f'canvers_{lang}_cleaners'])
     text_input = np.expand_dims(np.array(phoneme_ids, dtype=np.int64), 0)
 
     inputs = {
         "input": text_input,
-        "input_lengths":  np.array([text_input.shape[1]], dtype=np.int64),
-        "scales": np.array([0.667, 1.0, 0.8], dtype=np.float16),
-        "sid" : np.array([int(voice)], dtype=np.int64) if voice is not None else None
+        "input_lengths": np.array([text_input.shape[1]],dtype=np.int64),
+        "scales": np.array( [0.667, 1.0, 0.8],dtype=np.float16),
+        "sid": np.array( [int(voice)], dtype=np.int64 )
     }
 
     result = pipe_tts(inputs)
-    audio = list(result.values())[0].squeeze((0, 1))  
-    
-    # 파일 저장
-    write(data=audio, rate=conf_tts.data.sampling_rate, filename=file_full_path)
-    # -------------------------------
+    audio = list(result.values())[0].squeeze((0, 1))
 
-    # 4. 재생 큐에 파일 경로 추가
-    # API 응답은 즉시 반환되지만, 재생은 워커 스레드에 의해 순차적으로 진행됩니다.
-    playback_queue.put(file_full_path)
-    
-    print(f"Total time: {t.time() - start:.4f}s - Queued for playback: {filename}")
-    
+    write( data=audio,rate=conf_tts.data.sampling_rate, filename=file_full_path)
+    playback_queue.put( ( file_full_path,motion))
+
+    print(f"Queued: {filename} "f"({t.time() - start:.2f}s)")
+
     return file_full_path
 
 print("Loading Complete","CPU")
