@@ -454,6 +454,17 @@ const BASE    = 'http://192.168.68.116:59531';
 const BASE_AI = 'http://192.168.68.116:59532';
 const MOTION  = 'http://192.168.68.116:8000';
 
+const motions = [
+  "greet",
+  "look_around",
+  "both_pose",
+  "curious",
+  "right_pose",
+  "left_pose",
+  "clap",
+  "calm_down"
+];
+
 /* ─── THEME SWITCHER ───
    Sets data-theme on <html>. All CSS vars that use
    html[data-theme="..."] selectors re-cascade instantly.
@@ -758,6 +769,14 @@ async function callImg2Chat(userText) {
     'You can see the people and scene in front of you through your camera. ' +
     'Be energetic, friendly, and concise — max 2 sentences.';
 
+   const motion = motions[Math.floor(Math.random() * motions.length)];
+   
+   fetch(`http://127.0.0.1:50003/motions/run/${motion}.json`, {
+     method: "POST",
+     headers: { "Content-Type": "application/json" },
+     body: JSON.stringify({ filename: `${motion}.json` })
+   });
+   
   const params = new URLSearchParams({ prompt: userText, system, lang: 'en', isPlay: '1' });
 
   try {
@@ -857,6 +876,14 @@ function startAuto() {
           `Proactively greet them with energy in 1-2 sentences, referencing what you observe.`;
 
         addLog(`Human detected — ${gen} ${age} at ${pos} (${emo})`);
+      
+         const motion = motions[Math.floor(Math.random() * motions.length)];
+   
+         fetch(`http://127.0.0.1:50003/motions/run/${motion}.json`, {
+           method: "POST",
+           headers: { "Content-Type": "application/json" },
+           body: JSON.stringify({ filename: `${motion}.json` })
+         });
 
         const params = new URLSearchParams({ prompt, lang: 'en', isPlay: '1' });
         fetch(`${IMG2CHAT}?${params}`).catch(() => {
