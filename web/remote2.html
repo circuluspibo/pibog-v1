@@ -860,7 +860,7 @@ function startAuto() {
 
         const params = new URLSearchParams({ prompt, lang: 'en', isPlay: '1' });
         fetch(`${IMG2CHAT}?${params}`).catch(() => {
-          fetch(`${BASE_AI}/v1/txt2chat?${params}`).catch(() => {});
+          fetch(`${BASE_AI}/v2/img2chat?${params}`).catch(() => {});
         });
 
         trigMotion();
