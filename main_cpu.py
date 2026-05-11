@@ -181,10 +181,6 @@ def tts1(text="", voice=31, lang='ko', static=0, isPlay=0):
     
 
 
-# 3. 워커 스레드 시작 (데몬 스레드로 설정하여 프로그램 종료 시 자동 종료)
-worker_thread = threading.Thread(target=audio_player_worker, daemon=True)
-worker_thread.start()
-
 MOTION_SERVER = "http://127.0.0.1:50003"
 
 
@@ -320,5 +316,9 @@ def tts2(text="",voice=6,lang="en",motion="auto"):
     print(f"Queued: {filename} "f"({t.time() - start:.2f}s)")
 
     return file_full_path
+    
+    # 3. 워커 스레드 시작 (데몬 스레드로 설정하여 프로그램 종료 시 자동 종료)
+worker_thread = threading.Thread(target=audio_player_worker, daemon=True)
+worker_thread.start()
 
 print("Loading Complete","CPU")
