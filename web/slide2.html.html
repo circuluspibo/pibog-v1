@@ -1,0 +1,780 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Red Hat Summit — Humanoid Robotics</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+  /* ── CONFIG ──────────────────────────────────────────────── */
+  :root {
+    --rh-red:    #ee0000;
+    --rh-dark:   #1a0000;
+    --rh-mid:    #2d0a0a;
+    --rh-accent: #ff4444;
+    --rh-dim:    #3d1010;
+    --rh-text:   #f5e6e6;
+    --rh-muted:  #a08080;
+    --slide-file: 'redhat.pdf';
+    --api-base:  'http://127.0.0.1:59530';
+  }
+
+  /* ── RESET ───────────────────────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 100%; height: 100%; overflow: hidden; }
+
+  body {
+    background: var(--rh-dark);
+    font-family: 'Courier New', monospace;
+    color: var(--rh-text);
+  }
+
+  /* ── NOISE OVERLAY ───────────────────────────────────────── */
+  body::before {
+    content: '';
+    position: fixed; inset: 0; z-index: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+    background-size: 150px;
+    pointer-events: none;
+    opacity: 0.4;
+  }
+
+  /* ── TOP BAR ─────────────────────────────────────────────── */
+  #topbar {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+    height: 48px;
+    display: flex; align-items: center; gap: 16px;
+    padding: 0 20px;
+    background: rgba(10,0,0,0.85);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid rgba(238,0,0,0.25);
+  }
+
+  .rh-logo {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 13px; font-weight: 700; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--rh-text);
+  }
+  .rh-logo svg { flex-shrink: 0; }
+
+  .topbar-sep { width: 1px; height: 22px; background: var(--rh-dim); }
+
+  .topbar-title {
+    font-size: 11px; letter-spacing: 0.08em;
+    color: var(--rh-muted); text-transform: uppercase;
+    flex: 1;
+  }
+
+  /* mode toggle */
+  #mode-toggle {
+    display: flex; gap: 4px;
+    background: var(--rh-mid);
+    border: 1px solid var(--rh-dim);
+    border-radius: 6px; padding: 3px;
+  }
+  .mode-btn {
+    padding: 4px 12px; border-radius: 4px; border: none; cursor: pointer;
+    font-size: 11px; font-family: inherit; letter-spacing: 0.06em;
+    text-transform: uppercase; font-weight: 700; transition: all .2s;
+    background: transparent; color: var(--rh-muted);
+  }
+  .mode-btn.active {
+    background: var(--rh-red); color: #fff;
+  }
+
+  /* page indicator */
+  #page-indicator {
+    font-size: 11px; color: var(--rh-muted); letter-spacing: 0.08em;
+    min-width: 70px; text-align: right;
+  }
+
+  /* ── MAIN LAYOUT ─────────────────────────────────────────── */
+  #app {
+    position: fixed; inset: 48px 0 0 0; z-index: 1;
+    display: flex;
+  }
+
+  /* ── WINDOWED MODE: LEFT PANEL (iframe) ──────────────────── */
+  #panel-left {
+    position: relative;
+    width: 50%; height: 100%;
+    display: flex; flex-direction: column;
+    border-right: 1px solid rgba(238,0,0,0.18);
+    overflow: hidden;
+    background: var(--rh-mid);
+  }
+
+  .panel-label {
+    position: absolute; top: 12px; left: 16px; z-index: 10;
+    font-size: 9px; letter-spacing: 0.15em; text-transform: uppercase;
+    color: var(--rh-red); background: rgba(10,0,0,0.7);
+    padding: 4px 8px; border: 1px solid rgba(238,0,0,0.3);
+    border-radius: 3px;
+  }
+
+  /* animated grid lines behind the iframe */
+  .grid-bg {
+    position: absolute; inset: 0; z-index: 0;
+    background-image:
+      linear-gradient(rgba(238,0,0,0.05) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(238,0,0,0.05) 1px, transparent 1px);
+    background-size: 40px 40px;
+    animation: gridShift 20s linear infinite;
+  }
+  @keyframes gridShift { to { background-position: 40px 40px; } }
+
+  /* corner decorations */
+  .corner { position: absolute; z-index: 5; width: 20px; height: 20px; }
+  .corner-tl { top: 8px; left: 8px;
+    border-top: 2px solid var(--rh-red); border-left: 2px solid var(--rh-red); }
+  .corner-tr { top: 8px; right: 8px;
+    border-top: 2px solid var(--rh-red); border-right: 2px solid var(--rh-red); }
+  .corner-bl { bottom: 8px; left: 8px;
+    border-bottom: 2px solid var(--rh-red); border-left: 2px solid var(--rh-red); }
+  .corner-br { bottom: 8px; right: 8px;
+    border-bottom: 2px solid var(--rh-red); border-right: 2px solid var(--rh-red); }
+
+  #digital-twin-iframe {
+    position: relative; z-index: 2;
+    flex: 1; width: 100%; border: none;
+    /* slight inset to show the frame */
+    margin: 36px 12px 12px;
+    width: calc(100% - 24px);
+    height: calc(100% - 48px);
+    border-radius: 4px;
+    background: #000;
+    box-shadow: 0 0 40px rgba(238,0,0,0.15);
+  }
+
+  /* ── RIGHT PANEL / FULLSCREEN: SLIDE VIEWER ──────────────── */
+  #panel-right {
+    flex: 1; height: 100%;
+    display: flex; flex-direction: column;
+    position: relative; overflow: hidden;
+    background: var(--rh-dark);
+  }
+
+  /* slide canvas wrapper */
+  #slide-wrapper {
+    flex: 1;
+    display: flex; align-items: center; justify-content: center;
+    position: relative; overflow: hidden;
+    padding: 16px;
+  }
+
+  #slide-canvas {
+    max-width: 100%; max-height: 100%;
+    border-radius: 4px;
+    box-shadow:
+      0 0 0 1px rgba(238,0,0,0.15),
+      0 8px 60px rgba(0,0,0,0.6),
+      0 0 80px rgba(238,0,0,0.05);
+    transition: opacity .25s;
+    display: block;
+  }
+  #slide-canvas.fading { opacity: 0; }
+
+  /* slide number badge */
+  #slide-badge {
+    position: absolute; bottom: 24px; right: 24px;
+    font-size: 10px; letter-spacing: 0.15em;
+    color: var(--rh-muted); background: rgba(10,0,0,0.6);
+    padding: 4px 10px; border: 1px solid var(--rh-dim);
+    border-radius: 3px; backdrop-filter: blur(8px);
+  }
+
+  /* red accent line top of slide panel */
+  #panel-right::before {
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--rh-red), transparent);
+    z-index: 10;
+  }
+
+  /* ── BOTTOM CONTROLS (windowed only) ─────────────────────── */
+  #controls {
+    height: 52px;
+    display: flex; align-items: center; justify-content: center; gap: 12px;
+    border-top: 1px solid rgba(238,0,0,0.15);
+    background: rgba(10,0,0,0.7);
+    backdrop-filter: blur(12px);
+    padding: 0 20px;
+    flex-shrink: 0;
+  }
+
+  .ctrl-btn {
+    display: flex; align-items: center; gap: 6px;
+    padding: 7px 16px; border-radius: 4px; border: 1px solid var(--rh-dim);
+    background: var(--rh-mid); color: var(--rh-text);
+    font-family: inherit; font-size: 11px; letter-spacing: 0.08em;
+    text-transform: uppercase; cursor: pointer;
+    transition: all .15s;
+  }
+  .ctrl-btn:hover:not(:disabled) {
+    border-color: var(--rh-red); color: var(--rh-red);
+    background: rgba(238,0,0,0.08);
+  }
+  .ctrl-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+  .ctrl-btn.primary {
+    background: var(--rh-red); border-color: var(--rh-red); color: #fff;
+  }
+  .ctrl-btn.primary:hover { background: var(--rh-accent); }
+
+  /* progress bar */
+  #progress-bar {
+    flex: 1; max-width: 200px; height: 3px;
+    background: var(--rh-dim); border-radius: 2px; overflow: hidden;
+  }
+  #progress-fill {
+    height: 100%; background: var(--rh-red);
+    transition: width .3s ease;
+    border-radius: 2px;
+  }
+
+  /* ── STATUS DOT ──────────────────────────────────────────── */
+  #status-dot {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 10px; letter-spacing: 0.08em; color: var(--rh-muted);
+  }
+  .dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--rh-muted);
+    transition: background .3s;
+  }
+  .dot.live { background: #00cc66; box-shadow: 0 0 6px #00cc66; animation: pulse 1.5s infinite; }
+  .dot.waiting { background: #ffaa00; box-shadow: 0 0 6px #ffaa00; }
+  .dot.error { background: var(--rh-red); box-shadow: 0 0 6px var(--rh-red); }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
+
+  /* ── SPEECH BUBBLE ───────────────────────────────────────── */
+  #speech-bar {
+    flex-shrink: 0;
+    min-height: 0;
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height .4s ease, padding .4s ease;
+    background: rgba(10,0,0,0.75);
+    border-top: 1px solid rgba(238,0,0,0.2);
+    backdrop-filter: blur(12px);
+    display: flex; align-items: flex-start; gap: 12px;
+    padding: 0 16px;
+  }
+  #speech-bar.visible {
+    max-height: 110px;
+    padding: 12px 16px;
+  }
+  .speech-icon {
+    flex-shrink: 0; margin-top: 2px;
+    display: flex; flex-direction: column; align-items: center; gap: 3px;
+  }
+  .speech-icon svg { opacity: 0.85; }
+  .speech-waves {
+    display: flex; gap: 2px; align-items: flex-end; height: 12px;
+  }
+  .speech-waves span {
+    display: block; width: 3px; border-radius: 2px;
+    background: var(--rh-red);
+    animation: wave 1s ease-in-out infinite;
+  }
+  .speech-waves span:nth-child(1){ height:6px;  animation-delay: 0s; }
+  .speech-waves span:nth-child(2){ height:10px; animation-delay:.15s; }
+  .speech-waves span:nth-child(3){ height:12px; animation-delay:.3s; }
+  .speech-waves span:nth-child(4){ height:8px;  animation-delay:.45s; }
+  .speech-waves span:nth-child(5){ height:5px;  animation-delay:.6s; }
+  @keyframes wave {
+    0%,100%{ transform: scaleY(0.5); opacity:.5; }
+    50%    { transform: scaleY(1);   opacity:1; }
+  }
+  #speech-label {
+    font-size: 9px; letter-spacing: 0.15em; text-transform: uppercase;
+    color: var(--rh-red); margin-bottom: 4px;
+  }
+  #speech-text {
+    font-size: 11.5px; line-height: 1.6; color: var(--rh-text);
+    letter-spacing: 0.02em;
+    display: -webkit-box; -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical; overflow: hidden;
+    opacity: 0; transition: opacity .35s .15s;
+  }
+  #speech-bar.visible #speech-text { opacity: 1; }
+
+  /* ── FULLSCREEN overrides ────────────────────────────────── */
+  body.mode-full #panel-left  { display: none; }
+  body.mode-full #panel-right { width: 100%; }
+  body.mode-full #controls    { display: none; }
+
+  body.mode-window #panel-left  { display: flex; }
+  body.mode-window #panel-right { /* flex:1 already */ }
+
+  /* ── LOADING SCREEN ──────────────────────────────────────── */
+  #loading {
+    position: fixed; inset: 0; z-index: 200;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 20px;
+    background: var(--rh-dark);
+    transition: opacity .5s;
+  }
+  #loading.hidden { opacity: 0; pointer-events: none; }
+
+  .load-hat { animation: hatBounce 1.2s ease-in-out infinite; }
+  @keyframes hatBounce {
+    0%,100%{ transform: translateY(0); }
+    50%     { transform: translateY(-12px); }
+  }
+  .load-text {
+    font-size: 12px; letter-spacing: 0.2em; text-transform: uppercase;
+    color: var(--rh-muted);
+  }
+  .load-bar {
+    width: 200px; height: 2px; background: var(--rh-dim);
+    border-radius: 1px; overflow: hidden;
+  }
+  .load-fill {
+    height: 100%; background: var(--rh-red);
+    animation: loadAnim 1.5s ease-in-out infinite;
+    border-radius: 1px;
+  }
+  @keyframes loadAnim {
+    0%  { width: 0%; margin-left: 0; }
+    50% { width: 60%; margin-left: 20%; }
+    100%{ width: 0%; margin-left: 100%; }
+  }
+
+  /* ── TOAST ───────────────────────────────────────────────── */
+  #toast {
+    position: fixed; bottom: 70px; left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: rgba(10,0,0,0.9); border: 1px solid var(--rh-dim);
+    color: var(--rh-text); padding: 8px 18px;
+    font-size: 11px; letter-spacing: 0.08em;
+    border-radius: 4px; z-index: 300;
+    opacity: 0; transition: all .25s;
+    pointer-events: none; backdrop-filter: blur(12px);
+  }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+</style>
+</head>
+<body class="mode-window">
+
+<!-- Loading Screen -->
+<div id="loading">
+  <svg class="load-hat" width="64" height="64" viewBox="0 0 64 64">
+    <ellipse cx="32" cy="46" rx="28" ry="8" fill="#ee0000" opacity="0.3"/>
+    <ellipse cx="32" cy="42" rx="28" ry="8" fill="#ee0000"/>
+    <path d="M14 42 C14 42 18 20 32 16 C46 20 50 42 50 42 Z" fill="#cc0000"/>
+    <ellipse cx="32" cy="42" rx="28" ry="6" fill="#ee0000"/>
+  </svg>
+  <div class="load-text">Loading Presentation</div>
+  <div class="load-bar"><div class="load-fill"></div></div>
+</div>
+
+<!-- Top Bar -->
+<div id="topbar">
+  <div class="rh-logo">
+    <!-- Red Hat hat icon -->
+    <svg width="28" height="22" viewBox="0 0 28 22">
+      <ellipse cx="14" cy="18" rx="12" ry="4" fill="#ee0000" opacity="0.4"/>
+      <ellipse cx="14" cy="16" rx="12" ry="4" fill="#ee0000"/>
+      <path d="M6 16 C6 16 8 6 14 4 C20 6 22 16 22 16 Z" fill="#cc0000"/>
+    </svg>
+    Red Hat Summit
+  </div>
+  <div class="topbar-sep"></div>
+  <div class="topbar-title">The Future of Embodied AI: Humanoid Robotics</div>
+
+  <!-- Status -->
+  <div id="status-dot">
+    <div class="dot waiting" id="dot"></div>
+    <span id="status-text">Connecting</span>
+  </div>
+
+  <div class="topbar-sep"></div>
+
+  <!-- Mode Toggle -->
+  <div id="mode-toggle">
+    <button class="mode-btn active" id="btn-window" onclick="setMode('window')">Window</button>
+    <button class="mode-btn" id="btn-full" onclick="setMode('full')">Full</button>
+  </div>
+
+  <div id="page-indicator">— / —</div>
+</div>
+
+<!-- App -->
+<div id="app">
+  <!-- Left: Digital Twin iframe -->
+  <div id="panel-left">
+    <div class="grid-bg"></div>
+    <div class="corner corner-tl"></div>
+    <div class="corner corner-tr"></div>
+    <div class="corner corner-bl"></div>
+    <div class="corner corner-br"></div>
+    <div class="panel-label">◈ Digital Twin Live Feed</div>
+    <iframe id="digital-twin-iframe"
+      src="about:blank"
+      title="Digital Twin Feed"
+      allow="autoplay; fullscreen"
+      sandbox="allow-scripts allow-same-origin allow-forms allow-popups">
+    </iframe>
+  </div>
+
+  <!-- Right: Slide Viewer -->
+  <div id="panel-right">
+    <div id="slide-wrapper">
+      <canvas id="slide-canvas"></canvas>
+      <div id="slide-badge">SLIDE 1</div>
+    </div>
+
+    <!-- Robot Speech Bar -->
+    <div id="speech-bar">
+      <div class="speech-icon">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+          <circle cx="12" cy="8" r="4" fill="#ee0000" opacity="0.9"/>
+          <path d="M6 20c0-3.3 2.7-6 6-6s6 2.7 6 6" stroke="#ee0000" stroke-width="1.5" stroke-linecap="round" fill="none" opacity="0.6"/>
+          <circle cx="12" cy="8" r="2" fill="#fff" opacity="0.3"/>
+        </svg>
+        <div class="speech-waves">
+          <span></span><span></span><span></span><span></span><span></span>
+        </div>
+      </div>
+      <div style="flex:1; min-width:0;">
+        <div id="speech-label" style="display:flex;align-items:center;gap:8px;">
+          ◈ Robot Speech
+          <span id="motion-badge" style="display:none;font-size:9px;letter-spacing:0.12em;
+            text-transform:uppercase;background:rgba(238,0,0,0.15);border:1px solid rgba(238,0,0,0.4);
+            color:var(--rh-accent);padding:2px 7px;border-radius:3px;font-family:inherit;">
+          </span>
+        </div>
+        <div id="speech-text"></div>
+      </div>
+    </div>
+
+    <!-- Bottom Controls (window mode) -->
+    <div id="controls">
+      <button class="ctrl-btn" id="btn-prev" onclick="prevSlide()" disabled>
+        ◀ Prev
+      </button>
+
+      <div id="progress-bar">
+        <div id="progress-fill" style="width:0%"></div>
+      </div>
+
+      <button class="ctrl-btn primary" id="btn-next" onclick="nextSlide()">
+        Next ▶
+      </button>
+
+      <div class="topbar-sep"></div>
+
+      <button class="ctrl-btn" onclick="goToSlide(1)">↩ Reset</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<script>
+// ── CONFIG ───────────────────────────────────────────────────
+const DIGITAL_TWIN_IP = '127.0.0.1:50002'; // ← IP:PORT only — change here
+
+const CONFIG = {
+  pdfUrl:      'redhat2.pdf',              // ← PDF 파일명 변경 시 여기만 수정
+  apiBase:     'http://127.0.0.1:59530',
+  digitalTwin: `http://${DIGITAL_TWIN_IP}/dashboard`,
+  scale:       2.0,                        // render resolution multiplier
+};
+
+// ── SLIDE SCRIPTS (robot utterance per page) ─────────────────
+// 9-page deck: redhat2.pdf
+// Edit freely. Key = page number (1-based). Fallback = SCRIPTS.default
+const SCRIPTS = {
+  default: "Advancing to the next slide. Stand by.",
+
+  1:  "Hello, everyone. I am a humanoid robot, and I am proud to stand here at Red Hat Summit. " +
+      "This presentation is brought to you by Circulus Robotics, Intel, and Red Hat. " +
+      "Today we will show you the future of embodied AI — humanoid robots stepping off the drawing board " +
+      "and onto the industrial frontline.",
+
+  2:  "This section is titled Physical AI Brain on Core Ultra 3. " +
+      "The compute platform inside my body is no longer a retrofitted PC. " +
+      "It is a purpose-built Physical AI Brain — designed from the ground up to think, " +
+      "perceive, and act in real time.",
+
+  3:  "We are establishing the WINTEL standard for Physical AI: " +
+      "a unified CPU, GPU, and NPU architecture that works across all robot form factors. " +
+      "Whether it is a mobile service robot, an industrial arm, or a full humanoid like me — " +
+      "the same software stack runs on all of them. " +
+      "Proven factory applications include pick and place, visual inspection, " +
+      "worker safety monitoring, and RFID-based inventory management.",
+
+  4:  "The Intel Core Ultra is the most human-like brain ever built for a humanoid. " +
+      "Built on Red Hat Enterprise Linux 10.2 for stability and reliability. " +
+      "The Vision-Language Action model handles speech-to-text understanding. " +
+      "The control system drives actuators using text-to-speech inference. " +
+      "The NPU processes multiple cameras in real time. " +
+      "And the E-core manages audio, sensors, data logging, and management — all simultaneously.",
+
+  5:  "This is a giant leap beyond single-channel compute. " +
+      "The old approach — NVIDIA Jetson on Unitree G1 — required two separate PCs and a slow interchange. " +
+      "With Intel Core Ultra 3 on MCR-1, the GPU, NPU, P-core, and E-core work in perfect synergy on one chip. " +
+      "Vision performance stays stable under full load, and battery life extends up to 2.1 times " +
+      "in warehouse deployment scenarios.",
+
+  6:  "Specialized engines, one unified intelligence. " +
+      "The GPU runs batch multimodal understanding — vision, speech-to-text, motion generation, and task management. " +
+      "The NPU handles real-time segmentation, object detection, and human detection. " +
+      "The P-core drives the event-based ROS 2 control pipeline, communications, and motion control. " +
+      "The E-core manages text-to-speech, sound detection, and legacy vision models. " +
+      "Every workload has a home. Every engine has a purpose.",
+
+  7:  "From simulation to reality — scaling humanoid deployment safely and efficiently. " +
+      "Using a Digital Twin environment, we train robot behaviors virtually before deploying them physically. " +
+      "This dramatically reduces cost and eliminates dangerous trial-and-error on real hardware. " +
+      "The result is the K-HUMANOID platform: a family of robots ready for cost-effective, safe deployment " +
+      "across diverse industrial environments.",
+
+  8:  "From vision to action — high-performance Physical AI for real factories. " +
+      "What you see here is not a lab demo. These are live deployments. " +
+      "Robots performing real tasks: vision-guided manipulation, multi-robot coordination, " +
+      "inspection on production lines, and autonomous navigation in unstructured environments. " +
+      "This is the world-class humanoid ecosystem we are building together, " +
+      "optimized for global industrial standards.",
+
+  9:  "Thank you for joining us at Red Hat Summit. " +
+      "The age of the humanoid worker has arrived — not in science fiction, but on your factory floor today. " +
+      "Powered by Intel Core Ultra silicon, Circulus Physical AI intelligence, " +
+      "and Red Hat Enterprise Linux reliability. " +
+      "We are ready to build this future with you.",
+};
+
+// ── SLIDE MOTIONS (robot body motion per page) ───────────────
+// Available: both_pose | clap | curious | greet | left_pose | look_around | right_pose
+// Set to null to send no motion for that slide.
+const MOTIONS = {
+  default: null,
+  1: 'greet',        // Opening — wave hello to the audience
+  2: 'curious',      // Introducing the Physical AI Brain concept
+  3: 'both_pose',    // Presenting the WINTEL standard with open arms
+  4: 'left_pose',    // Gesturing to the Core Ultra brain diagram
+  5: 'right_pose',   // Pointing to the performance comparison charts
+  6: 'look_around',  // Surveying all the specialized compute engines
+  7: 'curious',      // Reflecting on simulation-to-reality transition
+  8: 'both_pose',    // Proud pose — showing real factory deployments
+  9: 'clap',         // Closing — thank you and applause
+};
+
+
+const state = {
+  pdf:          null,
+  totalPages:   0,
+  currentPage:  1,
+  mode:         'window',
+  rendering:    false,
+  autoRunning:  true,   // false = 수동 조작으로 자동 진행 중단됨
+};
+
+// ── DOM REFS ─────────────────────────────────────────────────
+const canvas    = document.getElementById('slide-canvas');
+const ctx       = canvas.getContext('2d');
+const loading   = document.getElementById('loading');
+const badge     = document.getElementById('slide-badge');
+const indicator = document.getElementById('page-indicator');
+const fillEl    = document.getElementById('progress-fill');
+const prevBtn   = document.getElementById('btn-prev');
+const nextBtn   = document.getElementById('btn-next');
+const dot       = document.getElementById('dot');
+const statusTxt = document.getElementById('status-text');
+const iframe    = document.getElementById('digital-twin-iframe');
+
+// ── PDF.js SETUP ─────────────────────────────────────────────
+pdfjsLib.GlobalWorkerOptions.workerSrc =
+  'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+// ── INIT ──────────────────────────────────────────────────────
+async function init() {
+  try {
+    state.pdf = await pdfjsLib.getDocument(CONFIG.pdfUrl).promise;
+    state.totalPages = state.pdf.numPages;
+    await renderPage(state.currentPage);
+    hideLoading();
+    updateUI();
+    startPolling();
+    notifyApi(state.currentPage);
+  } catch (e) {
+    console.error('PDF load error:', e);
+    document.querySelector('.load-text').textContent = 'Error loading PDF';
+  }
+}
+
+// ── RENDER ───────────────────────────────────────────────────
+async function renderPage(pageNum, animate = false) {
+  if (state.rendering) return;
+  state.rendering = true;
+
+  if (animate) canvas.classList.add('fading');
+
+  const page     = await state.pdf.getPage(pageNum);
+  const viewport = page.getViewport({ scale: CONFIG.scale });
+
+  canvas.width  = viewport.width;
+  canvas.height = viewport.height;
+
+  await page.render({ canvasContext: ctx, viewport }).promise;
+
+  if (animate) {
+    await delay(50);
+    canvas.classList.remove('fading');
+  }
+  state.rendering = false;
+}
+
+// ── NAVIGATION ───────────────────────────────────────────────
+// manualOverride: true → 버튼/키보드 조작, false → 자동 진행
+async function goToSlide(n, manualOverride = false) {
+  const target = Math.max(1, Math.min(n, state.totalPages));
+
+  // 같은 페이지 재진입은 수동 조작일 때만 막음 (자동 진행은 항상 실행)
+  if (manualOverride && target === state.currentPage) return;
+
+  state.currentPage = target;
+  await renderPage(target, true);
+  updateUI();
+
+  // 수동 조작 시 진행 중인 자동 시퀀스 중단
+  if (manualOverride) state.autoRunning = false;
+
+  notifyApi(target);
+}
+
+function prevSlide() { goToSlide(state.currentPage - 1, true); }
+function nextSlide() { goToSlide(state.currentPage + 1, true); }
+
+// ── API NOTIFY + 자동 페이지 진행 ────────────────────────────
+// 흐름: /slide 호출 → 서버가 TTS 재생 + 3초 대기 후 응답
+//       → result:true 받으면 다음 페이지로 자동 전진
+async function notifyApi(page) {
+  const text   = SCRIPTS[page] ?? SCRIPTS.default;
+  const motion = MOTIONS[page] ?? MOTIONS.default;
+
+  let url = `${CONFIG.apiBase}/slide?page=${page}&text=${encodeURIComponent(text)}`;
+  if (motion) url += `&motion=${encodeURIComponent(motion)}`;
+
+  showSpeech(text, motion);   // 즉시 UI에 발화 내용 표시
+  setStatus('waiting', 'Speaking...');
+
+  try {
+    const res  = await fetch(url, { method: 'GET', mode: 'cors' });
+    const data = await res.json();
+    setStatus('live', 'API Connected');
+
+    // 서버 응답 후 자동으로 다음 페이지 진행
+    // (수동 조작으로 이미 다른 페이지로 이동했으면 중단)
+    if (data.result && state.currentPage === page) {
+      const next = page + 1;
+      if (next <= state.totalPages) {
+        await goToSlide(next, false);   // 자동 진행
+      } else {
+        setStatus('live', 'Presentation Complete');
+      }
+    }
+  } catch {
+    setStatus('error', 'API Unreachable');
+  }
+}
+
+// polling 제거 — notifyApi 응답 기반으로 자동 진행하므로 불필요
+function startPolling() { /* no-op */ }
+
+// ── MODE ──────────────────────────────────────────────────────
+function setMode(m) {
+  state.mode = m;
+  document.body.className = `mode-${m}`;
+  document.getElementById('btn-window').classList.toggle('active', m === 'window');
+  document.getElementById('btn-full').classList.toggle('active', m === 'full');
+
+  // Load digital twin iframe only in window mode
+  if (m === 'window') {
+    if (iframe.src === 'about:blank') {
+      iframe.src = CONFIG.digitalTwin;
+    }
+  }
+}
+
+// ── UI UPDATES ────────────────────────────────────────────────
+function updateUI() {
+  const cur = state.currentPage;
+  const tot = state.totalPages;
+  badge.textContent     = `SLIDE ${cur}`;
+  indicator.textContent = `${cur} / ${tot}`;
+  fillEl.style.width    = `${(cur / tot) * 100}%`;
+  prevBtn.disabled      = cur <= 1;
+  nextBtn.disabled      = cur >= tot;
+}
+
+function setStatus(type, text) {
+  dot.className = `dot ${type}`;
+  statusTxt.textContent = text;
+}
+
+function hideLoading() {
+  loading.classList.add('hidden');
+  setTimeout(() => loading.style.display = 'none', 600);
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// ── SPEECH DISPLAY ────────────────────────────────────────────
+function showSpeech(text, motion) {
+  const bar     = document.getElementById('speech-bar');
+  const textEl  = document.getElementById('speech-text');
+  const motionEl = document.getElementById('motion-badge');
+
+  bar.classList.remove('visible');
+  textEl.textContent = '';
+
+  if (motionEl) {
+    if (motion) {
+      motionEl.textContent = `▶ ${motion}`;
+      motionEl.style.display = 'inline-block';
+    } else {
+      motionEl.style.display = 'none';
+    }
+  }
+
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      textEl.textContent = text;
+      bar.classList.add('visible');
+    });
+  });
+}
+
+
+
+function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// ── KEYBOARD SHORTCUTS ────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === ' ') {
+    e.preventDefault(); nextSlide();
+  } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+    e.preventDefault(); prevSlide();
+  } else if (e.key === 'f' || e.key === 'F') {
+    setMode(state.mode === 'full' ? 'window' : 'full');
+  } else if (e.key === 'Home') {
+    goToSlide(1);
+  } else if (e.key === 'End') {
+    goToSlide(state.totalPages);
+  }
+});
+
+// ── START ─────────────────────────────────────────────────────
+init();
+</script>
+</body>
+</html>
