@@ -449,7 +449,7 @@ body::after {
 <div class="bbar">ARCos · REDHAT × CIRCULUS × INTEL COLLABORATION · REDHAT SUMMIT 2025</div>
 
 <script>
-   alert('REDHAT 260511-0855')
+   alert('REDHAT 260511-0900')
 /* ─── CONFIG ─── */
 const BASE    = 'http://192.168.68.116:59531';
 const BASE_AI = 'http://192.168.68.116:59532';
@@ -635,7 +635,7 @@ async function execDeliver() {
 
 // STT endpoint — POST multipart audio, returns { result, data }
 const STT_URL  = `${BASE}/v1/stt`;
-const IMG2CHAT = `${BASE_AI}/v1/txt2chat` //`${BASE_AI}/v2/img2chat`;
+const IMG2CHAT = `${BASE_AI}/v1/rag/txt2chat` //`${BASE_AI}/v2/img2chat`;
 
 let isRec = false, visInt = null;
 let mediaRec = null, audioChunks = [], gumStream = null;
