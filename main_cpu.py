@@ -28,6 +28,7 @@ import subprocess
 from slide import create_slide_router
 import threading
 import queue
+import asyncio
 # 기존 임포트 항목들 (numpy, time, scipy.io.wavfile 등)
 
 app = FastAPI()
