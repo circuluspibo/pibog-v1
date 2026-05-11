@@ -486,13 +486,21 @@ function setTheme(name, pill) {
   let cols, drops;
 
   function resize() {
-    canvas.width  = window.innerWidth;
-    canvas.height = window.innerHeight;
-    cols  = Math.floor(canvas.width / FS);
-    drops = Array.from({ length: cols }, () => Math.random() * -(canvas.height / FS));
+    // Only resize if dimensions actually changed — prevents DevTools trigger loop
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    if (canvas.width === w && canvas.height === h) return;
+    canvas.width  = w;
+    canvas.height = h;
+    cols  = Math.floor(w / FS);
+    drops = Array.from({ length: cols }, () => Math.random() * -(h / FS));
   }
   resize();
-  window.addEventListener('resize', resize);
+  let resizeTimer;
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(resize, 150);
+  });
 
   function getMatColors() {
     const st = getComputedStyle(document.documentElement);
