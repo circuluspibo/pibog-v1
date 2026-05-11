@@ -604,10 +604,27 @@ async function execDeliver() {
   } catch(e) { prog.classList.remove('active'); setDS('⚠  Connection failed — check server', ''); deliverBusy = false; }
 }
 
-/* ─── TALK ─── */
-const REC_START = `${BASE}/rec/start`;
-const REC_STOP  = `${BASE}/rec/stop`;
+/* ════════════════════════════════════════════════════
+   TALK MODE
+   ┌─ Tablet mic (MediaRecorder) ──────────────────┐
+   │  1. getUserMedia() → MediaRecorder (webm/ogg)  │
+   │  2. Stop → Blob → POST multipart /v1/stt       │
+   │     field name: "file"                         │
+   │     returns: { result: true, data: "text" }    │
+   │  3. data text → /v2/img2chat (scene-aware)     │
+   └───────────────────────────────────────────────┘
+   curl equivalent (what the browser replicates):
+     curl -X POST                                    
+       'http://192.168.68.116:59531/v1/stt?lang=en&isPlay=0'
+       -F 'file=@voice.webm;type=audio/webm'
+════════════════════════════════════════════════════ */
+
+// STT endpoint — POST multipart audio, returns { result, data }
+const STT_URL  = `${BASE}/v1/stt`;
+const IMG2CHAT = `${BASE_AI}/v2/img2chat`;
+
 let isRec = false, visInt = null;
+let mediaRec = null, audioChunks = [], gumStream = null;
 
 const vizEl = document.getElementById('viz');
 for (let i = 0; i < 22; i++) {
@@ -615,81 +632,233 @@ for (let i = 0; i < 22; i++) {
 }
 
 function enterTalk() { showScreen('screen-talk'); resetTalk(); }
+
 function resetTalk() {
-  const mb = document.getElementById('micBtn'); mb.className = 'mic-btn'; mb.textContent = '🎤';
+  const mb = document.getElementById('micBtn');
+  mb.className = 'mic-btn'; mb.textContent = '🎤';
   setMS('', 'Tap microphone to start voice input');
   document.getElementById('transcript').textContent = '—';
   document.getElementById('response').textContent = '';
   vizEl.classList.remove('active'); stopViz();
 }
-function stopMicIfActive() { if (isRec) { fetch(REC_STOP).catch(()=>{}); isRec = false; } stopViz(); }
+
+function stopMicIfActive() {
+  if (mediaRec && mediaRec.state !== 'inactive') mediaRec.stop();
+  if (gumStream) { gumStream.getTracks().forEach(t => t.stop()); gumStream = null; }
+  isRec = false; stopViz();
+}
 
 async function toggleMic() {
   if (isRec) {
-    isRec = false; setMicSt('processing'); stopViz(); vizEl.classList.remove('active');
-    try {
-      const r = await (await fetch(REC_STOP)).json();
-      const p = r.data || r.text || '';
-      document.getElementById('transcript').textContent = p || '(no speech recognized)';
-      if (p.trim()) { setMS('success', '✓  Recognized — generating response'); document.getElementById('response').textContent = ''; await generate(p); }
-    } catch(e) { setMS('', '⚠  Server connection error'); }
-    trigMotion(); setMicSt('idle');
+    // STOP — triggers onstop below
+    isRec = false;
+    setMicSt('processing');
+    stopViz(); vizEl.classList.remove('active');
+    if (mediaRec && mediaRec.state !== 'inactive') mediaRec.stop();
+
   } else {
-    try { await fetch(REC_START); isRec = true; setMicSt('recording'); startViz(); }
-    catch(e) { setMS('', '⚠  Recording server unavailable'); }
+    // START — request tablet mic
+    try {
+      gumStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    } catch(e) {
+      setMS('', '⚠  Mic denied — check browser permissions'); return;
+    }
+
+    audioChunks = [];
+
+    // auto-detect best format supported by this browser
+    const mime = ['audio/webm;codecs=opus','audio/webm','audio/ogg;codecs=opus','audio/ogg','audio/mp4']
+      .find(m => MediaRecorder.isTypeSupported(m)) || '';
+
+    mediaRec = new MediaRecorder(gumStream, mime ? { mimeType: mime } : {});
+    mediaRec.ondataavailable = e => { if (e.data && e.data.size > 0) audioChunks.push(e.data); };
+
+    mediaRec.onstop = async () => {
+      // release mic hardware immediately
+      gumStream.getTracks().forEach(t => t.stop()); gumStream = null;
+
+      const blob = new Blob(audioChunks, { type: mediaRec.mimeType || 'audio/webm' });
+      audioChunks = [];
+
+      const ext = (mediaRec.mimeType || '').includes('ogg') ? 'ogg'
+                : (mediaRec.mimeType || '').includes('mp4') ? 'm4a' : 'webm';
+
+      setMS('processing', '◌  Sending to STT server...');
+
+      try {
+        /* Replicates:
+           curl -X POST 'http://192.168.68.116:59531/v1/stt?lang=en&isPlay=0'
+                -F 'file=@voice.webm;type=audio/webm'
+           Browser FormData sets Content-Type + boundary automatically —
+           do NOT set Content-Type header manually. */
+        const fd = new FormData();
+        fd.append('file', blob, `voice.${ext}`);
+
+        const sttRes = await fetch(`${STT_URL}?lang=en&isPlay=0`, {
+          method: 'POST',
+          body:   fd          // no Content-Type header — browser handles it
+        });
+
+        if (!sttRes.ok) throw new Error(`STT HTTP ${sttRes.status}`);
+
+        const j = await sttRes.json();
+        // server returns { result: true, data: "recognized text" }
+        const recognized = j.data || j.text || '';
+
+        document.getElementById('transcript').textContent = recognized || '(no speech recognized)';
+
+        if (recognized.trim()) {
+          setMS('success', '✓  Recognized — generating response');
+          document.getElementById('response').textContent = '';
+          await callImg2Chat(recognized);
+        } else {
+          setMS('', 'No speech detected — tap to try again');
+        }
+
+      } catch(err) {
+        console.error('[STT]', err);
+        setMS('', (err instanceof TypeError)
+          ? '⚠  CORS/network error — check server Access-Control headers'
+          : `⚠  STT error: ${err.message}`);
+      }
+
+      trigMotion();
+      setMicSt('idle');
+    };
+
+    mediaRec.start(250);
+    isRec = true;
+    setMicSt('recording');
+    startViz();
   }
 }
+
+/* img2chat — robot sees current camera view + responds to user */
+async function callImg2Chat(userText) {
+  const system =
+    'You are ARCos, a 16-year-old humanoid robot at a RedHat Summit demo. ' +
+    'You can see the people and scene in front of you through your camera. ' +
+    'Be energetic, friendly, and concise — max 2 sentences.';
+
+  const params = new URLSearchParams({ prompt: userText, system, lang: 'en', isPlay: '1' });
+
+  try {
+    const resp = await fetch(`${IMG2CHAT}?${params}`);
+    if (!resp.ok) throw new Error(`img2chat HTTP ${resp.status}`);
+    const reader = resp.body.getReader(), dec = new TextDecoder();
+    const el = document.getElementById('response');
+    while (true) {
+      const { done, value } = await reader.read(); if (done) break;
+      el.textContent += dec.decode(value, { stream: true });
+      el.scrollTop = el.scrollHeight;
+    }
+  } catch(e) {
+    console.warn('[img2chat] fallback to txt2chat:', e.message);
+    await callTxt2Chat(userText, system);
+  }
+}
+
+async function callTxt2Chat(prompt, system) {
+  try {
+    const params = new URLSearchParams({ prompt, system, lang: 'en', isPlay: '1' });
+    const resp = await fetch(`${BASE_AI}/v1/txt2chat?${params}`);
+    if (!resp.ok) return;
+    const reader = resp.body.getReader(), dec = new TextDecoder();
+    const el = document.getElementById('response');
+    while (true) {
+      const { done, value } = await reader.read(); if (done) break;
+      el.textContent += dec.decode(value, { stream: true });
+      el.scrollTop = el.scrollHeight;
+    }
+  } catch(e) { document.getElementById('response').textContent = 'Response error'; }
+}
+
 function setMicSt(s) {
   const mb = document.getElementById('micBtn');
-  if (s === 'recording')  { mb.className='mic-btn recording';  mb.textContent='⏹'; setMS('recording','● Recording — tap again to stop'); }
-  else if (s==='processing'){ mb.className='mic-btn processing'; mb.textContent='◌'; setMS('processing','◌  Processing...'); }
-  else { mb.className='mic-btn'; mb.textContent='🎤'; setMS('','Tap microphone to start voice input'); }
+  if      (s === 'recording')  { mb.className='mic-btn recording';  mb.textContent='⏹'; setMS('recording',  '● Recording — tap again to stop'); }
+  else if (s === 'processing') { mb.className='mic-btn processing'; mb.textContent='◌'; setMS('processing', '◌  Processing...'); }
+  else                         { mb.className='mic-btn';            mb.textContent='🎤'; setMS('', 'Tap microphone to start voice input'); }
 }
-function setMS(cls, msg) { const el=document.getElementById('mstatus'); el.className='mstatus'+(cls?' '+cls:''); el.textContent=msg; }
-function startViz() { vizEl.classList.add('active'); const bars=vizEl.querySelectorAll('.vbar'); visInt=setInterval(()=>{bars.forEach(b=>{b.style.height=(Math.random()*28+3)+'px';});},85); }
-function stopViz()  { if(visInt){clearInterval(visInt);visInt=null;} vizEl.querySelectorAll('.vbar').forEach(b=>b.style.height='3px'); }
-async function generate(prompt) {
-  try {
-    const resp=await fetch(`${BASE_AI}/v1/txt2chat?prompt=${encodeURIComponent(prompt)}&lang=en&isPlay=1`);
-    if(!resp.ok)return;
-    const reader=resp.body.getReader(),dec=new TextDecoder();
-    const el=document.getElementById('response');
-    while(true){const{done,value}=await reader.read();if(done)break;el.textContent+=dec.decode(value,{stream:true});el.scrollTop=el.scrollHeight;}
-  } catch(e){document.getElementById('response').textContent='Response error';}
+function setMS(cls, msg) {
+  const el = document.getElementById('mstatus');
+  el.className = 'mstatus' + (cls ? ' ' + cls : ''); el.textContent = msg;
 }
-function trigMotion(){const m=['','test1','test2','test3'][Date.now()%4];fetch(`${MOTION}/motion${m?'?name='+m:''}`).catch(()=>{});}
+function startViz() {
+  vizEl.classList.add('active');
+  const bars = vizEl.querySelectorAll('.vbar');
+  visInt = setInterval(() => bars.forEach(b => { b.style.height = (Math.random()*28+3)+'px'; }), 85);
+}
+function stopViz() {
+  if (visInt) { clearInterval(visInt); visInt = null; }
+  vizEl.querySelectorAll('.vbar').forEach(b => b.style.height = '3px');
+}
+function trigMotion() {
+  const m = ['','test1','test2','test3'][Date.now() % 4];
+  fetch(`${MOTION}/motion${m ? '?name='+m : ''}`).catch(() => {});
+}
 
-/* ─── AUTO ─── */
-let autoInt=null, lastAutoTime=0;
-function enterAuto(){showScreen('screen-auto');addLog('AUTO MODE ACTIVATED');addLog('Scanning for humans...');startAuto();}
-function startAuto(){
-  if(autoInt)clearInterval(autoInt);
-  autoInt=setInterval(async()=>{
-    try{
-      const data=(await(await fetch(`${BASE}/heartbeat`)).json()).data;
-      const live=data.cnt_live||0;
-      const det=document.getElementById('adet');
-      det.textContent=live>0?'FOUND':'SCAN';
-      det.style.color=live>0?'#00cc66':'rgba(0,204,102,0.32)';
-      document.getElementById('adep').textContent=data.human?.depth!=null?(+data.human.depth).toFixed(1):'—';
-      document.getElementById('apos').textContent=data.human?.position||'—';
-      document.getElementById('alive').textContent=live;
-      if(Date.now()-lastAutoTime>30000&&live>0){
-        lastAutoTime=Date.now();
-        addLog(`Human at ${data.human?.position||'?'} — greeting initiated`);
-        fetch(`${BASE_AI}/v1/txt2chat?prompt=${encodeURIComponent('Greet the person in front of you briefly and energetically!')}&lang=en&isPlay=1`).catch(()=>{});
+/* ════════════════════════════════════════════════════
+   AUTO MODE — proactive greeting based on heartbeat
+════════════════════════════════════════════════════ */
+let autoInt = null, lastAutoTime = 0;
+
+function enterAuto() {
+  showScreen('screen-auto');
+  addLog('AUTO MODE ACTIVATED');
+  addLog('Scanning for humans...');
+  startAuto();
+}
+
+function startAuto() {
+  if (autoInt) clearInterval(autoInt);
+  autoInt = setInterval(async () => {
+    try {
+      const data = (await (await fetch(`${BASE}/heartbeat`)).json()).data;
+      const live = data.cnt_live || 0;
+
+      const det = document.getElementById('adet');
+      det.textContent = live > 0 ? 'FOUND' : 'SCAN';
+      det.style.color  = live > 0 ? '#00cc66' : 'rgba(0,204,102,0.32)';
+      document.getElementById('adep').textContent  = data.human?.depth    != null ? (+data.human.depth).toFixed(1) : '—';
+      document.getElementById('apos').textContent  = data.human?.position || '—';
+      document.getElementById('alive').textContent = live;
+
+      if (Date.now() - lastAutoTime > 30000 && live > 0) {
+        lastAutoTime = Date.now();
+
+        const h   = data.human || {};
+        const pos = h.position || 'center';
+        const emo = h.emotion  || 'neutral';
+        const gen = h.gender === 'M' ? 'male' : h.gender === 'F' ? 'female' : 'person';
+        const age = h.age    ? `around ${h.age} years old` : '';
+        const dep = h.depth  != null ? `${(+h.depth).toFixed(1)}m away` : '';
+
+        const prompt =
+          `You are ARCos at a RedHat Summit demo. ` +
+          `You can see through your camera: a ${gen} ${age} ${dep}, standing ${pos}, looking ${emo}. ` +
+          `Proactively greet them with energy in 1-2 sentences, referencing what you observe.`;
+
+        addLog(`Human detected — ${gen} ${age} at ${pos} (${emo})`);
+
+        const params = new URLSearchParams({ prompt, lang: 'en', isPlay: '1' });
+        fetch(`${IMG2CHAT}?${params}`).catch(() => {
+          fetch(`${BASE_AI}/v1/txt2chat?${params}`).catch(() => {});
+        });
+
         trigMotion();
       }
-    }catch(e){addLog('Heartbeat lost — retrying...');}
-  },1000);
+    } catch(e) { addLog('Heartbeat lost — retrying...'); }
+  }, 1000);
 }
-function stopAuto(){if(autoInt){clearInterval(autoInt);autoInt=null;}}
-function addLog(msg){
-  const log=document.getElementById('alog');
-  const d=document.createElement('div');
-  d.textContent=`[${new Date().toTimeString().slice(0,8)}] ▶ ${msg}`;
-  log.appendChild(d);log.scrollTop=log.scrollHeight;
-  if(log.children.length>40)log.removeChild(log.firstChild);
+
+function stopAuto() { if (autoInt) { clearInterval(autoInt); autoInt = null; } }
+
+function addLog(msg) {
+  const log = document.getElementById('alog');
+  const d   = document.createElement('div');
+  d.textContent = `[${new Date().toTimeString().slice(0,8)}] ▶ ${msg}`;
+  log.appendChild(d); log.scrollTop = log.scrollHeight;
+  if (log.children.length > 40) log.removeChild(log.firstChild);
 }
 </script>
 </body>
