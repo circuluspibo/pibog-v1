@@ -28,6 +28,8 @@ import numpy as np
 import cv2
 import matplotlib.colors
 import pyaudio
+from fastapi import FastAPI, File, UploadFile, Query, HTTPException
+import httpx
 
 from scipy.io.wavfile import write as write_wav
 from scipy.io.wavfile import write as wav_write
@@ -90,6 +92,9 @@ AUDIO_FORMAT             = pyaudio.paInt16
 AUDIO_CHANNELS           = 2 #1
 AUDIO_RATE               = 44100 #16000
 AUDIO_CHUNK              = 16000
+
+# 실제 STT 서버의 주소
+TARGET_STT_URL = "http://192.168.68.116:59532/v1/stt"
 
 os.makedirs(RECORDING_OUTPUT_DIR, exist_ok=True)
 os.makedirs("output", exist_ok=True)
@@ -796,6 +801,47 @@ def rec_stop():
         return {"result": False, "message": "Not recording"}
     _stop_recording_and_save()
     return {"result": True, "message": "Recording stopped"}
+
+
+@app.post("/v1/stt")
+async def proxy_stt(
+    file: UploadFile = File(...),
+    lang: str = Query("en"),
+    isPlay: int = Query(0)
+):
+    """
+    웹 클라이언트로부터 파일을 받아 내부 STT 서버로 전달합니다.
+    """
+    try:
+        # 1. 클라이언트가 보낸 파일 읽기
+        file_content = await file.read()
+        
+        # 2. 내부 STT 서버로 보낼 파라미터와 파일 구성
+        params = {"lang": lang, "isPlay": isPlay}
+        files = {
+            "file": (file.filename, file_content, file.content_type)
+        }
+
+        # 3. httpx를 사용하여 내부 서버에 POST 요청 (비동기)
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                TARGET_STT_URL,
+                params=params,
+                files=files,
+                timeout=60.0  # STT 처리가 길어질 수 있으므로 타임아웃 넉넉히 설정
+            )
+
+        # 4. 내부 서버의 응답을 그대로 클라이언트에게 반환
+        return response.json()
+
+    except httpx.RequestError as exc:
+        # 내부 서버 연결 실패 시 에러 처리
+        raise HTTPException(status_code=500, detail=f"Internal STT Server connection error: {exc}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        # 파일 리소스 닫기
+        await file.close()
 
 @app.get("/start_collection")
 def start_collection():
