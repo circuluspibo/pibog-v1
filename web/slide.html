@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Red Hat Summit — Humanoid Robotics</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="./pdf.min.js"></script>
 <style>
   /* ── CONFIG ──────────────────────────────────────────────── */
   :root {
@@ -613,8 +613,7 @@ const statusTxt = document.getElementById('status-text');
 const iframe    = document.getElementById('digital-twin-iframe');
 
 // ── PDF.js SETUP ─────────────────────────────────────────────
-pdfjsLib.GlobalWorkerOptions.workerSrc =
-  'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+pdfjsLib.GlobalWorkerOptions.workerSrc = './pdf.worker.min.js';
 
 // ── INIT ──────────────────────────────────────────────────────
 async function init() {
