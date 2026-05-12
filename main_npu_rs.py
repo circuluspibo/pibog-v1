@@ -206,15 +206,25 @@ def visualize_segmentation(frame, masks, boxes, classes, scores, depths, class_n
 
 def get_mask_depths(masks, depth_frame, low_percentile=5):
     depths = []
-    depth_image = np.asanyarray(depth_frame.get_data())
+    depth_image = np.asanyarray(depth_frame.get_data())  # (480, 640)
+    
     for mask in masks:
         if mask.sum() == 0:
             depths.append(0.0)
             continue
-        depth_values = depth_image[mask == 1]
+        
+        # mask 크기(640x640)에 맞게 depth_image 리사이즈
+        mask_h, mask_w = mask.shape
+        depth_resized = cv2.resize(
+            depth_image, 
+            (mask_w, mask_h), 
+            interpolation=cv2.INTER_NEAREST  # depth는 nearest 보간 사용
+        )
+        
+        depth_values = depth_resized[mask == 1]
         valid = depth_values[depth_values > 0]
         if len(valid) > 0:
-            low_thresh = np.percentile(valid, low_percentile)  # 예: 5번째 백분위수
+            low_thresh = np.percentile(valid, low_percentile)
             filtered = valid[valid >= low_thresh]
             if len(filtered) > 0:
                 closest_depth_m = np.min(filtered) / 1000.0
@@ -224,6 +234,33 @@ def get_mask_depths(masks, depth_frame, low_percentile=5):
             closest_depth_m = 0.0
         depths.append(closest_depth_m)
     return depths
+
+
+# ===== 수정 2: processed_frame_queue 옆에 depth_frame_queue 추가 =====
+
+
+
+# ===== 수정 3: processing_thread 안에서 depth 시각화 프레임 저장 =====
+# out = visualize_face(out, face_det_results) 이후에 아래 코드 추가
+
+
+
+# ===== 수정 4: depth_feed 엔드포인트 추가 =====
+
+@app.get("/depth_feed")
+async def depth_feed():
+    def generate():
+        while True:
+            if not depth_frame_queue.empty():
+                output = depth_frame_queue.get()
+                _, img_bytes = cv2.imencode('.jpg', output)
+                frame = img_bytes.tobytes()
+                yield (b'--frame\r\n'
+                       b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n\r\n')
+            else:
+                time.sleep(0.01)
+
+    return StreamingResponse(generate(), media_type="multipart/x-mixed-replace; boundary=frame")
 
 
 ser = None
@@ -240,6 +277,7 @@ _IP = "127.0.0.1" #si.getIP()
 _PORT = int(open("port.txt", 'r').read())
 
 processed_frame_queue = Queue(maxsize=5)
+depth_frame_queue = Queue(maxsize=5)      # ← 추가
 
 cnt_live = 0
 cnt_object = 0
@@ -312,6 +350,20 @@ def processing_thread():
         face_det_results = face_det_compiled_model(input_tensor)[face_det_output_layer]
 
         out = visualize_face(out, face_det_results)
+
+        # --- depth 컬러맵 프레임 생성 ---
+        depth_image_raw = np.asanyarray(depth_frame.get_data())           # (480, 640)
+        depth_colormap = cv2.applyColorMap(
+            cv2.convertScaleAbs(depth_image_raw, alpha=0.03),
+            cv2.COLORMAP_JET
+        )
+        depth_colormap_resized = cv2.resize(depth_colormap, (640, 480))
+
+        if depth_frame_queue.full():
+            depth_frame_queue.get()
+        depth_frame_queue.put(depth_colormap_resized)
+             
+             
 
         # FPS 계산 및 표시
         curr_time = time.time()
@@ -398,5 +450,13 @@ async def start_frame_collection():
          
 
     return {"message": "프레임 수집을 시작했습니다"}
+
+@app.on_event("startup")
+async def startup_event():
+    global is_collecting
+    is_collecting = True
+    threading.Thread(target=fps_saver_thread, daemon=True).start()
+    threading.Thread(target=processing_thread, daemon=True).start()
+    print("✅ 프레임 수집 자동 시작")
 
 print("Loading Complete","NPU")
