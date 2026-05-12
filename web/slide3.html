@@ -16,7 +16,7 @@
     --rh-text:   #f5e6e6;
     --rh-muted:  #a08080;
     --slide-file: 'redhat.pdf';
-    --api-base:  'http://192.168.68.116:59530';
+    --api-base:  'http://172.22.181.100:59530';
   }
 
   /* ── RESET ───────────────────────────────────────────────── */
@@ -475,11 +475,11 @@
 
 <script>
 // ── CONFIG ───────────────────────────────────────────────────
-const DIGITAL_TWIN_IP = '192.168.68.116:50002'; // ← IP:PORT only — change here
+const DIGITAL_TWIN_IP = '172.22.181.100:50002'; // ← IP:PORT only — change here
 
 const CONFIG = {
   pdfUrl:      'redhat2.pdf',              // ← PDF 파일명 변경 시 여기만 수정
-  apiBase:     'http://192.168.68.116:59530',
+  apiBase:     'http://172.22.181.100:59530',
   digitalTwin: `http://${DIGITAL_TWIN_IP}/dashboard`,
   scale:       2.0,                        // render resolution multiplier
 };
