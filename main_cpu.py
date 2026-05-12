@@ -36,7 +36,7 @@ app = FastAPI()
 
 
 def play_sound(file_path):
-    subprocess.run(["aplay","-D","plughw:0,0",file_path])
+    subprocess.run(["aplay","-D","plughw:0,0", file_path], stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
     #subprocess.run(["play", file_path])
 
 
@@ -248,7 +248,7 @@ def audio_player_worker():
                 trigger_motion_once(motion)
 
             print(f"[play] {file_path}")
-            subprocess.run(["play", file_path], stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,)
+            subprocess.run(["aplay","-D","plughw:0,0", file_path], stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
 
         except Exception as e:
             print(f"Playback error: {e}")
