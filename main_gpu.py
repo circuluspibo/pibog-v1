@@ -648,11 +648,55 @@ def img2chat(file : UploadFile = File(...), prompt = "" ,system = _SYSTEM, isPla
 
   out = process_stream(streamer, False, isPlay, lang, voice)
   #return StreamingResponse(out, media_type='text/event-stream')
-  return StreamingResponse(out, media_type='text/plain; charset=utf-8', headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Content-Type-Options": "nosniff"})    
+  return StreamingResponse(out, media_type='text/plain; charset=utf-8', headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Content-Type-Options": "nosniff"})   
 
-@app.get("/v1/rag/img2chat", summary="RAG + Image Chat")
-@app.post("/v1/rag/img2chat", summary="RAG + Image Chat")
-def img2rag( prompt="", system=_SYSTEM, isPlay=0, lang='en', voice=6):
+@app.post("/v1/rag/img2chat", summary="문장 기반의 chatgpt 스타일 구현")
+def img2rag(file : UploadFile = File(...), prompt = "" ,system = _SYSTEM, isPlay = 0, lang='en', voice=6): # gen or med
+    streamer = IterableStreamer(pipe_txt.get_tokenizer())
+
+    # ===============================
+    # 🔥 RAG CONTEXT
+    # ===============================
+   
+    rag_context = get_rag_context(prompt)
+    if rag_context:
+        prompt = f"""
+다음은 참고 지식이다. 반드시 이 내용을 우선 참고하여 url 은 빼고 답변해주세요.
+
+[지식]
+{rag_context}
+
+[질문]
+{prompt}
+"""
+
+    pipe_txt.start_chat(system_message=system)
+
+    config = GenerationConfig(
+        max_new_tokens=256,
+        do_sample=False,
+        speculative_decoding=True,
+        repetition_penalty=1.1,
+    )
+
+    generate_kwargs = dict(
+        prompt=prompt,
+        images=read_image(file.file),
+        config=config,
+        streamer=streamer,
+    )
+
+    t1 = Thread(target=pipe_txt.generate, kwargs=generate_kwargs)
+    t1.start()
+
+    # 🔥 기존 streaming 유지
+    out = process_stream(streamer, False, isPlay, lang,voice)
+    #return StreamingResponse(out, media_type="text/event-stream")
+    return StreamingResponse(out, media_type='text/plain; charset=utf-8', headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Content-Type-Options": "nosniff"})
+
+@app.get("/v2/rag/img2chat", summary="RAG + Image Chat")
+@app.post("/v2/rag/img2chat", summary="RAG + Image Chat")
+def img2rag2( prompt="", system=_SYSTEM, isPlay=0, lang='en', voice=6):
     streamer = IterableStreamer(pipe_txt.get_tokenizer())
 
     # ===============================
