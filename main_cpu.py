@@ -35,7 +35,8 @@ app = FastAPI()
 
 
 def play_sound(file_path):
-    subprocess.run(["play", file_path])
+    subprocess.run(["aplay","-D","plughw:0,0",file_path])
+    #subprocess.run(["play", file_path])
 
 
 def set_volume(val):
