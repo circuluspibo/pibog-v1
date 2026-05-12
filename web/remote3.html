@@ -635,7 +635,7 @@ async function execDeliver() {
 
 // STT endpoint — POST multipart audio, returns { result, data }
 const STT_URL  = `${BASE}/v1/stt`;
-const IMG2CHAT = `${BASE_AI}/v1/rag/txt2chat` //`${BASE_AI}/v2/img2chat`;
+const IMG2CHAT = `${BASE_AI}/v2/img2rag` //`${BASE_AI}/v1/rag/txt2chat`;
 
 let isRec = false, visInt = null;
 let mediaRec = null, audioChunks = [], gumStream = null;
