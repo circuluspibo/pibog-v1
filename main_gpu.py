@@ -558,7 +558,6 @@ def txt2rag(prompt : str ,system = _SYSTEM, isPlay = 0, lang='en', voice=6): # g
 
 
 @app.get("/v2/img2chat", summary="문장 기반의 chatgpt 스타일 구현")
-@app.post("/v2/img2chat", summary="문장 기반의 chatgpt 스타일 구현")
 def img2chat2(prompt = "" ,system = _SYSTEM, isPlay = 0, lang='en', voice=6): # gen or med
   streamer = IterableStreamer(pipe_txt.get_tokenizer())
 
@@ -695,7 +694,6 @@ def img2rag(file : UploadFile = File(...), prompt = "" ,system = _SYSTEM, isPlay
     return StreamingResponse(out, media_type='text/plain; charset=utf-8', headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Content-Type-Options": "nosniff"})
 
 @app.get("/v2/rag/img2chat", summary="RAG + Image Chat")
-@app.post("/v2/rag/img2chat", summary="RAG + Image Chat")
 def img2rag2( prompt="", system=_SYSTEM, isPlay=0, lang='en', voice=6):
     streamer = IterableStreamer(pipe_txt.get_tokenizer())
 
@@ -769,7 +767,7 @@ def stt(file : UploadFile = File(...), lang="ko", isPlay=0):
   return { "result" : True, "data" : str(out) } #txt2chat(chat, isPlay)
 
 print("Loading Complete","GPU")
-#subprocess.Popen(["play", 'intel_inside.mp3']) # async
+subprocess.Popen(["aplay", 'intel_inside.mp3']) # async
 
 upload_all_csv()
 
