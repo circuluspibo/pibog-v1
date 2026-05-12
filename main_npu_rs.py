@@ -236,33 +236,6 @@ def get_mask_depths(masks, depth_frame, low_percentile=5):
     return depths
 
 
-# ===== 수정 2: processed_frame_queue 옆에 depth_frame_queue 추가 =====
-
-
-
-# ===== 수정 3: processing_thread 안에서 depth 시각화 프레임 저장 =====
-# out = visualize_face(out, face_det_results) 이후에 아래 코드 추가
-
-
-
-# ===== 수정 4: depth_feed 엔드포인트 추가 =====
-
-@app.get("/depth_feed")
-async def depth_feed():
-    def generate():
-        while True:
-            if not depth_frame_queue.empty():
-                output = depth_frame_queue.get()
-                _, img_bytes = cv2.imencode('.jpg', output)
-                frame = img_bytes.tobytes()
-                yield (b'--frame\r\n'
-                       b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n\r\n')
-            else:
-                time.sleep(0.01)
-
-    return StreamingResponse(generate(), media_type="multipart/x-mixed-replace; boundary=frame")
-
-
 ser = None
 
 def getHash(text):
@@ -401,6 +374,21 @@ async def video_feed():
             time.sleep(0.01)
 
   return StreamingResponse(generate(), media_type="multipart/x-mixed-replace; boundary=frame")
+
+@app.get("/depth_feed")
+async def depth_feed():
+    def generate():
+        while True:
+            if not depth_frame_queue.empty():
+                output = depth_frame_queue.get()
+                _, img_bytes = cv2.imencode('.jpg', output)
+                frame = img_bytes.tobytes()
+                yield (b'--frame\r\n'
+                       b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n\r\n')
+            else:
+                time.sleep(0.01)
+
+    return StreamingResponse(generate(), media_type="multipart/x-mixed-replace; boundary=frame")
 
 lastCmd = {} 
 
