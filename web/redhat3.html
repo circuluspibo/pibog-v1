@@ -1187,6 +1187,20 @@ body { display:flex; flex-direction:column; }
 
 <script>
    const HOST = window.location.hostname;
+   
+    const iframe = document.getElementById("main-iframe");
+
+  iframe.onload = function () {
+    const url = new URL(window.location.href);
+    
+    // hostname + 기존 path로 재구성
+    const newSrc = `http://${HOST}:50003/robot-only`;
+
+    // 이미 같은 주소로 바뀌는 무한 루프 방지
+    if (iframe.src !== newSrc) {
+      iframe.src = newSrc;
+    }
+  }
 /* ══════════════════════════════════
    BOOT SEQUENCE
 ══════════════════════════════════ */
