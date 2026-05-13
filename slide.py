@@ -76,7 +76,7 @@ async def _fire_motion(motion: str) -> None:
 async def _play_audio(file_path: str) -> None:
     """비동기 서브프로세스로 음성 재생 — 완료까지 await"""
     proc = await asyncio.create_subprocess_exec(
-       "aplay","-D","plughw:1,0", file_path,
+       "aplay","-D","plughw:0,0", file_path,
         stdout=asyncio.subprocess.DEVNULL,
         stderr=asyncio.subprocess.DEVNULL,
     )
