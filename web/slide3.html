@@ -492,77 +492,103 @@ const CONFIG = {
 const SCRIPTS = {
   default: "Advancing to the next slide. Stand by.",
 
-  1:  "Hello, everyone. I am a humanoid robot, and I am proud to stand here at Red Hat Summit. " +
-      "This presentation is brought to you by Circulus Robotics, Intel, and Red Hat. " +
-      "Today we will show you the future of embodied AI — humanoid robots stepping off the drawing board " +
-      "and onto the industrial frontline.",
+  1:  "Hello, everyone. I am a humanoid robot powered by Circulus Robotics, Intel, and Red Hat. " +
+      "Today, we explore how embodied AI is leaving the research lab and stepping onto the industrial frontline.",
 
-  2:  "This section is titled Physical AI Brain on Core Ultra 3. " +
-      "The compute platform inside my body is no longer a retrofitted PC. " +
-      "It is a purpose-built Physical AI Brain — designed from the ground up to think, " +
-      "perceive, and act in real time.",
+  2:  "Operating safely beside humans demands three things simultaneously: massive AI throughput, " +
+      "millisecond-level response latency, and a rock-solid operating system — all compressed into " +
+      "an on-robot power envelope. That is the engineering challenge we are solving together.",
 
-  3:  "We are establishing the WINTEL standard for Physical AI: " +
-      "a unified CPU, GPU, and NPU architecture that works across all robot form factors. " +
-      "Whether it is a mobile service robot, an industrial arm, or a full humanoid like me — " +
-      "the same software stack runs on all of them. " +
-      "Proven factory applications include pick and place, visual inspection, " +
-      "worker safety monitoring, and RFID-based inventory management.",
+  3:  "This session brings together three industry leaders: Intel providing raw silicon intelligence, " +
+      "Circulus Robotics delivering the physical AI operating system, and Red Hat ensuring enterprise-grade " +
+      "reliability through RHEL. A unified stack built for the factory floor.",
 
-  4:  "The Intel Core Ultra is the most human-like brain ever built for a humanoid. " +
-      "Built on Red Hat Enterprise Linux 10.2 for stability and reliability. " +
-      "The Vision-Language Action model handles speech-to-text understanding. " +
-      "The control system drives actuators using text-to-speech inference. " +
-      "The NPU processes multiple cameras in real time. " +
-      "And the E-core manages audio, sensors, data logging, and management — all simultaneously.",
+  4:  "At the heart of my cognition sits the Intel Core Ultra Series 3 — the Physical AI Brain. " +
+      "Think of it as a human-like mind: a cerebrum for high-level reasoning, a diencephalon for " +
+      "coordination, and a brainstem for real-time reflexes. All on a single chip.",
 
-  5:  "This is a giant leap beyond single-channel compute. " +
-      "The old approach — NVIDIA Jetson on Unitree G1 — required two separate PCs and a slow interchange. " +
-      "With Intel Core Ultra 3 on MCR-1, the GPU, NPU, P-core, and E-core work in perfect synergy on one chip. " +
-      "Vision performance stays stable under full load, and battery life extends up to 2.1 times " +
-      "in warehouse deployment scenarios.",
+  5:  "We call this the WINTEL standard for Physical AI. Just as Wintel defined the PC era, " +
+      "a unified CPU-GPU-NPU architecture is becoming the standard for all heterogeneous robots — " +
+      "from humanoids to mobile platforms. Proven killer apps include pick-and-place, visual inspection, " +
+      "worker safety monitoring, and RFID inventory management.",
 
-  6:  "Specialized engines, one unified intelligence. " +
-      "The GPU runs batch multimodal understanding — vision, speech-to-text, motion generation, and task management. " +
-      "The NPU handles real-time segmentation, object detection, and human detection. " +
-      "The P-core drives the event-based ROS 2 control pipeline, communications, and motion control. " +
-      "The E-core manages text-to-speech, sound detection, and legacy vision models. " +
-      "Every workload has a home. Every engine has a purpose.",
+  6:  "The Intel Core Ultra maps directly onto the human brain's architecture. " +
+      "The GPU handles high-level multimodal understanding — vision, speech, and motion generation. " +
+      "The NPU drives real-time vision and sound processing. " +
+      "The P-core manages control and actuation. The E-core handles legacy models and audio synthesis. " +
+      "All orchestrated by Red Hat Enterprise Linux 10.",
 
-  7:  "From simulation to reality — scaling humanoid deployment safely and efficiently. " +
-      "Using a Digital Twin environment, we train robot behaviors virtually before deploying them physically. " +
-      "This dramatically reduces cost and eliminates dangerous trial-and-error on real hardware. " +
-      "The result is the K-HUMANOID platform: a family of robots ready for cost-effective, safe deployment " +
-      "across diverse industrial environments.",
+  7:  "Compared to NVIDIA Jetson on Unitree G1, the Intel Core Ultra 3 on MCR-1 eliminates " +
+      "the robotic reflex gap — vision performance stays stable even under full computational load. " +
+      "Battery endurance improves by up to 2.1 times in warehouse scenarios. " +
+      "This is not incremental progress. This is a generational leap.",
 
-  8:  "From vision to action — high-performance Physical AI for real factories. " +
-      "What you see here is not a lab demo. These are live deployments. " +
-      "Robots performing real tasks: vision-guided manipulation, multi-robot coordination, " +
-      "inspection on production lines, and autonomous navigation in unstructured environments. " +
-      "This is the world-class humanoid ecosystem we are building together, " +
-      "optimized for global industrial standards.",
+  8:  "Specialized engines, unified intelligence. " +
+      "The GPU handles batch multimodal tasks. The NPU owns real-time perception. " +
+      "The P-core runs the event-driven control pipeline via ROS 2. " +
+      "The E-core manages background services. " +
+      "On the server side, dedicated GPUs handle large vision models and continual fine-tuning. " +
+      "Every compute resource has a precise role.",
 
-  9:  "Thank you for joining us at Red Hat Summit. " +
-      "The age of the humanoid worker has arrived — not in science fiction, but on your factory floor today. " +
-      "Powered by Intel Core Ultra silicon, Circulus Physical AI intelligence, " +
-      "and Red Hat Enterprise Linux reliability. " +
-      "We are ready to build this future with you.",
+  9:  "Intel's Robotics AI Suite connects humanoid workloads to optimized pipelines running on Panther Lake. " +
+      "Physical AI workloads — vision, dynamic motion, VLA, language-guided execution — " +
+      "are matched to algorithms like ACT, Diffusion Policy, LLM Robotics, and pi-zero. " +
+      "OpenVINO unifies inference across all engines. Intel brings not just silicon, but a full software stack.",
+
+  10: "Here is the complete Unitree demo runtime stack: sensors feed into OpenVINO-accelerated intelligence, " +
+      "which drives ROS 2 control and motor actuation. " +
+      "The PREEMPT RT Linux kernel guarantees deterministic timing. " +
+      "SELinux and bootc provide a secure, immutable runtime. " +
+      "Fleet management completes the enterprise story. " +
+      "Sense. Understand. Act — on one SoC.",
+
+  11: "We are now entering the demonstration phase. " +
+      "What you are about to see is not a simulation. " +
+      "This is real-time Physical AI running on the integrated stack we have described. " +
+      "Please observe how I perceive, reason, and respond to my environment.",
+
+  12: "The digital twin you see on your left is a synchronized mirror of my physical state. " +
+      "Every sensor reading, every joint position, every decision I make — " +
+      "reflected in real time through the dark factory simulation. " +
+      "This is how tomorrow's factories will be monitored and managed.",
+
+  13: "Red Hat Enterprise Linux is not merely an operating system here — " +
+      "it is the reliability foundation that makes enterprise robotics possible. " +
+      "Long-term support, certified hardware compatibility, and containerized workload orchestration " +
+      "mean that what works in the lab deploys identically at global scale.",
+
+  14: "Two capabilities make RHEL uniquely suited for humanoid robotics. " +
+      "First, the PREEMPT RT kernel — transforming Linux into a deterministic real-time platform " +
+      "that prevents the timing jitter which destabilizes physical hardware. " +
+      "Second, native ROS 2 Jazzy Jalisco Tier 2 support — " +
+      "production-grade robotics middleware, enterprise-tested and enterprise-supported.",
+
+  15: "Thank you for joining us at Red Hat Summit. " +
+      "The age of humanoid workers has begun — not in science fiction, but on your factory floor, " +
+      "powered by Intel silicon, Circulus intelligence, and Red Hat enterprise reliability. " +
+      "We look forward to building this future together.",
 };
 
 // ── SLIDE MOTIONS (robot body motion per page) ───────────────
 // Available: both_pose | clap | curious | greet | left_pose | look_around | right_pose
 // Set to null to send no motion for that slide.
 const MOTIONS = {
-  default: null,
-  1: 'greet',        // Opening — wave hello to the audience
-  2: 'curious',      // Introducing the Physical AI Brain concept
-  3: 'both_pose',    // Presenting the WINTEL standard with open arms
-  4: 'left_pose',    // Gesturing to the Core Ultra brain diagram
-  5: 'right_pose',   // Pointing to the performance comparison charts
-  6: 'look_around',  // Surveying all the specialized compute engines
-  7: 'curious',      // Reflecting on simulation-to-reality transition
-  8: 'both_pose',    // Proud pose — showing real factory deployments
-  9: 'clap',         // Closing — thank you and applause
+  default:  null,
+  1:        'greet',        // Opening — wave hello to the audience
+  2:        'look_around',  // Scanning the environment, explaining requirements
+  3:        'both_pose',    // Presenting three partners with open arms
+  4:        'curious',      // Pondering the brain analogy
+  5:        'right_pose',   // Pointing to the WINTEL standard concept
+  6:        'left_pose',    // Gesturing to the architecture diagram
+  7:        'both_pose',    // Confident pose — highlighting the performance leap
+  8:        'look_around',  // Surveying all the specialized engines
+  9:        'right_pose',   // Pointing to the AI Suite pipeline
+  10:       'left_pose',    // Presenting the full runtime stack
+  11:       'greet',        // Inviting audience to watch the demo
+  12:       'curious',      // Looking at the digital twin feed
+  13:       'both_pose',    // Open arms — RHEL as the foundation
+  14:       'look_around',  // Explaining two key RHEL capabilities
+  15:       'clap',         // Closing — thank you and applause
 };
 
 
