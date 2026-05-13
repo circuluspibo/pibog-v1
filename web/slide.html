@@ -475,11 +475,12 @@
 
 <script>
 // ── CONFIG ───────────────────────────────────────────────────
-const DIGITAL_TWIN_IP = '172.22.181.100:50003'; // ← IP:PORT only — change here
+const HOST = window.location.hostname;
+const DIGITAL_TWIN_IP = `${HOST}:50003`; // ← IP:PORT only — change here
 
 const CONFIG = {
   pdfUrl:      'redhat2.pdf',              // ← PDF 파일명 변경 시 여기만 수정
-  apiBase:     'http://172.22.181.100:59530',
+  apiBase:     `http://${HOST}:59530`,
   digitalTwin: `http://${DIGITAL_TWIN_IP}/robot-only`,
   scale:       2.0,                        // render resolution multiplier
 };
