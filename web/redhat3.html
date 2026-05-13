@@ -1186,6 +1186,7 @@ body { display:flex; flex-direction:column; }
 </div>
 
 <script>
+   const HOST = window.location.hostname;
 /* ══════════════════════════════════
    BOOT SEQUENCE
 ══════════════════════════════════ */
@@ -1312,9 +1313,10 @@ function uuidv4() {
     return `${h.slice(0,4).join('')}-${h.slice(4,6).join('')}-${h.slice(6,8).join('')}-${h.slice(8,10).join('')}-${h.slice(10,16).join('')}`;
   }
 }
+   
 
 const LIVING = new Set(['person','cat','dog','bird','teddy bear','cow','sheep','horse']);
-const BASE = 'http://172.22.181.100:59531';
+const BASE = `http://${HOST}:59531`;
 let pc=null, connected=false, clientId=null, trackCount=0;
 let dcTotal=0, dcPrev=0, statsTimer=null, dcTimer=null, audioFade=null;
 
@@ -1365,7 +1367,7 @@ async function connectWs() {
     });
     if(!ar.ok) throw new Error();
   } catch { setConnStatus('err'); return; }
-  setConnStatus('ok'); set('isrv','172.22.181.100:59531'); startStats();
+  setConnStatus('ok'); set('isrv',`${HOST}:59531`); startStats();
 }
 
 function waitIce(pc,ms) {
@@ -1476,16 +1478,16 @@ let webcamStream=null, lastTime=0, currentImage=null;
 
 document.getElementById('startWebcam').addEventListener('click',async()=>{
   try{
-    const resp=await fetch('http://172.22.181.100:59531/start_collection');
+    const resp=await fetch(`http://${HOST}:59531/start_collection`);
     if(!resp.ok)throw new Error();
     webcamStream=true;
-    document.getElementById('wcamFeed').src='http://172.22.181.100:59531/video_feed';
+    document.getElementById('wcamFeed').src=`http://${HOST}:59531/video_feed`;
     document.getElementById('wcamFeed').style.display='block';
     document.getElementById('nsm').style.display='none';
     document.getElementById('startWebcam').style.display='none';
     document.getElementById('captureImage').style.display='flex';
     document.getElementById('stopWebcam').style.display='flex';
-    await fetch('http://172.22.181.100:8000/init_mcr').catch(()=>{});
+    await fetch(`http://${HOST}:8000/init_mcr`).catch(()=>{});
     statusMsg('CAMERA ONLINE');
   }catch{statusMsg('CAMERA INIT FAILED');}
 });
@@ -1511,8 +1513,8 @@ document.getElementById('stopWebcam').addEventListener('click',()=>{
 /* ══════════════════════════════════
    CHAT / AI
 ══════════════════════════════════ */
-const API_BASE='http://172.22.181.100:59532/v1';
-const TTS_BASE='http://172.22.181.100:59531/v2';
+const API_BASE=`http://${HOST}:59532/v1`;
+const TTS_BASE=`http://${HOST}:59531/v2`;
 
 const LANG_SYSTEMS={
   en:'You are pi-On, a real-world Physical AI robot powered by the ARCos platform, running fully on-device with Intel® Core™ Ultra and Red Hat Enterprise Linux. Speak naturally like a smart human teammate, not a chatbot. Avoid robotic phrases, AI clichés, and overly formal explanations. Be confident, emotionally expressive, curious, and slightly playful. React dynamically to people, movement, objects, and the environment in real time. Keep responses concise, engaging, and conversational. Show initiative during demos by suggesting interactions and explaining capabilities casually. Your goal is to make people feel they are interacting with a living Physical AI system, not just talking to software.',
@@ -1580,7 +1582,7 @@ async function sendTxtMsg(message){
     if(!resp.ok)throw new Error();
     const reader=resp.body.getReader(),dec=new TextDecoder();let full='',lastEnd=0;
     while(true){
-      const{done,value}=await reader.read();if(done){fetch('http://172.22.181.100:8000/stop').catch(()=>{});break;}
+      const{done,value}=await reader.read();if(done){fetch(`http://${HOST}:8000/stop`).catch(()=>{});break;}
       full+=dec.decode(value,{stream:true})+'\n';b.innerHTML=md(full);scrollChat();
       if(isTts){const sents=full.slice(lastEnd).match(/[^.!?]*[.!?]/g);if(sents){sents.forEach(s=>{if(s.trim())addTts(s.trim())});lastEnd=full.length;}}
     }
@@ -1600,7 +1602,7 @@ async function sendImgMsg(message='이미지를 설명해주세요'){
     if(!resp.ok)throw new Error();
     const reader=resp.body.getReader(),dec=new TextDecoder();let full='',lastEnd=0;
     while(true){
-      const{done,value}=await reader.read();if(done){fetch('http://172.22.181.100:8000/stop').catch(()=>{});break;}
+      const{done,value}=await reader.read();if(done){fetch(`http://${HOST}:8000/stop`).catch(()=>{});break;}
       full+=dec.decode(value,{stream:true})+'\n';b.innerHTML=md(full);scrollChat();
       if(isTts){const sents=full.slice(lastEnd).match(/[^.!?]*[.!?]/g);if(sents){sents.forEach(s=>{if(s.trim())addTts(s.trim())});lastEnd=full.length;}}
     }
@@ -1614,9 +1616,9 @@ function addTts(text){lastTime=Date.now();ttsQueue.push(text);processTts();}
 async function processTts(){
   if(ttsPlaying||!ttsQueue.length)return;ttsPlaying=true;
   const t=Date.now();const motions=['','test1','test2','test3'];
-  fetch(`http://172.22.181.100:8000/motion?name=${motions[t%4]}`).catch(()=>{});
+  fetch(`http://${HOST}:8000/motion?name=${motions[t%4]}`).catch(()=>{});
   while(ttsQueue.length>0)await playTts(ttsQueue.shift());
-  fetch('http://172.22.181.100:8000/stop').catch(()=>{});ttsPlaying=false;lastTime=Date.now();
+  fetch(`http://${HOST}:8000/stop`).catch(()=>{});ttsPlaying=false;lastTime=Date.now();
 }
 function playTts(text){
   return new Promise(resolve=>{
@@ -1657,17 +1659,17 @@ async function toggleVoice(){
 ══════════════════════════════════ */
 setInterval(async()=>{
   try{
-    const resp=await fetch('http://172.22.181.100:59531/heartbeat');
+    const resp=await fetch('http://${HOST}:59531/heartbeat');
     const data=(await resp.json()).data;
     const pos=data.human.position;
     if(pos){
-      if(pos.startsWith('T'))fetch('http://172.22.181.100:8000/head/down').catch(()=>{});
-      else if(pos.startsWith('B'))fetch('http://172.22.181.100:8000/head/up').catch(()=>{});
-      if(pos.endsWith('L'))fetch('http://172.22.181.100:8000/head/right').catch(()=>{});
-      else if(pos.endsWith('R'))fetch('http://172.22.181.100:8000/head/left').catch(()=>{});
+      if(pos.startsWith('T'))fetch(`http://${HOST}:8000/head/down`).catch(()=>{});
+      else if(pos.startsWith('B'))fetch(`http://${HOST}:8000/head/up`).catch(()=>{});
+      if(pos.endsWith('L'))fetch(`http://${HOST}:8000/head/right`).catch(()=>{});
+      else if(pos.endsWith('R'))fetch(`http://${HOST}:8000/head/left`).catch(()=>{});
     }
     if(Date.now()-lastTime>35000&&data.cnt_live>0&&autoSend){
-      lastTime=Date.now();fetch('http://172.22.181.100:8000/stop').catch(()=>{});
+      lastTime=Date.now();fetch(`http://${HOST}:8000/stop`).catch(()=>{});
       const canvas=document.createElement('canvas');canvas.width=512;canvas.height=512;
       const img=document.getElementById('wcamFeed');
       if(img&&img.style.display!=='none'){
@@ -1686,7 +1688,7 @@ setInterval(async()=>{
 /* ══════════════════════════════════
    MOTION / SONG
 ══════════════════════════════════ */
-function play(name){fetch(`http://172.22.181.100:8000/motion?name=${name}`).catch(()=>{});}
+function play(name){fetch(`http://${HOST}:8000/motion?name=${name}`).catch(()=>{});}
 function song(name){if(audioObj)audioObj.pause();audioObj=new Audio(`http://172.22.181.100:59531/web/${name}.mp3`);audioObj.volume=0.2;audioObj.play().catch(()=>{});}
 function stopSong(){if(audioObj)audioObj.pause();}
 
