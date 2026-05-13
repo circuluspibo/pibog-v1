@@ -549,6 +549,7 @@ const nextBtn   = document.getElementById('btn-next');
 const dot       = document.getElementById('dot');
 const statusTxt = document.getElementById('status-text');
 const iframe    = document.getElementById('digital-twin-iframe');
+iframe.src = CONFIG.digitalTwin;  
 
 // ── PDF.js SETUP ─────────────────────────────────────────────
 pdfjsLib.GlobalWorkerOptions.workerSrc =
