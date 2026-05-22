@@ -261,6 +261,7 @@ async def process_stream(streamer, isStream=True, isPlay=0, lang='en'):
         # 🔥 Stream 모드 처리
         # ---------------------
         if isStream:
+            await asyncio.sleep(0)
             yield new_token
 
         # ---------------------
@@ -279,6 +280,7 @@ async def process_stream(streamer, isStream=True, isPlay=0, lang='en'):
                     )
 
                 print(sentence)
+                await asyncio.sleep(0)
                 yield sentence
                 sentence = ""
 

@@ -36,13 +36,13 @@ from optimum.intel.openvino import OVModelForSeq2SeqLM
 from fastapi import FastAPI, UploadFile, File, Form
 import random
 import torch
-from ov_faceswap import FaceSwapOpenVINO 
+#from ov_faceswap import FaceSwapOpenVINO 
 import cv2
 import os
 import numpy as np
 import torch
 from scipy.io.wavfile import write
-from optimum.intel import OVZImagePipeline
+from optimum.intel import OVFlux2KleinPipeline #OVZImagePipeline
 
 from speaker_encoder import audio
 from speaker_encoder.hparams import sampling_rate, mel_window_step, partials_n_frames
@@ -172,26 +172,27 @@ class Chat(BaseModel):
   top_k : int = 50
   max : int = 256 #16384
 
-model_txt = snapshot_download(repo_id='circulus/Qwen3-VL-8B-it-ov-awq') # helenai/Qwen3-VL-4B-Instruct-int4 Echo9Zulu/gemma-3-4b-it-qat-int4_asym-ov circulus/gemma-3-4b-it-ov-awq-sym helenai/Qwen2.5-VL-3B-Instruct-ov-int4
-model_stt = snapshot_download(repo_id='circulus/whisper-large-v3-turbo-ov-int4') # translate not working, only general model
-model_img = snapshot_download(repo_id='circulus/Z-Image-Turbo-ov-int4')
-model_t2t = snapshot_download(repo_id='rippertnt/ko2en-ov-int4')
+model_txt = "./models/Qwen3-VL-8B-it-ov-awq" # helenai/Qwen3-VL-4B-Instruct-int4 Echo9Zulu/gemma-3-4b-it-qat-int4_asym-ov circulus/gemma-3-4b-it-ov-awq-sym helenai/Qwen2.5-VL-3B-Instruct-ov-int4
+model_stt = './models/whisper-large-v3-turbo-ov-int4'  # translate not working, only general model
+model_img = './models/FLUX.2-klein-9B-ov-int4'
+#model_t2t = snapshot_download(repo_id='rippertnt/ko2en-ov-int4')
 
 #swapper = FaceSwapOpenVINO(device_name="GPU") 
 
 token_txt = AutoTokenizer.from_pretrained(model_txt)
 #token_img = AutoTokenizer.from_pretrained(model_img)
 
-conf = AutoConfig.from_pretrained(model_t2t, trust_remote_code=True)
-token_t2t = AutoTokenizer.from_pretrained(model_t2t, trust_remote_code=True)
-model_t2t = OVModelForSeq2SeqLM.from_pretrained(model_t2t, device='GPU', ov_config={"PERFORMANCE_HINT": "LATENCY", "NUM_STREAMS": "1"}, config=conf, low_cpu_mem_usage=True, trust_remote_code=True) #"KV_CACHE_PRECISION": "u8", "DYNAMIC_QUANTIZATION_GROUP_SIZE": "32"
-pipe_t2t = pipeline("text2text-generation", model=model_t2t, tokenizer=token_t2t)
+#conf = AutoConfig.from_pretrained(model_t2t, trust_remote_code=True)
+#token_t2t = AutoTokenizer.from_pretrained(model_t2t, trust_remote_code=True)
+#model_t2t = OVModelForSeq2SeqLM.from_pretrained(model_t2t, device='GPU', ov_config={"PERFORMANCE_HINT": "LATENCY", "NUM_STREAMS": "1"}, config=conf, low_cpu_mem_usage=True, trust_remote_code=True) #"KV_CACHE_PRECISION": "u8", "DYNAMIC_QUANTIZATION_GROUP_SIZE": "32"
+#pipe_t2t = pipeline("text2text-generation", model=model_t2t, tokenizer=token_t2t)
 
 pipe_stt = ov_genai.WhisperPipeline(model_stt,device="GPU", config={"PERFORMANCE_HINT": "LATENCY"})
 pipe_txt = ov_genai.VLMPipeline(model_txt, device="GPU", config={"PERFORMANCE_HINT": "LATENCY"})
 
 
-ov_pipe = OVZImagePipeline.from_pretrained(model_img, device="GPU")
+#ov_pipe = OVZImagePipeline.from_pretrained(model_img, device="GPU")
+ov_pipe = OVFlux2KleinPipeline.from_pretrained(model_img, device="GPU")
 
 
 def load_model(vlm=True):
@@ -237,6 +238,7 @@ async def process_stream(streamer, isStream=True, isPlay=0, lang='en'):
         # 🔥 Stream 모드 처리
         # ---------------------
         if isStream:
+            await asyncio.sleep(0)
             yield new_token
 
         # ---------------------
@@ -256,13 +258,14 @@ async def process_stream(streamer, isStream=True, isPlay=0, lang='en'):
 
                 print(sentence)
                 yield sentence
+                await asyncio.sleep(0)
                 sentence = ""
 
         else:
             sentence += new_token
 
     # 마지막 문장 처리
-    if len(sentence) > 3:
+    if len(sentence) > 3:      
         yield sentence
 
     # ---------------------------------
@@ -436,29 +439,50 @@ def stt(file : UploadFile = File(...), lang="ko", isPlay=0):
 
   return { "result" : True, "data" : str(out) } #txt2chat(chat, isPlay)
 
-
+"""
 @app.post("/v1/translate", summary="한글을 영어로 번역합니다")
 def translate(prompt : str):
   out = pipe_t2t(prompt, max_new_tokens=512)[0]['generated_text']
 
   return { "result" : True, "data" : str(out) } #txt2chat(chat, isPlay)
-
+"""
 
 @app.post("/v1/txt2img", response_class=FileResponse)
-async def txt2img(prompt: str = "", seed: int = None, w : int = 512, h : int = 512, lang : str = 'ko'):
-  load_model(False)
+async def txt2img(prompt: str = "", seed: int = None, w : int = 1024, h : int = 1024):
 
   if seed is None:
       seed = random.randint(0, 2**32 - 1)
-  torch.manual_seed(seed)
 
   image = ov_pipe(
       prompt=prompt,
       height=h,
       width=w,
-      num_inference_steps=9,  # This actually results in 8 DiT forwards
-      guidance_scale=0.0,  # Guidance should be 0 for the Turbo models
-      generator=torch.Generator("cpu").manual_seed(42),
+      guidance_scale=1.0,
+      num_inference_steps=4,
+      generator=torch.Generator("cpu").manual_seed(seed),
+  ).images[0]
+
+  image.save(f"outputs/out_image_{seed}.png")
+
+  return f"outputs/out_image_{seed}.png"
+
+
+@app.post("/v1/img2img", response_class=FileResponse)
+def img2img(file : UploadFile = File(...), prompt: str = "", seed: int = None, w : int = 1024, h : int = 1024): # gen or med
+
+  ref_image = Image.open(file.file).resize((w, h))
+
+  if seed is None:
+      seed = random.randint(0, 2**32 - 1)
+
+  image = ov_pipe(
+      prompt=prompt,
+      image=[ref_image],
+      height=h,
+      width=w,
+      guidance_scale=1.0,
+      num_inference_steps=4,
+      generator=torch.Generator("cpu").manual_seed(seed),
   ).images[0]
 
   image.save(f"outputs/out_image_{seed}.png")
