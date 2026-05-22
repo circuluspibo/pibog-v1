@@ -1,4 +1,4 @@
-alert("Nice to meet you again! 2603260740")
+alert("Nice to meet you again! 2602191600")
 // 버튼 클릭 효과 및 상태 변화 시뮬레이션
 const list_tts = []
 let audio = 0
@@ -18,7 +18,6 @@ var AudioContext = window.AudioContext || window.webkitAudioContext;
 var audioContext //new audio context to help us record
 let lastTime = 0
 let interval = 0
-let tag = 0
 
 let isLive = 0
 let human = {}
@@ -85,7 +84,6 @@ let lastPlay = 0
 let lastText = 0
 
 function play(text){
-    fetch(`http://127.0.0.1:59531/led?r=0&g=255&b=0`)
     if(text == lastText && Date.now() - lastPlay < 3000)
         return
 
@@ -95,12 +93,11 @@ function play(text){
     console.log('play...',text)
     lastPlay = Date.now()
     lastText = text
-    audio = new Audio(`/v2/tts?voice=31&lang=ko&static=0&isPlay=1&text=${text}`);
+    audio = new Audio(`/v2/tts?voice=31&lang=ko&static=0&isPlay=0&text=${text}`);
     audio.play()
 }
 
 function playNext(chunk) {
-    fetch(`http://127.0.0.1:59531/led?r=0&g=255&b=0`)
 
     let cmd = ''
 
@@ -119,16 +116,14 @@ function playNext(chunk) {
         fetch(cmd)
 
         const text = list_tts.shift()
-        audio = new Audio(`/v2/tts?voice=31&lang=ko&static=0&isPlay=1&text=${text}`);
+        audio = new Audio(`/v2/tts?voice=31&lang=ko&static=0&isPlay=0&text=${text}`);
         audio.play()
 
         audio.addEventListener('ended', () => {
             audio = 0
             playNext()  // Play next audio when current one ends
         })
-    } else { // end of audio
-        fetch(`http://127.0.0.1:59531/led?r=0&g=255&b=255`)
-    }
+    } 
 }
 
   // Start playing the list
@@ -272,8 +267,9 @@ function getDirection() {
         rx = smooth(multi)
     
     // 명령어 생성 // pion 은 정지 명령도 필요하여 무조건 전송 - 다만 기존과 다를때만
-    /*
-    if(up && isLive > 0 && human.depth < 2){
+
+    if(up && isLive > 0 && human.depth < 1){
+        document.getElementById('log').value = '(정지) 1m 안에  생명체 감지'
         play("사람이 있어서, 안전상 이유로 정리할께.")
         console.log("emergency stop!!!!  a1")
         lx = 0
@@ -282,11 +278,11 @@ function getDirection() {
         ry = 0
 
     }
-    */
+
 
     const cmd = `lx=${lx}&rx=${rx}&ly=${ly}&ry=${ry}`
 
-    document.getElementById('log').value = cmd
+    //document.getElementById('log').value = cmd
 
     if(lastCmd != cmd){
         console.log('cmd',cmd)    
@@ -327,20 +323,8 @@ document.addEventListener("keyup", (event) => {
 });
 */
 
-let mode =  false //'normal'
+let mode =  false // 자동 끄기 //'normal'
 let cmdTime = 0
-
-async function autoMove(){
-    cmd = `/walkG1?lx=0&rx=0&ly=0.5&ry=0.5`
-
-    const response = await fetch(cmd)
-    if (!response.ok) {
-        throw new Error(`Response status: ${response.status}`)
-    }
-
-    const json = await response.json()
-    console.log(cmd ,json)
-}
 
 document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('object-speed').textContent = multi
@@ -381,8 +365,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     break;                
                 case 'move-up':
 
-                    if(isLive > 0 && human.depth < 2){
-
+                    if(isLive > 0 && human.depth < 1){
+                        document.getElementById('log').value = '(위험) 1m 안에  생명체 감지'
                         play("사람이 있어서, 안전상 이유로 정리할께.")
                         console.log("emergency stop!!!!")
                         cmd = `/walkG1?lx=0&rx=0&ly=0&ry=0`
@@ -414,37 +398,30 @@ document.addEventListener('DOMContentLoaded', function() {
                     cmd = `/walkG1?lx=0&rx=0&ly=${-1.5 * multi}&ry=${-1.5 * multi}`
                     break;        
                 case 'tts-hello':
-                    cmd = `/arm?cmd=shakeHands_1`
-                    play("안녕? 나는 서큘러스의 파이온이라고 해. 로봇의 세계에 대해 알려줄께.")
+                    cmd = `/arm?cmd=clamp`
+                    play("경상북도 교육청 수학문화관을 방문해 주셔서 감사합니다.")
                     break;
                 case 'tts-intro':
-                    cmd = `/arm?cmd=clamp`
-                    play("서큘러스의 파이온을 보러 오신것을 환영합니다. 방문자 등록후 이용해 주세요.")
+                    cmd = `/arm?cmd=shakeHands_1`
+                    play("저는 이족보행로봇 파이온입니다.")
                     break; 
                 case 'tts-follow':
                     cmd = `/arm?cmd=lowWave`
-                    play("자 저를 따라서 서큘러스 안으로 들어 와서 놀라운 경험을 해 보세요!")
+                    play("방문자 등록 키오스크에서 등로 후 관람해 주세요.")
                     break;
                 case 'tts-warn':
                     cmd = `/arm?cmd=highFive`
-                    play("안녕하세요. 로봇중에 인싸인 저와 함께 멋지게 사진좀 찍어보실래요?")
+                    play("저와 기념 촬영하시겠습니까?")
                     break;
                 case 'tts-bye':
                     cmd = `/arm?cmd=lowWave`
-                    play("방문해 줘서 고마워. 다음번에 서큘러스의 멋진 보금자리 에서 또 만나길 기대할께. 조심히 들어가!")
+                    play("경상북도 교육청 수학문화관은 '모든 것은 수학이다'를 주제로 전시체험을 할 수 있습니다. 수학의 세계로 가 보시죠!")
                     break;
                 case 'tts-poet':
-                    cmd = `/arm?cmd=Refuse`
+                    cmd = `/arm?cmd=lowWave`
                     //cmd = 'http://127.0.0.1:59532/v2/img2chat?isPlay=1&lang=ko&prompt="이 장면에 적합한 인사말을 해 주겠니?"'
-                    play("저는 막중한 업무를 처리중이므로, 가까이 오시면 위험합니다.")
-                    break;
-                case 'marker':
-                    alert('marker')
-                    if(tag){
-                        if(tag.id == 0 && tag.dist > 1)
-                            moveIntv = setInterval(autoMove,500)
-                    } 
-                    break;
+                    play("주학이랑 함께 한 시간, 재미있었나요? 다음에 또 놀러오세요!")
+                    break;    
                 case 'mode':
                     if(mode){
                         document.getElementById("mode").textContent = '수동'
@@ -496,7 +473,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
                             isLive = data.cnt_live
                             human = data.human // copy value
-                            tag = data.tag
 
                             const pos = data.human.position
                             /*
@@ -510,15 +486,22 @@ document.addEventListener('DOMContentLoaded', function() {
                             else if(pos.endsWith('R'))
                                 fetch(`http://127.0.0.1:8000/head/left`)
                             */
-
-                            if(Date.now() - lastTime > 30000 && data.cnt_live > 0 && mode){
+                            
+                            if(Date.now() - lastTime > 30000 && isLive > 0 && mode){
                                 lastTime = Date.now()
+
                                 fetch('http://127.0.0.1:59532/v1/rag/img2chat?isPlay=1&lang=ko&prompt="이런 상황에 어울리는 짧은 인사말을 해줘!"')
                                 
-                                if(isLive == 0 || human.depth > 1)
+                                if(isLive == 0 || human.depth > 2)
                                     fetch(`/arm?cmd=lowWave`)
-                            }                        
-                        },10000)
+                            }  
+                            
+                            if(isLive > 0 && human.depth < 1)
+                                document.getElementById('log').value = '(위험) 1m 안에  생명체 감지'
+                            else
+                                document.getElementById('log').value = '전면을 주의하여 구동하세요.'
+                            
+                        },1000)
 
 
                     })
@@ -538,7 +521,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
 
 
-            document.getElementById('log').value = cmd
+            //document.getElementById('log').value = cmd
 
             const response = await fetch(cmd)
             if (!response.ok) {
@@ -712,17 +695,13 @@ document.addEventListener('DOMContentLoaded', function() {
             const color = this.getAttribute('data-color');
             const theme = themeColors[color];
 
-            fetch(`http://127.0.0.1:59531/led?r=255&g=0&b=0`)
-            /*
             const response = await fetch(`/color?value=${color}`)
             if (!response.ok) {
                 throw new Error(`Response status: ${response.status}`)
             }
-            */
         
-            
-            //const json = await response.json()
-            //console.log(color ,json)
+            const json = await response.json()
+            console.log(color ,json)
 
             
             root.style.setProperty('--primary-color', theme.primary);
