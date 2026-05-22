@@ -41,7 +41,7 @@ import os
 import numpy as np
 import torch
 from scipy.io.wavfile import write
-
+import asyncio
 from speaker_encoder import audio
 from speaker_encoder.hparams import sampling_rate, mel_window_step, partials_n_frames
 

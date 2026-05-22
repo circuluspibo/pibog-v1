@@ -41,6 +41,7 @@ import cv2
 import os
 import numpy as np
 import torch
+import asyncio
 from scipy.io.wavfile import write
 from optimum.intel import OVFlux2KleinPipeline #OVZImagePipeline
 

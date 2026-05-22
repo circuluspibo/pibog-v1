@@ -44,7 +44,7 @@ from scipy.io.wavfile import write
 from optimum.intel import OVZImagePipeline
 from speaker_encoder import audio
 from speaker_encoder.hparams import sampling_rate, mel_window_step, partials_n_frames
-
+import asyncio
 
 # 변환된 모델 로드
 compiled_cmodel = ov.compile_model("models/FreeVC_ov/cmodel_ir.xml")
