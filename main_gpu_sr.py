@@ -347,7 +347,7 @@ def txt2chat(prompt : str ,system = _SYSTEM, isPlay = 0, lang='en'): # gen or me
       #beam_size=1,
       do_sample=False, #fast for beam-search
       speculative_decoding=True,
-      repetition_penalty=1.1,
+      repetition_penalty=1.3,
       #top_k=50,
       #top_p=0.9,
   )
@@ -387,7 +387,7 @@ def img2chat2(prompt = "" ,system = _SYSTEM, isPlay = 0, lang='en'): # gen or me
       #beam_size=1,
       do_sample=False, #fast for beam-search
       speculative_decoding=True,
-      repetition_penalty=1.1,
+      repetition_penalty=1.3,
       #top_k=50,
       #top_p=0.9,
   )
