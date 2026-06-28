@@ -80,7 +80,7 @@ config.top_n = 5
 # ===============================
 #model_rerank = snapshot_download(repo_id="OpenVINO/Qwen3-Reranker-0.6B-fp16-ov")
 
-reranker = TextRerankPipeline("./models/Qwen3-Reranker-0.6B-fp16-ov","GPU",config) #./models/Qwen3-Reranker-0.6B-ov
+reranker = TextRerankPipeline("./models/Qwen3-Reranker-0.6B-int8-ov","GPU",config) #./models/Qwen3-Reranker-0.6B-ov
 
 
 #optimum-cli export openvino --weight-format int4 --task text-generation-with-past --model growdle/HyperCLOVAX-SEED-Text-Instruct-1.5B ./CLOVAX-1.5B-ov-int4
@@ -129,7 +129,7 @@ clamp, highFive, shakeHands_1, blowKiss, hug, hightWave, lowWave, ultramanRay, b
 응답시 가장 적절한 동작을 하나만 선택하고, 대화체로 마크업 없이 사람처럼 대답 해줘.
 예시 : [동작] 응답어
 """
-_SYSTEM = "당신은 서큘러스에서 만든 파이봇 이라고 하는 MIT 박사 수준의 로봇 인공지능 입니다. 젊은 톤의 대화체로 입력된 언어로 사람 같이 짧게 응답하세요."
+_SYSTEM = "너는 카이스트에서 안전 임무를 맡고 있는 파이온 이라는 로봇으로, 이모티콘 없이 사람처럼 짧고 명쾌하게 대답해줘."
 
 def read_image(path: str) -> Tensor:
     pic = Image.open(path).convert("RGB")
@@ -152,7 +152,7 @@ class Chat(BaseModel):
   top_k : int = 50
   max : int = 256 #16384
 
-model_txt = "./models/Qwen3-VL-8B-it-ov-awq" #gemma-3-4b-it-ov-awq" #snapshot_download(repo_id='Echo9Zulu/gemma-3-4b-it-qat-int4_asym-ov') # circulus/gemma-3-4b-it-ov-awq-sym helenai/Qwen2.5-VL-3B-Instruct-ov-int4
+model_txt = "./models/gemma-4-E4B-it-int4-ov" #gemma-3-4b-it-ov-awq" #snapshot_download(repo_id='Echo9Zulu/gemma-3-4b-it-qat-int4_asym-ov') # circulus/gemma-3-4b-it-ov-awq-sym helenai/Qwen2.5-VL-3B-Instruct-ov-int4
 model_stt = "./models/whisper-large-v3-turbo-ov-int4"#snapshot_download(repo_id='circulus/whisper-large-v3-turbo-ov')
 
 config = {
@@ -207,7 +207,7 @@ def get_rag_context(
 
 
 # for genai
-async def process_stream(streamer, isStream=True, isPlay=0, lang='en', voice=6):
+async def process_stream(streamer, isStream=True, isPlay=0, lang='en', voice=31):
     cnt = 0
     latency = 0
     isStart = False
@@ -251,7 +251,7 @@ async def process_stream(streamer, isStream=True, isPlay=0, lang='en', voice=6):
             sentence += new_token
             if len(sentence) > 3:
 
-                sentence = sentence.strip()
+                #sentence = sentence.strip()
 
                 if int(isPlay) > 0:
                     get("http://127.0.0.1:59530/v2/tts",params={"text": sentence, "lang": lang, "voice": voice, "isPlay" : 1})
@@ -269,7 +269,7 @@ async def process_stream(streamer, isStream=True, isPlay=0, lang='en', voice=6):
         if int(isPlay) > 0:
             get( "http://127.0.0.1:59530/v2/tts",params={"text": sentence, "lang": lang, "voice": voice, "isPlay" : 1})        
         yield sentence
-        await asyncio.sleep(0)
+        await asyncio.sleep(0)        
 
     # ---------------------------------
     # 🔥 token/s 계산
@@ -444,7 +444,7 @@ def upload_all_csv():
     }
 
 @app.get("/v1/txt2chat", summary="문장 기반의 chatgpt 스타일 구현")
-def txt2chat(prompt : str ,system = _SYSTEM, isPlay = 0, lang='en', voice=6): # gen or med
+def txt2chat(prompt : str ,system = _SYSTEM, isPlay = 0, lang='en', voice=31): # gen or med
   streamer = IterableStreamer(pipe_txt.get_tokenizer())
 
   messages = [
@@ -500,7 +500,7 @@ def txt2chat(prompt : str ,system = _SYSTEM, isPlay = 0, lang='en', voice=6): # 
   return StreamingResponse(out, media_type='text/plain; charset=utf-8', headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Content-Type-Options": "nosniff"})
 
 @app.get("/v1/rag/txt2chat", summary="문장 기반의 chatgpt 스타일 구현")
-def txt2rag(prompt : str ,system = _SYSTEM, isPlay = 0, lang='en', voice=6): # gen or med
+def txt2rag(prompt : str ,system = _SYSTEM, isPlay = 0, lang='en', voice=31): # gen or med
   streamer = IterableStreamer(pipe_txt.get_tokenizer())
 
   rag_context = get_rag_context(prompt)
@@ -558,7 +558,7 @@ def txt2rag(prompt : str ,system = _SYSTEM, isPlay = 0, lang='en', voice=6): # g
 
 
 @app.get("/v2/img2chat", summary="문장 기반의 chatgpt 스타일 구현")
-def img2chat2(prompt = "" ,system = _SYSTEM, isPlay = 0, lang='en', voice=6): # gen or med
+def img2chat2(prompt = "" ,system = _SYSTEM, isPlay = 0, lang='en', voice=31): # gen or med
   streamer = IterableStreamer(pipe_txt.get_tokenizer())
 
 
@@ -592,7 +592,7 @@ def img2chat2(prompt = "" ,system = _SYSTEM, isPlay = 0, lang='en', voice=6): # 
 
   generate_kwargs = dict(
       prompt = prompt,
-      images=read_image("capture.jpg"),
+      images=read_image("capture2.jpg"), # ppe from g12
       config=config,
       streamer=streamer, # !do_sample || top_k > 0
   )
@@ -605,7 +605,7 @@ def img2chat2(prompt = "" ,system = _SYSTEM, isPlay = 0, lang='en', voice=6): # 
   return StreamingResponse(out, media_type='text/plain; charset=utf-8', headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Content-Type-Options": "nosniff"})
 
 @app.post("/v1/img2chat", summary="문장 기반의 chatgpt 스타일 구현")
-def img2chat(file : UploadFile = File(...), prompt = "" ,system = _SYSTEM, isPlay = 0, lang='en', voice=6): # gen or med
+def img2chat(file : UploadFile = File(...), prompt = "" ,system = _SYSTEM, isPlay = 0, lang='en', voice=31): # gen or med
   streamer = IterableStreamer(pipe_txt.get_tokenizer())
 
   messages = [
@@ -650,7 +650,7 @@ def img2chat(file : UploadFile = File(...), prompt = "" ,system = _SYSTEM, isPla
   return StreamingResponse(out, media_type='text/plain; charset=utf-8', headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Content-Type-Options": "nosniff"})   
 
 @app.post("/v1/rag/img2chat", summary="문장 기반의 chatgpt 스타일 구현")
-def img2rag(file : UploadFile = File(...), prompt = "" ,system = _SYSTEM, isPlay = 0, lang='en', voice=6): # gen or med
+def img2rag(file : UploadFile = File(...), prompt = "" ,system = _SYSTEM, isPlay = 0, lang='en', voice=31): # gen or med
     streamer = IterableStreamer(pipe_txt.get_tokenizer())
 
     # ===============================
@@ -694,7 +694,7 @@ def img2rag(file : UploadFile = File(...), prompt = "" ,system = _SYSTEM, isPlay
     return StreamingResponse(out, media_type='text/plain; charset=utf-8', headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Content-Type-Options": "nosniff"})
 
 @app.get("/v2/rag/img2chat", summary="RAG + Image Chat")
-def img2rag2( prompt="", system=_SYSTEM, isPlay=0, lang='en', voice=6):
+def img2rag2( prompt="", system=_SYSTEM, isPlay=0, lang='en', voice=31):
     streamer = IterableStreamer(pipe_txt.get_tokenizer())
 
     # ===============================
@@ -775,11 +775,11 @@ upload_all_csv()
 url = "http://127.0.0.1:59531/web/pion2.html"
 
 # Kiosk 모드로 Chromium 실행
-"""
+
 subprocess.Popen(['chromium', '--kiosk', url],
     stdin=subprocess.DEVNULL,       # Discard stdin from the child process
     stdout=subprocess.DEVNULL,      # Discard stdout from the child process
     stderr=subprocess.DEVNULL,      # Discard stderr from the child process
     start_new_session=True          # Start the process in a new session (POSIX only)
 )
-"""
+

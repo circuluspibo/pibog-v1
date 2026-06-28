@@ -40,6 +40,7 @@ from ultralytics import YOLO
 import utils
 from text import text_to_sequence
 from serverinfo import si
+import httpx
 
 logging.basicConfig(level=logging.ERROR)
 logger = logging.getLogger(__name__)
@@ -91,7 +92,7 @@ age_gender_h, age_gender_w = list(age_gender_compiled.input(0).shape)[2:]
 emotion_h,    emotion_w    = list(emotion_compiled.input(0).shape)[2:]
 
 det_model = YOLO("models/yolo11m-seg_int8_openvino_model") #yolo26s-helmet_int8_openvino_model
-ppe_model = YOLO("models/yolo11n-helmet4_int8_openvino_model")  #yolo26s-seg_int8_openvino_model
+ppe_model = YOLO("models/safety-11s_int8_openvino_model") #yolo26s-seg_int8_openvino_model
 
 class_names = det_model.names
 ppe_names   = ppe_model.names
@@ -269,6 +270,8 @@ def processing_thread():
                     crop     = frame_ai[max(0,y1):min(ch,y2), max(0,x1):min(cw,x2)].copy()
                     cap_type = "ppe" if 'helmet' in label else "face"
 
+                    cv2.imwrite("capture2.jpg", frame)
+
                     # DataChannel 캡처 전송
                     ok, buf = cv2.imencode('.jpg', crop, [cv2.IMWRITE_JPEG_QUALITY, 75])
                     if ok:
@@ -281,14 +284,86 @@ def processing_thread():
                         except queue.Full:
                             pass
 
-                    # ── [수정2] LED/TTS/파일저장 → daemon 스레드로 분리 ──
-                    # processing_thread 안에서 직접 호출하면 HTTP 요청(requests)이
-                    # 수백ms~수초 블로킹 → 프레임 드롭 심화
+
+                    if cap_type == "ppe" and cur_time - last_ppe_saved_time > 15.0:
+                        last_ppe_saved_time = cur_time
+                        
+                        def _ppe_action(img, fn):
+                            # 1. 시각 신호(LED)는 지연이 없으므로 즉시 실행
+                            led(255, 255, 255)
+                            
+                            # 2. API 요청 비동기 스레드 실행
+                            def send_ppe_request():
+                                try:
+                                    httpx.get("http://127.0.0.1:59532/v2/img2chat", params={"prompt": "다음과 같이 사람이 안전모를 쓴 상황에서 어떤 말을 하면 좋을까?"})
+                                except Exception as e:
+                                    print(f"PPE Network error: {e}")
+                            threading.Thread(target=send_ppe_request, daemon=True).start()
+                            
+                            # 3. 안내 음성 재생 스레드 실행 (음악이 재생되는 동안 코드가 멈추지 않음)
+                            threading.Thread(target=play, args=('welcome.mp3',), daemon=True).start()
+                            
+                            # 4. 이미지 저장 스레드 실행 (디스크 I/O 병목 방지)
+                            threading.Thread(target=_save_ppe, args=(img, fn), daemon=True).start()
+                            
+                            # # 필요 시 주석 해제하여 사용 (로봇 팔 제어)
+                            # threading.Thread(target=arm, args=("lowWave",), daemon=True).start()
+                            # threading.Thread(target=arm, args=("Release_Arm",), daemon=True).start()
+
+                        # 전체 액션을 감싸는 스레드 시작
+                        threading.Thread(
+                            target=_ppe_action,
+                            args=(crop.copy(), f"ppe_{label}_{int(cur_time)}.jpg"),
+                            daemon=True
+                        ).start()
+
+                        arm("lowWave")
+                        arm("Release_Arm")
+
+                    elif cap_type == "face" and cur_time - last_face_saved_time > 15.0:
+                        last_face_saved_time = cur_time
+                        
+                        def _face_action(img, fn):
+                            # 1. 경고 LED 즉시 실행
+                            led(255, 0, 0)
+                            
+                            # 2. 위험 상황 알림 API 요청 비동기 스레드 실행
+                            def send_face_request():
+                                try:
+                                    httpx.get("http://127.0.0.1:59532/v2/img2chat", params={"prompt": "다음과 같이 사람이 안전모를 쓰지 않은 위험상황에 대해 이야기 해줘."})
+                                except Exception as e:
+                                    print(f"Face Network error: {e}")
+                            threading.Thread(target=send_face_request, daemon=True).start()
+                            
+                            # 3. 경고음 재생 스레드 실행
+                            threading.Thread(target=play, args=('alarm.mp3',), daemon=True).start()
+                            
+                            # 4. 로봇 팔 제어 스레드 실행
+                            # (주의: Refuse 동작과 Release_Arm 동작 사이에 시간 간격이 필요하다면 arm 함수 내부나 
+                            #  별도 함수에서 time.sleep()을 준 뒤 순차 실행해야 할 수 있습니다. 여기서는 동시에 던집니다.)
+                            threading.Thread(target=arm, args=("Refuse",), daemon=True).start()
+                            threading.Thread(target=arm, args=("Release_Arm",), daemon=True).start()
+                            
+                            # 5. 미착용 이미지 저장 스레드 실행
+                            threading.Thread(target=_save_face, args=(img, fn), daemon=True).start()
+
+                        # 전체 액션을 감싸는 스레드 시작
+                        threading.Thread(
+                            target=_face_action,
+                            args=(crop.copy(), f"face_{int(cur_time)}.jpg"),
+                            daemon=True
+                        ).start()
+
+                        arm("Refuse")
+                        arm("Release_Arm")
+
+                    """
                     if cap_type == "ppe" and cur_time - last_ppe_saved_time > 15.0:
                         last_ppe_saved_time = cur_time
                         def _ppe_action(img, fn):
                             led(255, 255, 255)
-                            tts_v2("오늘도 좋은 하루입니다.", 31)
+                            httpx.get("http://127.0.0.1:59532/v2/img2chat", params={"prompt": "다음과 같이 사람이 안전모를 쓴 상황에서 어떤 말을 하면 좋을까?"})
+                            #tts_v2("오늘도 좋은 하루입니다.", 31)
                             play('welcome.mp3')                          
                             _save_ppe(img, fn)
                             #arm("lowWave")
@@ -303,7 +378,8 @@ def processing_thread():
                         last_face_saved_time = cur_time
                         def _face_action(img, fn):
                             led(255, 0, 0)
-                            tts_v2("안전모를 착용해 주세요", 31)
+                            httpx.get("http://127.0.0.1:59532/v2/img2chat", params={"prompt": "다음과 같이 사람이 안전모를 쓰지 않은 위험상황에 대해 이야기 해줘."})
+                            #tts_v2("안전모를 착용해 주세요", 31)
                             play('alarm.mp3')
                             arm("Refuse")
                             arm("Release_Arm")
@@ -313,6 +389,7 @@ def processing_thread():
                             args=(crop.copy(), f"face_{int(cur_time)}.jpg"),
                             daemon=True
                         ).start()
+                    """
 
         out = visualize_segmentation(frame_ai, masks, boxes, classes, scores,
                                      get_mask_depths(masks, depth_ai))
@@ -342,8 +419,8 @@ def processing_thread():
         q_put(stream_q_main, cv2.resize(out,(640,480)))
 
         cnt_image += 1
-        if cnt_image % 100 == 0:
-            cv2.imwrite("capture.jpg", frame)
+        #if cnt_image % 100 == 0:
+        #    cv2.imwrite("capture2.jpg", frame)
 
 # ─────────────────────────────────────────────────────────────
 # WebRTC VideoStreamTrack
@@ -544,6 +621,7 @@ async def hand(cmd: str):
 async def heartbeat():
     return {"result": True, "data": state}
 
+
 @app.get("/start_collection")
 def start_collection():
     global is_collecting
@@ -552,6 +630,7 @@ def start_collection():
     is_collecting = True
     threading.Thread(target=receiver_thread,   daemon=True).start()
     threading.Thread(target=processing_thread, daemon=True).start()
+
     return {"message": "started"}
 
 def toFloat(v):
@@ -599,6 +678,7 @@ def tts_v2(text="", voice=6, lang='ko'):
         requests.post(f"http://{_IP}:59521/audio",
                       files={"audio_file":(f"{filename}.wav",f,"audio/wav")})
     return path
+
 
 @app.get("/led")
 def led(r:int=0, g:int=0, b:int=0):
