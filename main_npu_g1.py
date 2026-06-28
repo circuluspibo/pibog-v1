@@ -91,10 +91,10 @@ emotion_output_layer = emotion_compiled_model.output(0)
 emotion_height, emotion_width = list(emotion_input_layer.shape)[2:]
 
 det_model = YOLO("models/yolo11m-seg_int8_openvino_model") #yolo26s-helmet_int8_openvino_model
-ppe_model = YOLO("models/safety-11s_int8_int8_openvino_model")  #yolo26s-seg_int8_openvino_model
+#ppe_model = YOLO("models/safety-11s_int8_int8_openvino_model")  #yolo26s-seg_int8_openvino_model
 
 class_names = det_model.names
-ppe_names = ppe_model.names
+#ppe_names = ppe_model.names
 
 is_collecting = False
 
@@ -417,7 +417,7 @@ async def processing_loop():
 
         # 3. NPU 추론
         res = det_model(frame_ai, device="intel:npu", verbose=False, conf=0.25)[0]
-        ppe_res = ppe_model(frame_ai, device="intel:npu", verbose=False, conf=0.25)[0]
+        #ppe_res = ppe_model(frame_ai, device="intel:npu", verbose=False, conf=0.25)[0]
 
         # 4. 후처리 및 시각화 로직
         if hasattr(res, 'masks') and res.masks is not None:
@@ -435,7 +435,7 @@ async def processing_loop():
         # 4. PPE 결과 시각화 추가 (파란색 박스)
         # 4. PPE 결과 시각화 추가 (파란색 박스 + 클래스 이름)
 
-        
+        """
         if ppe_res.boxes is not None:
           ppe_boxes = ppe_res.boxes.xyxy.cpu().numpy()
           ppe_scores = ppe_res.boxes.conf.cpu().numpy()
@@ -466,7 +466,7 @@ async def processing_loop():
                   
                   # 3) 텍스트 쓰기 (흰색)
                   cv2.putText(out, display_str, (x1, text_y - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
-        
+        """
         gray = cv2.cvtColor(frame_ai, cv2.COLOR_BGR2GRAY)
         tags = detector.detect(gray)
 
