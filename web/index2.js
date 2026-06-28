@@ -513,9 +513,16 @@ document.addEventListener('DOMContentLoaded', function() {
                     if(this.classList.contains('hands'))
                         cmd = `/hand?cmd=${this.id}`
                     else if(this.classList.contains('states')){
-                        state = this.id
-                        multi = 0.5
-                        cmd = `/stateG1?cmd=${this.id}`                    
+                        isOk = confirm(`Be careful! ${this.id} is dangerous method for standing robot.`) 
+
+                        if(isOk){
+                          state = this.id
+                          multi = 0.5
+                          cmd = `/stateG1?cmd=${this.id}`
+                        } else {
+                          alert(`${this.id} is cancelled!`)
+                          return
+                        }
                     } else
                         cmd = `/arm?cmd=${this.id}`
             }
