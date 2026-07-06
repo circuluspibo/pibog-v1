@@ -1,16 +1,4 @@
-"""
-구조:
-  Thread-1 receiver   : 웹캠(OpenCV) → raw_q
-  Thread-mic          : 마이크 → WakeWord / ACLNet / VAD → STT → RAG
-                        ACLNet 결과는 state["audio"] 에 직접 기록 → DataChannel 자동 전송
-  Thread-2 processing : raw_q → YOLO + 얼굴분석 통합 시각화 → stream_q_main
-                              → Depth Anything V2 추론 → stream_q_depth
-                        depth min/max/center → state["depth"] → DataChannel 자동 전송
-  asyncio  WebRTC     : stream_q_main  → MainTrack  (mid=0) → WebRTC 송출
-                        stream_q_depth → DepthTrack (mid=1) → WebRTC 송출
-  asyncio  FastAPI    : REST 엔드포인트
-"""
-
+import base64
 import queue
 import threading
 import time
@@ -29,11 +17,10 @@ import matplotlib.colors
 import pyaudio
 from fastapi import FastAPI, File, UploadFile, Query, HTTPException
 import httpx
-import base64
+
 from scipy.io.wavfile import write as write_wav
 from scipy.io.wavfile import write as wav_write
 import audioop
-#from openwakeword.model import Model as WakeWordModel
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -57,12 +44,11 @@ from serverinfo import si
 logging.basicConfig(level=logging.ERROR)
 logger = logging.getLogger(__name__)
 
-# ─────────────────────────────────────────────────────────────
-# 설정
-# ─────────────────────────────────────────────────────────────
 _IP          = "192.168.0.34"
 _SERVER_PORT = 59530
 
+MOTION_CONTROL_URL = "http://127.0.0.1:3001"
+RESUME_DELAY_SEC   = 10
 
 DEPTH_SKIP_N = 5
 
@@ -73,12 +59,11 @@ WEBCAM_FPS    = 30
 
 RTC_CONFIG = RTCConfiguration(iceServers=[])
 
-# 오디오
 WAKEWORD_MODEL_NAME      = "./models/alexa_v0.1.xml"
 WAKEWORD_THRESHOLD       = 0.5
 ACLNET_MODEL_XML         = "./models/aclnet.xml"
 ACLNET_CLASSES_TXT       = "./models/aclnet_53cl.txt"
-ACLNET_THRESHOLD         = 0.6          # ← threshold 이상 모든 클래스 반환
+ACLNET_THRESHOLD         = 0.6
 VAD_ACTIVATION_THRESHOLD = 500
 SILENCE_DURATION         = 2
 MAX_RECORDING_DURATION   = 15
@@ -88,23 +73,19 @@ STT_LANG                 = "ko"
 STT_IS_PLAY              = 0
 RAG_URL                  = "http://127.0.0.1:59532/v1/rag/txt2chat"
 AUDIO_FORMAT             = pyaudio.paInt16
-AUDIO_CHANNELS           = 2 #1
-AUDIO_RATE               = 44100 #16000
+AUDIO_CHANNELS           = 2
+AUDIO_RATE               = 44100
 AUDIO_CHUNK              = 16000
 
-# 실제 STT 서버의 주소
 TARGET_STT_URL = "http://192.168.68.116:59532/v1/stt"
 
 os.makedirs(RECORDING_OUTPUT_DIR, exist_ok=True)
 os.makedirs("output", exist_ok=True)
 
-# ─────────────────────────────────────────────────────────────
-# 큐
-# ─────────────────────────────────────────────────────────────
-raw_q         = queue.Queue(maxsize=1)
+raw_q          = queue.Queue(maxsize=1)
 stream_q_main  = queue.Queue(maxsize=1)
-stream_q_depth = queue.Queue(maxsize=1)   # Depth Anything V2 컬러맵
-capture_q     = queue.Queue(maxsize=4)   # 얼굴 crop → DataChannel
+stream_q_depth = queue.Queue(maxsize=1)
+capture_q      = queue.Queue(maxsize=4)
 
 def play(path):
     with open(path, "rb") as f:
@@ -118,9 +99,6 @@ def q_put(q: queue.Queue, item):
         pass
     q.put(item)
 
-# ─────────────────────────────────────────────────────────────
-# OpenVINO 모델 로드
-# ─────────────────────────────────────────────────────────────
 DEVICE  = "NPU"
 ov_core = Core()
 
@@ -135,23 +113,18 @@ face_det_h,   face_det_w   = list(face_det_compiled.input(0).shape)[2:]
 age_gender_h, age_gender_w = list(age_gender_compiled.input(0).shape)[2:]
 emotion_h,    emotion_w    = list(emotion_compiled.input(0).shape)[2:]
 
-det_model = YOLO("models/yolo11m-seg_int8_openvino_model") #yolo26s-helmet_int8_openvino_model
-ppe_model = YOLO("models/safety-11s_int8_openvino_model") #yolo26s-seg_int8_openvino_model
-
+det_model   = YOLO("models/yolo11m-seg_int8_openvino_model")
+ppe_model   = YOLO("models/safety-11s_int8_openvino_model")
 class_names = det_model.names
 ppe_names   = ppe_model.names
-
 detector    = Detector(families="tag36h11")
 
 config_tts = {"PERFORMANCE_HINT": "LATENCY"}
 pipe_tts   = ov_core.compile_model(ov_core.read_model("./models/all_base_ov.xml"), "CPU", config_tts)
 conf_tts   = utils.get_hparams_from_file("./models/all_base_ov.json")
 
-# ─────────────────────────────────────────────────────────────
-# Depth Anything V2 (CPU — NPU 자원 분리)
-# ─────────────────────────────────────────────────────────────
 DEPTH_MODEL_XML  = "./models/depth_anything_v2_int8.xml"
-DEPTH_INPUT_H    = 518   # 모델 권장 입력 크기
+DEPTH_INPUT_H    = 518
 DEPTH_INPUT_W    = 518
 
 depth_compiled   = None
@@ -196,7 +169,6 @@ def infer_depth(frame_bgr: np.ndarray):
 
     return colored, depth_info
 
-# ACLNet (CPU)
 audio_ov_config = {
     "SCHEDULING_CORE_TYPE": "ECORE_ONLY",
     "PERFORMANCE_HINT":     "LATENCY",
@@ -218,9 +190,6 @@ except Exception as e:
     aclnet_compiled = None
     ACLNET_CLASSES  = []
 
-# ─────────────────────────────────────────────────────────────
-# 전역 상태
-# ─────────────────────────────────────────────────────────────
 LIVING_CLASSES = {'person','cat','dog','bird','teddy bear','cow','sheep','horse'}
 EMOTIONS       = ['neutral','happy','sad','surprise','anger']
 
@@ -229,8 +198,6 @@ state = {
     "cnt_live": 0, "cnt_object": 0, "boxes": [],
     "human": {"age": "", "gender": "", "emotion": "", "position": ""},
     "tag":   {"id": None, "dist": 0},
-    # ↓ ACLNet: threshold 이상 모든 결과를 리스트로 저장
-    # [{"cls": str, "prob": float}, ...]  — 비어있으면 []
     "audio": {"results": [], "ts": 0},
     "depth": {"min": 0.0, "max": 0.0, "center": 0.0},
 }
@@ -248,27 +215,91 @@ PPE_DIR   = "ppe";   os.makedirs(PPE_DIR,   exist_ok=True)
 last_face_saved_time = 0.0
 last_ppe_saved_time  = 0.0
 
-# ─────────────────────────────────────────────────────────────
-# 파일 저장
-# ─────────────────────────────────────────────────────────────
+motion_lock = threading.Lock()
+
+def find_webcam_mic_index(keywords=None):
+    """
+    이름에 keyword가 포함된 입력 장치(채널>0)를 찾아 인덱스 반환.
+    못 찾으면 시스템 기본 입력 장치, 그것도 없으면 None.
+    """
+    if keywords is None:
+        keywords = ["webcam", "usb", "camera", "cam"]
+
+    pa = pyaudio.PyAudio()
+    found = None
+    try:
+        # 1) 이름 매칭 (입력 채널이 있는 장치만)
+        for i in range(pa.get_device_count()):
+            info = pa.get_device_info_by_index(i)
+            if info.get("maxInputChannels", 0) <= 0:
+                continue
+            name = str(info.get("name", "")).lower()
+            print(f"[MIC] idx={i} ch={info['maxInputChannels']} name={info.get('name')}")
+            if any(k in name for k in keywords):
+                found = i
+                print(f"[MIC] ✅ matched → idx={i} ({info.get('name')})")
+                break
+
+        # 2) 매칭 실패 시 시스템 기본 입력 장치
+        if found is None:
+            try:
+                default = pa.get_default_input_device_info()
+                found = int(default["index"])
+                print(f"[MIC] ⚠️  no match, using default → idx={found} ({default.get('name')})")
+            except Exception:
+                found = None
+                print("[MIC] ❌ no input device found")
+    finally:
+        pa.terminate()
+    return found
+
+def pause_motion():
+    try:
+        requests.get(f"{MOTION_CONTROL_URL}/pause", timeout=3)
+        print("[MOTION] ⏸️  paused")
+    except Exception as e:
+        print(f"[MOTION] pause error: {e}")
+
+def resume_motion():
+    try:
+        requests.get(f"{MOTION_CONTROL_URL}/resume", timeout=3)
+        print("[MOTION] ▶️  resumed")
+    except Exception as e:
+        print(f"[MOTION] resume error: {e}")
+
+def run_safe_action(action_fn):
+    if not motion_lock.acquire(blocking=False):
+        print("[MOTION] action already in progress, skip")
+        return
+    try:
+        pause_motion()
+        try:
+            action_fn()
+        except Exception as e:
+            print(f"[MOTION] action error: {e}")
+        time.sleep(RESUME_DELAY_SEC)
+    finally:
+        resume_motion()
+        motion_lock.release()
+
 def _save_face(img, filename):
     try:
         cv2.imwrite(os.path.join(FACES_DIR, filename), img)
+        files = sorted(glob.glob(os.path.join(FACES_DIR, "*.jpg")), key=os.path.getmtime)
+        for f in files[:-20]:
+            os.remove(f)
     except Exception as e:
         print(f"face save error: {e}")
 
 def _save_ppe(img, filename):
     try:
         cv2.imwrite(os.path.join(PPE_DIR, filename), img)
-        files = sorted(glob.glob(os.path.join(PPE_DIR,"*.jpg")), key=os.path.getmtime)
+        files = sorted(glob.glob(os.path.join(PPE_DIR, "*.jpg")), key=os.path.getmtime)
         for f in files[:-20]:
             os.remove(f)
     except Exception as e:
         print(f"ppe save error: {e}")
 
-# ─────────────────────────────────────────────────────────────
-# 통합 시각화 함수
-# ─────────────────────────────────────────────────────────────
 def visualize_all(frame_ai, masks, boxes, classes, scores, alpha=0.5):
     global state
     H, W = frame_ai.shape[:2]
@@ -363,10 +394,6 @@ def visualize_all(frame_ai, masks, boxes, classes, scores, alpha=0.5):
 
     return out, face_crops
 
-
-# ─────────────────────────────────────────────────────────────
-# 오디오 헬퍼
-# ─────────────────────────────────────────────────────────────
 def _set_recording_active():
     global is_recording, recorded_frames, recording_start_time, last_sound_time
     is_recording         = True
@@ -417,9 +444,6 @@ def _call_rag(prompt: str):
     except Exception as e:
         print(f"[RAG] ❌ {e}")
 
-# ─────────────────────────────────────────────────────────────
-# Thread-1: 웹캠 수신
-# ─────────────────────────────────────────────────────────────
 def receiver_thread():
     print("=== Receiver thread started (webcam)")
     cap = cv2.VideoCapture(WEBCAM_INDEX)
@@ -436,37 +460,49 @@ def receiver_thread():
             continue
         q_put(raw_q, frame)
 
-# ─────────────────────────────────────────────────────────────
-# Thread-mic: 마이크 → WakeWord / ACLNet / VAD
-#   ACLNet: ACLNET_THRESHOLD 이상 모든 클래스를 results 리스트로 저장
-# ─────────────────────────────────────────────────────────────
 def mic_thread_func():
     global is_recording, recorded_frames, last_sound_time, recording_start_time
     print("=== Mic thread started")
 
-    audio  = pyaudio.PyAudio()
-    stream = audio.open(format=AUDIO_FORMAT, channels=AUDIO_CHANNELS,
-                        rate=AUDIO_RATE,input_device_index=0, input=True, frames_per_buffer=AUDIO_CHUNK)
+    mic_index = find_webcam_mic_index()
+    if mic_index is None:
+        print("[MIC] ❌ No usable input device. Mic thread aborted.")
+        return
+
+    audio = pyaudio.PyAudio()
+
+    dev_info      = audio.get_device_info_by_index(mic_index)
+    dev_channels  = int(dev_info.get("maxInputChannels", 1))
+    use_channels  = 2 if dev_channels >= 2 else 1
+    print(f"[MIC] using idx={mic_index} name={dev_info.get('name')} channels={use_channels}")
+
+    try:
+        stream = audio.open(format=AUDIO_FORMAT, channels=use_channels,
+                            rate=AUDIO_RATE, input_device_index=mic_index,
+                            input=True, frames_per_buffer=AUDIO_CHUNK)
+    except Exception as e:
+        print(f"[MIC] ❌ open failed on idx={mic_index}: {e}")
+        audio.terminate()
+        return
+
     st = None
     try:
-        CHUNK = 44100  # 1초 분량을 한 번에 읽음 (에러 방지용)
+        CHUNK = 44100
         while True:
-
-# 읽기 부분
             data = stream.read(CHUNK, exception_on_overflow=False)
-            mono = audioop.tomono(data, 2, 1, 1)
+            # 장치가 mono면 tomono 생략, stereo면 mono로 합침
+            if use_channels == 2:
+                mono = audioop.tomono(data, 2, 1, 1)
+            else:
+                mono = data
             converted, st = audioop.ratecv(mono, 2, 1, 44100, 16000, st)
-          
-            #chunk      = np.frombuffer(stream.read(AUDIO_CHUNK, exception_on_overflow=False), dtype=np.int16)
+
             chunk      = np.frombuffer(converted, dtype=np.int16)
             cur_time   = time.time()
             volume     = int(np.max(np.abs(chunk)))
             is_active  = volume > VAD_ACTIVATION_THRESHOLD
 
             if is_active:
-
-                # ACLNet — 녹음 중이 아닐 때만
-                # threshold 이상인 모든 클래스를 결과 리스트로 저장
                 if not is_recording and aclnet_compiled:
                     inp   = chunk.astype(np.float32) / 32768.0
                     inp   = inp.reshape(1, 1, 1, -1)
@@ -479,23 +515,16 @@ def mic_thread_func():
                                 "cls":  ACLNET_CLASSES[idx],
                                 "prob": round(float(prob), 2),
                             })
-                    # 확률 높은 순으로 정렬
                     results.sort(key=lambda x: x["prob"], reverse=True)
 
                     if results:
                         top = results[0]
                         print(f"[AEC] 🔥 {top['cls']} ({top['prob']:.2f})")
-
                         state["audio"] = {
                             "results": results,
                             "ts":      int(cur_time),
                         }
-                    # 결과 없으면 state 초기화 (소리가 사라짐)
-                    # 필요 시 주석 해제:
-                    # else:
-                    #     state["audio"] = {"results": [], "ts": int(cur_time)}
 
-            # 녹음 처리
             if is_recording:
                 recorded_frames.append(chunk)
                 if cur_time - recording_start_time > MAX_RECORDING_DURATION:
@@ -511,12 +540,9 @@ def mic_thread_func():
         stream.stop_stream(); stream.close(); audio.terminate()
         if is_recording:
             _stop_recording_and_save()
-
-# ─────────────────────────────────────────────────────────────
-# Thread-2: AI 처리
-# ─────────────────────────────────────────────────────────────
+            
 def processing_thread():
-    global last_face_saved_time
+    global last_face_saved_time, last_ppe_saved_time
     cnt_image = 0
     depth_tick  = 0
     print("=== Processing thread started")
@@ -533,33 +559,40 @@ def processing_thread():
         res     = det_model(frame_ai, device="intel:npu", verbose=False, conf=0.3)[0]
         ppe_res = ppe_model(frame_ai, device="intel:npu", verbose=False, conf=0.7)[0]
 
-
         masks   = res.masks.data.cpu().numpy().astype(np.uint8) if res.masks else []
         boxes   = res.boxes.xyxy.cpu().numpy()
         classes = res.boxes.cls.cpu().numpy().astype(int)
         scores  = res.boxes.conf.cpu().numpy()
 
+        out, face_crops = visualize_all(frame_ai, masks, boxes, classes, scores)
+
         cur_time = time.time()
         if ppe_res.boxes is not None:
             for i, box in enumerate(ppe_res.boxes.xyxy.cpu().numpy()):
-                x1,y1,x2,y2 = map(int, box)
+                x1, y1, x2, y2 = map(int, box)
                 conf   = float(ppe_res.boxes.conf.cpu().numpy()[i])
                 cls_id = int(ppe_res.boxes.cls.cpu().numpy()[i])
                 label  = ppe_names.get(cls_id, str(cls_id))
 
                 if 'helmet' in label or 'face' in label:
-                    ch,cw    = frame_ai.shape[:2]
-                    crop     = frame_ai[max(0,y1):min(ch,y2), max(0,x1):min(cw,x2)].copy()
+                    ch, cw   = frame_ai.shape[:2]
+                    crop     = frame_ai[max(0, y1):min(ch, y2), max(0, x1):min(cw, x2)].copy()
                     cap_type = "ppe" if 'helmet' in label else "face"
 
-                    cv2.imwrite("capture2.jpg", frame)
+                    box_color = (0, 255, 0) if cap_type == "ppe" else (0, 0, 255)
+                    cv2.rectangle(out, (x1, y1), (x2, y2), box_color, 2)
+                    cv2.putText(out, f"{label}:{conf:.2f}",
+                                (x1, max(15, y1 - 10)),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, box_color, 2)
 
-                    # DataChannel 캡처 전송
                     ok, buf = cv2.imencode('.jpg', crop, [cv2.IMWRITE_JPEG_QUALITY, 75])
                     if ok:
-                        b64 = base64.b64encode(buf).decode()
-                        msg = json.dumps({"type":cap_type,"b64":b64,
-                                          "label":label,"conf":round(conf,2)})
+                        msg = json.dumps({
+                            "type":  cap_type,
+                            "b64":   base64.b64encode(buf).decode(),
+                            "label": label,
+                            "conf":  round(conf, 2),
+                        })
                         try:
                             capture_q.put_nowait(msg)
                         except queue.Full:
@@ -567,77 +600,53 @@ def processing_thread():
 
                     if cap_type == "ppe" and cur_time - last_ppe_saved_time > 15.0:
                         last_ppe_saved_time = cur_time
-                        
-                        def _ppe_action(img, fn):
-                            # 1. 시각 신호(LED)는 지연이 없으므로 즉시 실행
-                            led(255, 255, 255)
-                            
-                            # 2. API 요청 비동기 스레드 실행
-                            def send_ppe_request():
-                                try:
-                                    httpx.get("http://127.0.0.1:59532/v2/img2chat", params={"prompt": "다음과 같이 사람이 안전모를 쓴 상황에서 어떤 말을 하면 좋을까?"})
-                                except Exception as e:
-                                    print(f"PPE Network error: {e}")
-                            threading.Thread(target=send_ppe_request, daemon=True).start()
-                            
-                            # 3. 안내 음성 재생 스레드 실행 (음악이 재생되는 동안 코드가 멈추지 않음)
-                            threading.Thread(target=play, args=('welcome.mp3',), daemon=True).start()
-                            
-                            # 4. 이미지 저장 스레드 실행 (디스크 I/O 병목 방지)
-                            threading.Thread(target=_save_ppe, args=(img, fn), daemon=True).start()
-                            
-                            # # 필요 시 주석 해제하여 사용 (로봇 팔 제어)
-                            # threading.Thread(target=arm, args=("lowWave",), daemon=True).start()
-                            # threading.Thread(target=arm, args=("Release_Arm",), daemon=True).start()
 
-                        # 전체 액션을 감싸는 스레드 시작
+                        def _ppe_action(img, fn):
+                            def action():
+                                led(255, 255, 255)
+                                def send_ppe_request():
+                                    try:
+                                        httpx.get("http://127.0.0.1:59532/v2/img2chat",
+                                                  params={"prompt": "다음과 같이 사람이 안전모를 쓴 상황에서 어떤 말을 하면 좋을까?"})
+                                    except Exception as e:
+                                        print(f"PPE Network error: {e}")
+                                threading.Thread(target=send_ppe_request, daemon=True).start()
+                                threading.Thread(target=play, args=('welcome.mp3',), daemon=True).start()
+                                threading.Thread(target=_save_ppe, args=(img, fn), daemon=True).start()
+                                arm("lowWave")
+                                arm("Release_Arm")
+                            run_safe_action(action)
+
                         threading.Thread(
                             target=_ppe_action,
                             args=(crop.copy(), f"ppe_{label}_{int(cur_time)}.jpg"),
                             daemon=True
                         ).start()
 
-                        arm("lowWave")
-                        arm("Release_Arm")
-
                     elif cap_type == "face" and cur_time - last_face_saved_time > 15.0:
                         last_face_saved_time = cur_time
-                        
-                        def _face_action(img, fn):
-                            # 1. 경고 LED 즉시 실행
-                            led(255, 0, 0)
-                            
-                            # 2. 위험 상황 알림 API 요청 비동기 스레드 실행
-                            def send_face_request():
-                                try:
-                                    httpx.get("http://127.0.0.1:59532/v2/img2chat", params={"prompt": "다음과 같이 사람이 안전모를 쓰지 않은 위험상황에 대해 이야기 해줘."})
-                                except Exception as e:
-                                    print(f"Face Network error: {e}")
-                            threading.Thread(target=send_face_request, daemon=True).start()
-                            
-                            # 3. 경고음 재생 스레드 실행
-                            threading.Thread(target=play, args=('alarm.mp3',), daemon=True).start()
-                            
-                            # 4. 로봇 팔 제어 스레드 실행
-                            # (주의: Refuse 동작과 Release_Arm 동작 사이에 시간 간격이 필요하다면 arm 함수 내부나 
-                            #  별도 함수에서 time.sleep()을 준 뒤 순차 실행해야 할 수 있습니다. 여기서는 동시에 던집니다.)
-                            threading.Thread(target=arm, args=("Refuse",), daemon=True).start()
-                            threading.Thread(target=arm, args=("Release_Arm",), daemon=True).start()
-                            
-                            # 5. 미착용 이미지 저장 스레드 실행
-                            threading.Thread(target=_save_face, args=(img, fn), daemon=True).start()
 
-                        # 전체 액션을 감싸는 스레드 시작
+                        def _face_action(img, fn):
+                            def action():
+                                led(255, 0, 0)
+                                def send_face_request():
+                                    try:
+                                        httpx.get("http://127.0.0.1:59532/v2/img2chat",
+                                                  params={"prompt": "다음과 같이 사람이 안전모를 쓰지 않은 위험상황에 대해 이야기 해줘."})
+                                    except Exception as e:
+                                        print(f"Face Network error: {e}")
+                                threading.Thread(target=send_face_request, daemon=True).start()
+                                threading.Thread(target=play, args=('alarm.mp3',), daemon=True).start()
+                                threading.Thread(target=_save_face, args=(img, fn), daemon=True).start()
+                                arm("Refuse")
+                                arm("Release_Arm")
+                            run_safe_action(action)
+
                         threading.Thread(
                             target=_face_action,
                             args=(crop.copy(), f"face_{int(cur_time)}.jpg"),
                             daemon=True
                         ).start()
-
-                        arm("Refuse")
-                        arm("Release_Arm")
-
-        out, face_crops = visualize_all(frame_ai, masks, boxes, classes, scores)
 
         depth_tick += 1
         if depth_tick >= DEPTH_SKIP_N:
@@ -672,15 +681,11 @@ def processing_thread():
         if cnt_image % 100 == 0:
             cv2.imwrite("capture.jpg", frame)
 
-# ─────────────────────────────────────────────────────────────
-# WebRTC
-# ─────────────────────────────────────────────────────────────
 def _make_vf(bgr: np.ndarray, pts: int, tb) -> VideoFrame:
     vf = VideoFrame.from_ndarray(cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB).copy(), format="rgb24")
     vf.pts       = pts
     vf.time_base = tb
     return vf
-
 
 class MainTrack(VideoStreamTrack):
     kind = "video"
@@ -702,7 +707,6 @@ class MainTrack(VideoStreamTrack):
         self._pts += self._step
         return vf
 
-
 class DepthTrack(VideoStreamTrack):
     kind = "video"
     def __init__(self):
@@ -722,7 +726,6 @@ class DepthTrack(VideoStreamTrack):
         vf        = _make_vf(self._last, self._pts, self._tb)
         self._pts += self._step
         return vf
-
 
 class WebRTCManager:
     def __init__(self):
@@ -811,12 +814,8 @@ class WebRTCManager:
         for cid in list(self._pcs):
             await self.close(cid)
 
-
 webrtc_manager = WebRTCManager()
 
-# ─────────────────────────────────────────────────────────────
-# FastAPI
-# ─────────────────────────────────────────────────────────────
 app = FastAPI()
 app.mount("/web",      StaticFiles(directory="web"),      name="web")
 app.mount("/webfonts", StaticFiles(directory="webfonts"), name="webfonts")
@@ -826,14 +825,8 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True,
 @app.middleware("http")
 async def add_process_time_header(request, call_next):
     response = await call_next(request)
-    # iframe 허용을 위해 X-Frame-Options 헤더 제거 또는 설정
-    # 모든 도메인에서 허용하고 싶다면 헤더 자체를 삭제하거나 'ALLOWALL' (비권장) 처리
     if "X-Frame-Options" in response.headers:
         del response.headers["X-Frame-Options"]
-    
-    # 또는 특정 도메인만 허용하고 싶다면 (현대적인 브라우저 방식)
-    # response.headers["Content-Security-Policy"] = "frame-ancestors 'self' http://parent-domain.com"
-    
     return response
 
 @app.on_event("startup")
@@ -843,7 +836,6 @@ async def _startup():
 @app.on_event("shutdown")
 async def _shutdown():
     await webrtc_manager.close_all()
-
 
 class AnswerRequest(BaseModel):
     sdp: str; type: str; client_id: str
@@ -875,6 +867,16 @@ async def hand(cmd: str):
 async def heartbeat():
     return {"result": True, "data": state}
 
+@app.get("/led")
+def led(r: int = 0, g: int = 0, b: int = 0):
+    requests.get(f"http://{_IP}:59521/led?r={r}&g={g}&b={b}")
+    return {"result": True}
+
+@app.get("/arm")
+def arm(cmd: str = 'lowWave'):
+    requests.get(f"http://{_IP}:58521/arm?cmd={cmd}")
+    return {"result": True}
+
 @app.get("/rec/start")
 def rec_start():
     if is_recording:
@@ -889,63 +891,32 @@ def rec_stop():
     _stop_recording_and_save()
     return {"result": True, "message": "Recording stopped"}
 
-
 @app.post("/v1/stt")
 async def proxy_stt(
     file: UploadFile = File(...),
     lang: str = Query("en"),
     isPlay: int = Query(0)
 ):
-    """
-    웹 클라이언트로부터 파일을 받아 내부 STT 서버로 전달합니다.
-    """
     try:
-        # 1. 클라이언트가 보낸 파일 읽기
         file_content = await file.read()
-        
-        # 2. 내부 STT 서버로 보낼 파라미터와 파일 구성
         params = {"lang": lang, "isPlay": isPlay}
         files = {
             "file": (file.filename, file_content, file.content_type)
         }
-
-        # 3. httpx를 사용하여 내부 서버에 POST 요청 (비동기)
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 TARGET_STT_URL,
                 params=params,
                 files=files,
-                timeout=60.0  # STT 처리가 길어질 수 있으므로 타임아웃 넉넉히 설정
+                timeout=60.0
             )
-
-        # 4. 내부 서버의 응답을 그대로 클라이언트에게 반환
         return response.json()
-
     except httpx.RequestError as exc:
-        # 내부 서버 연결 실패 시 에러 처리
         raise HTTPException(status_code=500, detail=f"Internal STT Server connection error: {exc}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     finally:
-        # 파일 리소스 닫기
         await file.close()
-
-
-@app.get("/led")
-def led(r:int=0, g:int=0, b:int=0):
-    requests.get(f"http://{_IP}:59521/led?r={r}&g={g}&b={b}")
-    return {"result": True}
-
-@app.get("/color")
-def color(value:str='red'):
-    rgb = (np.array(matplotlib.colors.to_rgb(value))*255).astype(int)
-    requests.get(f"http://{_IP}:59521/led?r={rgb[0]}&g={rgb[1]}&b={rgb[2]}")
-    return {"result": True}
-
-@app.get("/arm")
-def arm(cmd:str='lowWave'):
-    requests.get(f"http://{_IP}:58521/arm?cmd={cmd}")
-    return {"result": True}
 
 @app.get("/start_collection")
 def start_collection():
@@ -965,6 +936,5 @@ def monitor():
 def getHash(text):
     h = hashlib.new('md5'); h.update(text.encode()); return h.hexdigest()
 
-# ─────────────────────────────────────────────────────────────
 start_collection()
 print("NPU", "2502010900")
