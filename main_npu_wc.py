@@ -48,7 +48,7 @@ _IP          = "192.168.0.34"
 _SERVER_PORT = 59530
 
 MOTION_CONTROL_URL = "http://127.0.0.1:3001"
-RESUME_DELAY_SEC   = 10
+RESUME_DELAY_SEC   = 7
 
 DEPTH_SKIP_N = 5
 
@@ -86,11 +86,18 @@ raw_q          = queue.Queue(maxsize=1)
 stream_q_main  = queue.Queue(maxsize=1)
 stream_q_depth = queue.Queue(maxsize=1)
 capture_q      = queue.Queue(maxsize=4)
+import subprocess
+
 
 def play(path):
-    with open(path, "rb") as f:
-        requests.post(f"http://{_IP}:59521/audio",
-                      files={"audio_file": (f"{path}", f, "audio/mp3")})
+    subprocess.run(["./g1_audio","enp115s0", path])
+    if path == "alarm.wav":
+        subprocess.run(["./g1_audio","enp115s0", "safe.wav"])
+    else:
+        subprocess.run(["./g1_audio","enp115s0", "unsafe.wav"])
+    
+
+
 
 def q_put(q: queue.Queue, item):
     try:
@@ -118,10 +125,6 @@ ppe_model   = YOLO("models/helmet-11s_int8_openvino_model")
 class_names = det_model.names
 ppe_names   = ppe_model.names
 detector    = Detector(families="tag36h11")
-
-config_tts = {"PERFORMANCE_HINT": "LATENCY"}
-pipe_tts   = ov_core.compile_model(ov_core.read_model("./models/all_base_ov.xml"), "CPU", config_tts)
-conf_tts   = utils.get_hparams_from_file("./models/all_base_ov.json")
 
 DEPTH_MODEL_XML  = "./models/depth_anything_v2_int8.xml"
 DEPTH_INPUT_H    = 518
@@ -519,7 +522,7 @@ def mic_thread_func():
 
                     if results:
                         top = results[0]
-                        print(f"[AEC] 🔥 {top['cls']} ({top['prob']:.2f})")
+                        #print(f"[AEC] 🔥 {top['cls']} ({top['prob']:.2f})")
                         state["audio"] = {
                             "results": results,
                             "ts":      int(cur_time),
@@ -573,17 +576,15 @@ def processing_thread():
                 conf   = float(ppe_res.boxes.conf.cpu().numpy()[i])
                 cls_id = int(ppe_res.boxes.cls.cpu().numpy()[i])
                 label  = ppe_names.get(cls_id, str(cls_id))
-                print(cur_time, label)
+
                 if 'helmet' in label or 'face' in label:
                     ch, cw   = frame_ai.shape[:2]
                     crop     = frame_ai[max(0, y1):min(ch, y2), max(0, x1):min(cw, x2)].copy()
                     cap_type = "ppe" if 'helmet' in label else "face"
 
                     box_color = (0, 255, 0) if cap_type == "ppe" else (0, 0, 255)
-                    cv2.rectangle(out, (x1, y1), (x2, y2), box_color, 2)
-                    cv2.putText(out, f"{label}:{conf:.2f}",
-                                (x1, max(15, y1 - 10)),
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, box_color, 2)
+                    #cv2.rectangle(out, (x1, y1), (x2, y2), box_color, 2)
+                    #cv2.putText(out, f"{label}:{conf:.2f}",(x1, max(15, y1 - 10)),cv2.FONT_HERSHEY_SIMPLEX, 0.5, box_color, 2)
 
                     ok, buf = cv2.imencode('.jpg', crop, [cv2.IMWRITE_JPEG_QUALITY, 75])
                     if ok:
@@ -604,7 +605,7 @@ def processing_thread():
                         def _ppe_action(img, fn):
                             def action():
                                 threading.Thread(target=_save_ppe, args=(img, fn), daemon=True).start()
-                                led(255, 255, 255)
+                                led("255", "255", "255")
                                 def send_ppe_request():
                                     try:
                                         httpx.get("http://127.0.0.1:59532/v2/img2chat",
@@ -612,7 +613,7 @@ def processing_thread():
                                     except Exception as e:
                                         print(f"PPE Network error: {e}")
                                 threading.Thread(target=send_ppe_request, daemon=True).start()
-                                threading.Thread(target=play, args=('welcome.mp3',), daemon=True).start()
+                                threading.Thread(target=play, args=('welcome.wav',), daemon=True).start()
                                 arm("lowWave")
                                 arm("Release_Arm")
                             run_safe_action(action)
@@ -628,7 +629,7 @@ def processing_thread():
 
                         def _face_action(img, fn):
                             def action():
-                                led(255, 0, 0)
+                                led("255", "0", "0")
                                 threading.Thread(target=_save_face, args=(img, fn), daemon=True).start()
                                 def send_face_request():
                                     try:
@@ -637,7 +638,7 @@ def processing_thread():
                                     except Exception as e:
                                         print(f"Face Network error: {e}")
                                 threading.Thread(target=send_face_request, daemon=True).start()
-                                threading.Thread(target=play, args=('alarm.mp3',), daemon=True).start()
+                                threading.Thread(target=play, args=('alarm.wav',), daemon=True).start()
                                 arm("Refuse")
                                 arm("Release_Arm")
                             run_safe_action(action)
@@ -869,15 +870,64 @@ async def hand(cmd: str):
 async def heartbeat():
     return {"result": True, "data": state}
 
+G1_ACTION = {
+    "clamp": 17,
+    "highFive": 18,
+    "shakeHands_1": 27,
+    "makeHeartBothHands": 20,
+    "makeHeartSingleHands": 21,
+    "blowKiss": 12,
+    "hug": 19,
+    "hightWave": 26,
+    "lowWave": 25,
+    "ultramanRay": 24,
+    "bothHandsUp": 15,
+    "singleHandsUp": 23,
+    "Refuse": 22,
+    "Release_Arm": 99,
+}
+
 @app.get("/led")
-def led(r: int = 0, g: int = 0, b: int = 0):
-    requests.get(f"http://{_IP}:59521/led?r={r}&g={g}&b={b}")
-    return {"result": True}
+def led(r: str = "255", g: str = "255", b: str = "255"):
+    try:
+        subprocess.run(
+            ["./g1_vui","enp115s0", r, g, b],
+            check=True
+        )
+        return {
+            "result": True,
+            "message": f"LED 색상 설정 완료: ({r}, {g}, {b})"
+        }
+    except subprocess.CalledProcessError as e:
+        return {
+            "result": False,
+            "error": f"g1_vui 실행 실패: {e}"
+        }
+
 
 @app.get("/arm")
-def arm(cmd: str = 'lowWave'):
-    requests.get(f"http://{_IP}:58521/arm?cmd={cmd}")
-    return {"result": True}
+def arm(cmd: str = "lowWave"):
+    if cmd not in G1_ACTION:
+        return {
+            "result": False,
+            "error": f"Unknown command: {cmd}"
+        }
+
+    try:
+        print(str(G1_ACTION[cmd]))
+        subprocess.run(
+            ["./g1_action","enp115s0", str(G1_ACTION[cmd])],
+            check=True
+        )
+        return {
+            "result": True,
+            "message": f"Action 실행 완료: {cmd}"
+        }
+    except subprocess.CalledProcessError as e:
+        return {
+            "result": False,
+            "error": f"g1_action 실행 실패: {e}"
+        }
 
 @app.get("/rec/start")
 def rec_start():

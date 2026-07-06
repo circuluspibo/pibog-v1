@@ -34,10 +34,19 @@ import httpx
 
 app = FastAPI()
 
-
 def play_sound(file_path):
-    subprocess.run(["aplay","-D","plughw:0,0", file_path], stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
-    #subprocess.run(["play", file_path])
+    #subprocess.run(["aplay","-D","plughw:0,0", file_path], stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+    subprocess.run([
+        "sox",
+        f"output/{file_path}",
+        "-r", "16000",
+        "-c", "1",
+        "-b", "16",
+        "-e", "signed-integer",
+        f"output/_{file_path}",
+    ], check=True)
+
+    subprocess.run(["./g1_audio","enp115s0", f"output/_{file_path}"])
 
 
 def set_volume(val):
@@ -77,9 +86,9 @@ app.add_middleware(
 _VOL = 0.5
 
 core = Core()
-path_tts = snapshot_download(repo_id="rippertnt/on-vits2-multi-tts-v1", allow_patterns="*ov*")
-pipe_tts = core.compile_model(core.read_model(model=f"{path_tts}/all_base_ov.xml"), device_name="CPU", config={"PERFORMANCE_HINT": "LATENCY", "INFERENCE_NUM_THREADS" : 4 })
-conf_tts = utils.get_hparams_from_file(hf_hub_download(repo_id="rippertnt/on-vits2-multi-tts-v1", filename="all_base.json"))
+config_tts = {"PERFORMANCE_HINT": "LATENCY"}
+pipe_tts   = core.compile_model(core.read_model("./models/all_base_ov.xml"), "CPU", config_tts)
+conf_tts   = utils.get_hparams_from_file("./models/all_base_ov.json")
 
 app.include_router(create_slide_router(pipe_tts, conf_tts))
 
@@ -175,11 +184,12 @@ def tts1(text="", voice=31, lang='ko', static=0, isPlay=0):
     if int(static) > 0:
         write(data=audio, rate=sampling_rate, filename="output/human.wav")
         return "output/human.wav"
+    else:
+        write(data=audio, rate=sampling_rate, filename=f"output/{filename}.wav")
 
-    if int(isPlay) > 0:
-        play_sound(f"output/{filename}.wav")
+        if int(isPlay) > 0:
+            play_sound(f"{filename}.wav")
 
-    write(data=audio, rate=sampling_rate, filename=f"output/{filename}.wav")
     return f"output/{filename}.wav"
     
 
