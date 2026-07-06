@@ -1,4 +1,5 @@
 rag_db
+ov_cache
 ppe
 faces
 yolo*
@@ -10,4 +11,5 @@ models
 __pycache__*
 *__pycache__*
 recordings_wakeword
+recordings
 *.csv

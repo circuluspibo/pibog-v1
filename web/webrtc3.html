@@ -1,0 +1,777 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ROBOT MONITOR — WebRTC</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow+Condensed:wght@300;400;600;700;900&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:    #080c10; --surf:  #0d1318; --border:#1a2535;
+  --accent:#00e5ff; --warn:  #ff6b35; --ok:    #39ff14;
+  --dim:   #1e2d3d; --text:  #c8d8e8; --muted: #3a5060;
+  --mono:  'Share Tech Mono', monospace;
+  --sans:  'Barlow Condensed', sans-serif;
+  --side:  clamp(240px, 22vw, 320px);   /* 우측 패널 너비 반응형 */
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body { height: 100%; }
+
+body { 
+  background: var(--bg); 
+  color: var(--text); 
+  font-family: var(--sans); 
+  min-height: 100vh;
+  height: 100vh;
+  display: flex; 
+  flex-direction: column; 
+  overflow: hidden; 
+}
+
+body::before {
+  content: ''; position: fixed; inset: 0; z-index: 9999; pointer-events: none;
+  background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,.03) 2px, rgba(0,0,0,.03) 4px);
+}
+
+header { 
+  flex-shrink: 0;
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  min-height: 46px; padding: 0 16px;
+  background: var(--surf); border-bottom: 1px solid var(--border); 
+  flex-wrap: wrap;
+}
+
+.logo { font-family: var(--mono); font-size: 12px; letter-spacing: 4px; color: var(--accent); white-space: nowrap; }
+.logo em { color: var(--muted); font-style: normal; }
+.hdr-right { display: flex; gap: 14px; align-items: center; }
+
+/* 좌측(비디오) + 우측(상태). 우측 폭은 clamp, 좌측은 나머지 */
+.grid { 
+  flex: 1; 
+  display: grid; 
+  grid-template-columns: minmax(0, 1fr) var(--side); 
+  grid-template-rows: minmax(0, 1fr); 
+  gap: 1px; 
+  background: var(--border); 
+  overflow: hidden; 
+  min-height: 0;
+}
+
+/* 좌측: 위(realsense) / 아래(캡처+AI) */
+.left {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 1px;
+  background: var(--border);
+  overflow: hidden;
+  min-width: 0;
+  min-height: 0;
+}
+
+.top-row, .bot-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 1px;
+  background: var(--border);
+  min-width: 0;
+  min-height: 0;
+}
+
+.panel { 
+  background: var(--surf); 
+  display: flex; 
+  flex-direction: column; 
+  overflow: hidden; 
+  min-width: 0;
+  min-height: 0;
+}
+
+.plabel { 
+  flex-shrink: 0;
+  font-family: var(--mono); font-size: 9px; letter-spacing: 3px; text-transform: uppercase; color: var(--muted);
+  padding: 7px 12px 6px; border-bottom: 1px solid var(--border); 
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  white-space: nowrap;
+}
+
+.vwrap { 
+  flex: 1;
+  position: relative; background: #000; 
+  min-width: 0;
+  min-height: 0;
+}
+.vwrap video, .vwrap img { width: 100%; height: 100%; object-fit: contain; display: block; }
+
+.sub-grid { 
+  flex: 1; 
+  display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 1px; background: var(--border); 
+  min-height: 0;
+}
+.svwrap { position: relative; background: #000; min-width: 0; min-height: 0; }
+.svwrap img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.svlabel {
+  position: absolute; top: 4px; left: 6px; z-index: 2;
+  font-family: var(--mono); font-size: 8px; letter-spacing: 2px; color: var(--accent);
+  background: rgba(8,12,16,.7); padding: 2px 5px;
+}
+
+/* 탭 공통 */
+.tabs {
+  flex-shrink: 0;
+  display: flex; gap: 1px; background: var(--border);
+  border-bottom: 1px solid var(--border);
+}
+.tab {
+  flex: 1; min-width: 0;
+  font-family: var(--mono); font-size: 9px; letter-spacing: 2px; text-transform: uppercase;
+  padding: 6px 4px; text-align: center; cursor: pointer;
+  background: var(--surf); color: var(--muted); border: none;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.tab.active { color: var(--accent); background: var(--dim); box-shadow: inset 0 -2px 0 var(--accent); }
+.tab:disabled { opacity: .35; cursor: not-allowed; }
+
+.tabview { flex: 1; position: relative; min-height: 0; min-width: 0; }
+.tabpane { position: absolute; inset: 0; display: none; background: #000; }
+.tabpane.active { display: block; }
+.tabpane video, .tabpane img { width: 100%; height: 100%; object-fit: contain; display: block; }
+
+/* 우측 상태 패널 */
+.spanel { 
+  background: var(--surf);
+  display: flex; flex-direction: column; overflow: hidden; min-width: 0; min-height: 0;
+}
+/* 상태 탭 내용 영역: 세로 스크롤 */
+.state-scroll {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+  display: none;
+  flex-direction: column;
+}
+.state-scroll.active { display: flex; }
+.state-scroll::-webkit-scrollbar { width: 3px; }
+.state-scroll::-webkit-scrollbar-thumb { background: var(--dim); }
+
+.objsec { 
+  overflow-y: auto; 
+  min-height: 60px;
+  max-height: 30vh;
+}
+.objsec::-webkit-scrollbar { width: 2px; }
+.objsec::-webkit-scrollbar-thumb { background: var(--dim); }
+
+.bat-block, .metrics, .hblock, .tblock, .dclog { flex-shrink: 0; }
+.bat-block { padding: 10px 14px; }
+.bat-head { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 9px; color: var(--muted); margin-bottom: 5px; }
+
+.dot-wrap { display: flex; align-items: center; gap: 7px; font-family: var(--mono); font-size: 10px; text-transform: uppercase; }
+.dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); flex-shrink: 0; }
+.dot.connecting { background: var(--warn); animation: blink 1s infinite; }
+.dot.connected { background: var(--ok); box-shadow: 0 0 5px var(--ok); }
+.dot.error { background: #ff3366; }
+@keyframes blink { 0%,100% { opacity: 1 } 50% { opacity: .3 } }
+#btn { font-family: var(--mono); font-size: 11px; text-transform: uppercase; padding: 5px 14px; background: transparent; border: 1px solid var(--accent); color: var(--accent); cursor: pointer; white-space: nowrap; }
+.badge { font-size: 8px; padding: 2px 6px; border: 1px solid currentColor; white-space: nowrap; }
+.badge.live { color: var(--ok); animation: blink 2s infinite; }
+.badge.idle { color: var(--muted); }
+.vfps { position: absolute; bottom: 6px; left: 8px; font-family: var(--mono); font-size: 10px; color: var(--accent); opacity: .6; z-index: 2; }
+.nosig { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(8,12,16,.92); font-family: var(--mono); font-size: 10px; color: var(--muted); gap: 8px; text-align: center; padding: 8px; }
+.bat-track { height: 12px; background: var(--dim); border: 1px solid var(--border); }
+.bat-fill { height: 100%; background: var(--ok); transition: width .6s; }
+.bat-fill.w { background: var(--warn); } .bat-fill.c { background: #ff3366; }
+.metrics { display: grid; grid-template-columns: 1fr 1fr; background: var(--border); }
+.metric { background: var(--surf); padding: 10px 12px; min-width: 0; }
+.mkey { font-family: var(--mono); font-size: 8px; color: var(--muted); letter-spacing: 1px; }
+.mval { font-family: var(--mono); font-size: clamp(15px, 1.6vw, 20px); color: var(--accent); }
+.mval.ok { color: var(--ok); } .mval.warn { color: var(--warn); }
+.munit { font-family: var(--mono); font-size: 7px; color: var(--muted); }
+.sec-head { font-family: var(--mono); font-size: 9px; letter-spacing: 2px; color: var(--muted); padding: 6px 12px; background: var(--dim); position: sticky; top: 0; display:flex; justify-content:space-between; z-index: 1; }
+.chip { font-family: var(--mono); font-size: 8px; color: var(--accent); }
+.orow { display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-bottom: 1px solid rgba(26,37,53,.6); }
+.odot { width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; }
+.odot.l { background: #ff4444; } .odot.o { background: var(--ok); }
+.ocls { flex: 1; font-family: var(--mono); font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.oscr, .opos { font-family: var(--mono); font-size: 9px; color: var(--muted); flex-shrink: 0; }
+.hblock { padding: 6px 12px 10px; }
+.hrow { display: flex; justify-content: space-between; gap: 8px; font-family: var(--mono); font-size: 10px; padding: 3px 0; }
+.hkey { color: var(--muted); } .hval { color: var(--text); text-align: right; }
+.tblock { display: flex; gap: 12px; padding: 8px 12px 12px; }
+.tblock > div { flex: 1; min-width: 0; }
+.tid, .tdist { font-family: var(--mono); font-size: 16px; color: var(--accent); }
+.dclog { padding: 4px 12px 10px; }
+.dcrow { display: flex; gap: 8px; font-family: var(--mono); font-size: 8px; color: var(--muted); padding: 2px 0; }
+.dct { color: var(--accent); opacity: .6; flex-shrink: 0; }
+
+.bbar { 
+  flex-shrink: 0;
+  background: var(--surf); padding: 8px 14px; 
+  display: flex; gap: 16px; flex-wrap: wrap;
+  font-family: var(--mono); font-size: 9px; color: var(--muted); 
+  border-top: 1px solid var(--border); 
+}
+
+/* ── 반응형: 좁은 화면에서 세로 스택 ── */
+@media (max-width: 900px) {
+  body { height: auto; overflow: auto; }
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto;
+    height: auto;
+  }
+  .left {
+    grid-template-rows: auto auto;
+  }
+  .top-row, .bot-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .vwrap { aspect-ratio: 4 / 3; }
+  .tabview { aspect-ratio: 4 / 3; }
+  .sub-grid { aspect-ratio: 8 / 3; }
+  .objsec { max-height: none; }
+  .spanel { max-height: none; }
+}
+
+/* 아주 좁을 때 헤더 폰트 축소 */
+@media (max-width: 480px) {
+  .logo { font-size: 10px; letter-spacing: 2px; }
+  .hdr-right { gap: 8px; }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">ROBOT<em>_</em>MONITOR <em style="font-size:10px;margin-left:6px">// WebRTC ×2</em></div>
+  <div class="hdr-right">
+    <div class="dot-wrap"><div class="dot" id="dot"></div><span id="clbl">DISCONNECTED</span></div>
+    <button id="btn" onclick="toggleConnect()">CONNECT</button>
+  </div>
+</header>
+
+<div class="grid">
+
+  <!-- 좌측 -->
+  <div class="left">
+
+    <!-- 위: RealSense 일반 / 깊이 -->
+    <div class="top-row">
+      <div class="panel">
+        <div class="plabel">REALSENSE — MAIN <span class="badge idle" id="bm">IDLE</span></div>
+        <div class="vwrap">
+          <video id="vm" autoplay playsinline muted></video>
+          <div class="nosig" id="nsm">
+            <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
+              <rect x="2" y="18" width="6" height="14" fill="currentColor" opacity=".2"/>
+              <rect x="13" y="12" width="6" height="20" fill="currentColor" opacity=".5"/>
+              <rect x="24" y="4" width="6" height="28" fill="currentColor" opacity=".8"/>
+              <line x1="1" y1="35" x2="35" y2="1" stroke="#ff3366" stroke-width="2"/>
+            </svg>
+            NO SIGNAL
+          </div>
+          <div class="vfps" id="fps">— fps</div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="plabel">REALSENSE — DEPTH <span class="badge idle" id="bd">IDLE</span></div>
+        <div class="vwrap">
+          <video id="vd" autoplay playsinline muted></video>
+          <div class="nosig" id="nsd">
+            <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
+              <rect x="2" y="18" width="6" height="14" fill="currentColor" opacity=".2"/>
+              <rect x="13" y="12" width="6" height="20" fill="currentColor" opacity=".5"/>
+              <rect x="24" y="4" width="6" height="28" fill="currentColor" opacity=".8"/>
+              <line x1="1" y1="35" x2="35" y2="1" stroke="#ff3366" stroke-width="2"/>
+            </svg>
+            NO DEPTH
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 아래: 캡처 / AI 탭 -->
+    <div class="bot-row">
+
+      <!-- 캡처 -->
+      <div class="panel">
+        <div class="plabel">CAPTURE <span class="badge idle" id="bs">IDLE</span></div>
+        <div class="sub-grid">
+          <div class="svwrap">
+            <div class="svlabel">FACE DETECT</div>
+            <img id="img-face" style="width:100%;height:100%;object-fit:cover;display:block;background:#000" src="">
+            <div class="nosig" id="nsf" style="font-size:9px">NO FACE</div>
+          </div>
+          <div class="svwrap">
+            <div class="svlabel">PPE / HELMET</div>
+            <img id="img-ppe" style="width:100%;height:100%;object-fit:cover;display:block;background:#000" src="">
+            <div class="nosig" id="nsp" style="font-size:9px">NO PPE</div>
+          </div>
+        </div>
+        <div class="dclog">
+          <div class="sec-head" style="padding:4px 0;background:transparent;position:static">DC LOG</div>
+          <div id="dcbody"></div>
+        </div>
+      </div>
+
+      <!-- AI 서버 탭 뷰 -->
+      <div class="panel">
+        <div class="plabel">AI SERVER <span class="badge idle" id="baic">DC —</span></div>
+        <div class="tabs">
+          <button class="tab active" id="tab-main"  onclick="switchAiTab('main')">MAIN</button>
+          <button class="tab"        id="tab-depth" onclick="switchAiTab('depth')">DEPTH (AI)</button>
+        </div>
+        <div class="tabview">
+          <div class="tabpane active" id="pane-main">
+            <video id="ai_vm" autoplay playsinline muted></video>
+            <div class="nosig" id="ai_nsm">
+              <svg width="30" height="30" viewBox="0 0 36 36" fill="none">
+                <rect x="2" y="18" width="6" height="14" fill="currentColor" opacity=".2"/>
+                <rect x="13" y="12" width="6" height="20" fill="currentColor" opacity=".5"/>
+                <rect x="24" y="4" width="6" height="28" fill="currentColor" opacity=".8"/>
+                <line x1="1" y1="35" x2="35" y2="1" stroke="#ff3366" stroke-width="2"/>
+              </svg>
+              NO SIGNAL
+            </div>
+          </div>
+          <div class="tabpane" id="pane-depth">
+            <video id="ai_vd" autoplay playsinline muted></video>
+            <div class="nosig" id="ai_nsd" style="font-size:9px">
+              NO AI DEPTH<br><span style="font-size:8px;opacity:.6">(추론 미가동 시 표시)</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- 우측 상태 패널 (탭: NPU / AI) -->
+  <div class="spanel">
+    <div class="plabel">SYSTEM STATE <span class="badge idle" id="bdc">DC —</span></div>
+
+    <div class="tabs">
+      <button class="tab active" id="stab-npu" onclick="switchStateTab('npu')">NPU</button>
+      <button class="tab"        id="stab-ai"  onclick="switchStateTab('ai')">AI</button>
+    </div>
+
+    <!-- NPU 상태 -->
+    <div class="state-scroll active" id="state-npu">
+      <div class="bat-block">
+        <div class="bat-head"><span>BATTERY</span><span id="npu-bpct">—%</span></div>
+        <div class="bat-track"><div class="bat-fill" id="npu-bfill" style="width:0%"></div></div>
+      </div>
+      <div class="metrics">
+        <div class="metric"><div class="mkey">VOLTAGE</div><div class="mval" id="npu-vv">—</div><div class="munit">V</div></div>
+        <div class="metric"><div class="mkey">TEMP</div><div class="mval" id="npu-vt">—</div><div class="munit">°C</div></div>
+        <div class="metric"><div class="mkey">LIVE OBJ</div><div class="mval ok" id="npu-vl">0</div><div class="munit">PERSON/ANIMAL</div></div>
+        <div class="metric"><div class="mkey">OBJECTS</div><div class="mval" id="npu-vo">0</div><div class="munit">DETECTED</div></div>
+      </div>
+      <div class="objsec">
+        <div class="sec-head">DETECTED <span class="chip" id="npu-bcount">0</span></div>
+        <div id="npu-blist"></div>
+      </div>
+      <div class="hblock">
+        <div class="sec-head" style="padding:4px 0;background:transparent;position:static;margin-bottom:4px">HUMAN ANALYSIS</div>
+        <div class="hrow"><span class="hkey">POSITION</span><span class="hval" id="npu-hp">—</span></div>
+        <div class="hrow"><span class="hkey">EMOTION</span> <span class="hval" id="npu-he">—</span></div>
+        <div class="hrow"><span class="hkey">GENDER</span>  <span class="hval" id="npu-hg">—</span></div>
+        <div class="hrow"><span class="hkey">AGE</span>     <span class="hval" id="npu-ha">—</span></div>
+        <div class="hrow"><span class="hkey">DEPTH</span>   <span class="hval" id="npu-hd">—</span></div>
+      </div>
+    </div>
+
+    <!-- AI 상태 -->
+    <div class="state-scroll" id="state-ai">
+      <div class="bat-block">
+        <div class="bat-head"><span>BATTERY</span><span id="ai-bpct">—%</span></div>
+        <div class="bat-track"><div class="bat-fill" id="ai-bfill" style="width:0%"></div></div>
+      </div>
+      <div class="metrics">
+        <div class="metric"><div class="mkey">VOLTAGE</div><div class="mval" id="ai-vv">—</div><div class="munit">V</div></div>
+        <div class="metric"><div class="mkey">TEMP</div><div class="mval" id="ai-vt">—</div><div class="munit">°C</div></div>
+        <div class="metric"><div class="mkey">LIVE OBJ</div><div class="mval ok" id="ai-vl">0</div><div class="munit">PERSON/ANIMAL</div></div>
+        <div class="metric"><div class="mkey">OBJECTS</div><div class="mval" id="ai-vo">0</div><div class="munit">DETECTED</div></div>
+      </div>
+      <div class="objsec">
+        <div class="sec-head">DETECTED <span class="chip" id="ai-bcount">0</span></div>
+        <div id="ai-blist"></div>
+      </div>
+      <div class="hblock">
+        <div class="sec-head" style="padding:4px 0;background:transparent;position:static;margin-bottom:4px">HUMAN ANALYSIS</div>
+        <div class="hrow"><span class="hkey">POSITION</span><span class="hval" id="ai-hp">—</span></div>
+        <div class="hrow"><span class="hkey">EMOTION</span> <span class="hval" id="ai-he">—</span></div>
+        <div class="hrow"><span class="hkey">GENDER</span>  <span class="hval" id="ai-hg">—</span></div>
+        <div class="hrow"><span class="hkey">AGE</span>     <span class="hval" id="ai-ha">—</span></div>
+        <div class="hrow"><span class="hkey">DEPTH</span>   <span class="hval" id="ai-hd">—</span></div>
+      </div>
+      <div class="tblock">
+        <div><div class="mkey" style="margin-bottom:4px">APRILTAG ID</div><div class="tid" id="ai-tid">—</div></div>
+        <div><div class="mkey" style="margin-bottom:4px">DISTANCE</div><div class="tdist"><span id="ai-tdist">—</span> m</div></div>
+      </div>
+    </div>
+
+    <div class="bbar">
+      <div>RTT <span id="irtt">—</span> ms</div>
+      <div>DC/s <span id="idcr">—</span></div>
+      <div>NPU <span id="ipcs">—</span></div>
+      <div>AI <span id="ipcs2">—</span></div>
+      <div>TRK <span id="itrk">0</span>/4</div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+function uuidv4() {
+  if (window.crypto && crypto.getRandomValues) {
+    const bytes = new Uint8Array(16);
+    crypto.getRandomValues(bytes);
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    const hex = [...bytes].map(b => b.toString(16).padStart(2, '0'));
+    return (
+      hex.slice(0, 4).join('') + '-' +
+      hex.slice(4, 6).join('') + '-' +
+      hex.slice(6, 8).join('') + '-' +
+      hex.slice(8, 10).join('') + '-' +
+      hex.slice(10, 16).join('')
+    );
+  } else {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+      const r = Math.random() * 16 | 0;
+      const v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// 두 개의 WebRTC 서버
+//   NPU_BASE : RealSense (일반=vm, 깊이=vd) + state DC → NPU 상태 탭
+//   AI_BASE  : CPU/AI    (일반=ai_vm, 깊이=ai_vd) + state DC → AI 상태 탭
+// ─────────────────────────────────────────────────────────────
+const NPU_BASE = `http://127.0.0.1:59531`;
+const AI_BASE  = `http://127.0.0.1:59533`;
+const LIVING   = new Set(['person','cat','dog','bird','teddy bear','cow','sheep','horse']);
+
+let connected = false;
+let clientId = null;
+
+const conns = {
+  npu: { pc: null, base: NPU_BASE, trackCount: 0,
+         targets: [ {vid:'vm', ns:'nsm', badge:'bm'}, {vid:'vd', ns:'nsd', badge:'bd'} ] },
+  ai:  { pc: null, base: AI_BASE,  trackCount: 0,
+         targets: [ {vid:'ai_vm', ns:'ai_nsm', badge:null}, {vid:'ai_vd', ns:'ai_nsd', badge:null} ] },
+};
+
+// 서버별 DC 통계
+let dcMsgTotal = 0, dcMsgPrev = 0;
+let statsTimer = null, dcRateTimer = null;
+const dcLines = [];
+
+// ── 탭 전환 ──
+function switchAiTab(which) {
+  const isMain = which === 'main';
+  document.getElementById('tab-main').classList.toggle('active', isMain);
+  document.getElementById('tab-depth').classList.toggle('active', !isMain);
+  document.getElementById('pane-main').classList.toggle('active', isMain);
+  document.getElementById('pane-depth').classList.toggle('active', !isMain);
+}
+
+function switchStateTab(which) {
+  const isNpu = which === 'npu';
+  document.getElementById('stab-npu').classList.toggle('active', isNpu);
+  document.getElementById('stab-ai').classList.toggle('active', !isNpu);
+  document.getElementById('state-npu').classList.toggle('active', isNpu);
+  document.getElementById('state-ai').classList.toggle('active', !isNpu);
+}
+
+async function toggleConnect() {
+  connected ? await disconnect() : await connect();
+}
+
+async function connect() {
+  setStatus('connecting');
+  clientId = uuidv4();
+
+  await Promise.allSettled([
+    connectServer('npu'),
+    connectServer('ai'),
+  ]);
+
+  if (conns.npu.pc || conns.ai.pc) {
+    setStatus('connected');
+    startStats();
+  } else {
+    setStatus('error');
+  }
+}
+
+async function connectServer(key) {
+  const ctx = conns[key];
+  ctx.trackCount = 0;
+  const pc = new RTCPeerConnection({ iceServers: [] });  // 로컬 망 전용
+  ctx.pc = pc;
+
+  pc.ontrack = (e) => {
+    const mid = e.transceiver ? e.transceiver.mid : String(ctx.trackCount);
+    const idx = parseInt(mid, 10);
+    const tgt = ctx.targets[idx] || ctx.targets[ctx.trackCount];
+    console.log(`[${key}] ontrack mid=${mid} idx=${idx} -> ${tgt ? tgt.vid : '??'}`);
+    if (tgt) {
+      const stream = new MediaStream([e.track]);
+      const vEl = document.getElementById(tgt.vid);
+      if (vEl) vEl.srcObject = stream;
+      const nsEl = document.getElementById(tgt.ns);
+      if (nsEl) nsEl.style.display = 'none';
+      if (tgt.badge) {
+        const b = document.getElementById(tgt.badge);
+        if (b) { b.textContent = 'LIVE'; b.className = 'badge live'; }
+      }
+    }
+    ctx.trackCount++;
+    updateTrackTotal();
+  };
+
+  pc.ondatachannel = (e) => {
+    if (e.channel.label !== 'state') return;
+    const dc = e.channel;
+    dc.binaryType = 'arraybuffer';
+    dc.onopen = () => {
+      if (key === 'npu') {
+        const b = document.getElementById('bdc');
+        if (b) { b.textContent = 'DC ON'; b.className = 'badge live'; }
+      } else {
+        const b = document.getElementById('baic');
+        if (b) { b.textContent = 'DC ON'; b.className = 'badge live'; }
+      }
+      startDcRate();
+    };
+    dc.onmessage = (ev) => {
+      dcMsgTotal++;
+      const raw = ev.data instanceof ArrayBuffer
+        ? new TextDecoder().decode(ev.data) : ev.data;
+      try {
+        const data = JSON.parse(raw);
+        // 캡처(face/ppe)는 어느 서버든 공통 캡처 패널로
+        if (data.type === 'face' || data.type === 'ppe') showCapture(data);
+        else updateUI(key, data);   // ← 서버별 상태 탭에 반영
+      } catch(err) { console.warn('DC parse error', err); }
+    };
+    dc.onclose = () => {
+      const id = key === 'npu' ? 'bdc' : 'baic';
+      const b = document.getElementById(id);
+      if (b) { b.textContent = 'DC OFF'; b.className = 'badge idle'; }
+    };
+  };
+
+  pc.onconnectionstatechange = () => {
+    set(key === 'npu' ? 'ipcs' : 'ipcs2', pc.connectionState);
+    console.log(`[${key}] connectionState:`, pc.connectionState);
+  };
+  pc.oniceconnectionstatechange = () => {
+    console.log(`[${key}] iceConnectionState:`, pc.iceConnectionState);
+  };
+
+  // offer 수신
+  const res = await fetch(`${ctx.base}/webrtc/offer?client_id=${clientId}`);
+  if (!res.ok) throw new Error(`[${key}] offer HTTP ${res.status}`);
+  const serverOffer = await res.json();
+  const cands = serverOffer.sdp.split('\n').filter(l => l.startsWith('a=candidate'));
+  console.log(`[${key}] server offer: ${cands.length} candidates`);
+  if (cands.length === 0)
+    console.error(`[${key}] !! no candidates in server SDP - check server NIC !!`);
+
+  await pc.setRemoteDescription(new RTCSessionDescription(serverOffer));
+  const answer = await pc.createAnswer();
+  await pc.setLocalDescription(answer);
+  await waitIce(pc, 3000);
+
+  const res2 = await fetch(`${ctx.base}/webrtc/answer`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      sdp: pc.localDescription.sdp,
+      type: pc.localDescription.type,
+      client_id: clientId,
+    })
+  });
+  if (!res2.ok) throw new Error(`[${key}] answer HTTP ${res2.status}`);
+  console.log(`[${key}] answer sent OK`);
+}
+
+function updateTrackTotal() {
+  set('itrk', conns.npu.trackCount + conns.ai.trackCount);
+}
+
+function waitIce(pc, ms) {
+  return new Promise(resolve => {
+    if (pc.iceGatheringState === 'complete') return resolve();
+    const tid = setTimeout(resolve, ms);
+    pc.addEventListener('icegatheringstatechange', function h() {
+      if (pc.iceGatheringState === 'complete') {
+        clearTimeout(tid);
+        pc.removeEventListener('icegatheringstatechange', h);
+        resolve();
+      }
+    });
+  });
+}
+
+async function disconnect() {
+  stopStats();
+  for (const key of ['npu','ai']) {
+    const ctx = conns[key];
+    if (ctx.pc) {
+      fetch(`${ctx.base}/webrtc/${clientId}`, { method: 'DELETE' }).catch(()=>{});
+      try { ctx.pc.close(); } catch {}
+      ctx.pc = null;
+      ctx.trackCount = 0;
+    }
+  }
+  ['vm','vd','ai_vm','ai_vd'].forEach(id => { const el = document.getElementById(id); if(el) el.srcObject = null; });
+  ['img-face','img-ppe'].forEach(id => { const el = document.getElementById(id); if(el) el.src = ''; });
+  ['nsm','nsd','nsf','nsp','ai_nsm','ai_nsd'].forEach(id => { const el = document.getElementById(id); if(el) el.style.display = ''; });
+  ['bm','bd','bs'].forEach(id => { const b = document.getElementById(id); if(b){b.textContent='IDLE';b.className='badge idle';}});
+  ['bdc','baic'].forEach(id => { const b = document.getElementById(id); if(b){b.textContent='DC —';b.className='badge idle';}});
+  set('itrk', '0');
+  setStatus('disconnected');
+}
+
+function showCapture(data) {
+  const imgId = data.type === 'face' ? 'img-face' : 'img-ppe';
+  const nsId  = data.type === 'face' ? 'nsf'      : 'nsp';
+  const el = document.getElementById(imgId);
+  if (!el) return;
+  el.src = 'data:image/jpeg;base64,' + data.b64;
+  const ns = document.getElementById(nsId);
+  if (ns) ns.style.display = 'none';
+  const b = document.getElementById('bs');
+  b.textContent = 'CAPTURE'; b.className = 'badge live';
+  const now = new Date().toISOString().substr(11,8);
+  const label = data.label ?? '';
+  const conf  = data.conf != null ? (data.conf*100).toFixed(0)+'%' : '';
+  dcLines.unshift(
+    `<div class="dcrow"><span class="dct">${now}</span>` +
+    `<span>${data.type.toUpperCase()} ${label} ${conf}</span></div>`
+  );
+  if (dcLines.length > 5) dcLines.pop();
+  document.getElementById('dcbody').innerHTML = dcLines.join('');
+}
+
+// key = 'npu' | 'ai' → 해당 상태 탭의 요소만 갱신 (id prefix)
+function updateUI(key, s) {
+  const p = key + '-';   // id prefix
+  const pct = s.charge ?? 0;
+  set(p+'bpct', pct + '%');
+  const fill = document.getElementById(p+'bfill');
+  if (fill) {
+    fill.style.width = pct + '%';
+    fill.className = 'bat-fill' + (pct < 20 ? ' c' : pct < 40 ? ' w' : '');
+  }
+
+  set(p+'vv', s.voltage != null ? (+s.voltage).toFixed(1) : '—');
+  const tel = document.getElementById(p+'vt');
+  const temp = s.temp ?? 0;
+  if (tel) { tel.textContent = temp; tel.className = 'mval' + (temp > 80 ? ' warn' : ''); }
+  set(p+'vl', s.cnt_live   ?? 0);
+  set(p+'vo', s.cnt_object ?? 0);
+
+  const boxes = s.boxes ?? [];
+  set(p+'bcount', boxes.length);
+  const listEl = document.getElementById(p+'blist');
+  if (listEl) {
+    listEl.innerHTML = boxes.length
+      ? boxes.slice(0,30).map(b =>
+          `<div class="orow">
+            <div class="odot ${LIVING.has(b.class)?'l':'o'}"></div>
+            <div class="ocls">${b.class}</div>
+            <div class="oscr">${(b.score*100).toFixed(0)}%</div>
+            <div class="opos">${b.position||'—'}</div>
+          </div>`).join('')
+      : '<div style="padding:10px 12px;font-family:var(--mono);font-size:9px;color:var(--muted)">NO OBJECTS</div>';
+  }
+
+  const h = s.human ?? {};
+  set(p+'hp', h.position || '—');
+  set(p+'he', h.emotion  || '—');
+  set(p+'hg', h.gender   || '—');
+  set(p+'ha', h.age      || '—');
+  set(p+'hd', h.depth != null && h.depth !== '' ? (+h.depth).toFixed(2)+' m' : '—');
+
+  // AprilTag은 AI 탭에만 존재
+  const tag = s.tag ?? {};
+  set(p+'tid',   tag.id   ?? '—');
+  set(p+'tdist', tag.dist != null ? (+tag.dist).toFixed(2) : '—');
+
+  const now = new Date().toISOString().substr(11,8);
+  dcLines.unshift(
+    `<div class="dcrow"><span class="dct">${now}</span>` +
+    `<span>[${key.toUpperCase()}] L:${s.cnt_live??0} O:${s.cnt_object??0} BAT:${s.charge??0}%</span></div>`
+  );
+  if (dcLines.length > 5) dcLines.pop();
+  document.getElementById('dcbody').innerHTML = dcLines.join('');
+}
+
+function set(id, val) { const el = document.getElementById(id); if(el) el.textContent = val; }
+
+function startStats() {
+  statsTimer = setInterval(async () => {
+    let rtt = null;
+    for (const key of ['npu','ai']) {
+      const pc = conns[key].pc;
+      if (!pc) continue;
+      try {
+        const stats = await pc.getStats();
+        stats.forEach(r => {
+          if (r.type==='candidate-pair' && r.state==='succeeded' && r.currentRoundTripTime!=null)
+            rtt = Math.round(r.currentRoundTripTime*1000);
+        });
+      } catch {}
+    }
+    if (rtt != null) set('irtt', rtt);
+  }, 1000);
+}
+
+function startDcRate() {
+  if (dcRateTimer) return;
+  dcRateTimer = setInterval(() => {
+    set('idcr', dcMsgTotal - dcMsgPrev);
+    dcMsgPrev = dcMsgTotal;
+  }, 1000);
+}
+
+function stopStats() {
+  clearInterval(statsTimer); clearInterval(dcRateTimer);
+  statsTimer = dcRateTimer = null;
+}
+
+function setStatus(s) {
+  document.getElementById('dot').className    = 'dot ' + s;
+  document.getElementById('clbl').textContent = s.toUpperCase();
+  const btn = document.getElementById('btn');
+  if (s === 'connected') {
+    connected = true; btn.textContent = 'DISCONNECT'; btn.disabled = false;
+  } else if (s === 'connecting') {
+    btn.textContent = '···'; btn.disabled = true;
+  } else {
+    connected = false; btn.textContent = 'CONNECT'; btn.disabled = false;
+  }
+}
+
+let fpsN = 0, fpsT = performance.now();
+(function loop() {
+  requestAnimationFrame(() => {
+    fpsN++;
+    const now = performance.now();
+    if (now - fpsT >= 1000) { set('fps', fpsN+' fps'); fpsN=0; fpsT=now; }
+    loop();
+  });
+})();
+</script>
+</body>
+</html>
