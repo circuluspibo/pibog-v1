@@ -767,7 +767,8 @@ def stt(file : UploadFile = File(...), lang="ko", isPlay=0):
   return { "result" : True, "data" : str(out) } #txt2chat(chat, isPlay)
 
 print("Loading Complete","GPU")
-subprocess.Popen(["aplay","-D","plughw:0,0", 'intel_inside.wav']) # async
+#subprocess.Popen(["aplay","-D","plughw:0,0", 'intel_inside.wav']) # async
+subprocess.Popen(["./g1_audio","enp115s0", 'intel_inside.wav'])
 
 upload_all_csv()
 
