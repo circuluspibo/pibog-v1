@@ -114,7 +114,7 @@ age_gender_h, age_gender_w = list(age_gender_compiled.input(0).shape)[2:]
 emotion_h,    emotion_w    = list(emotion_compiled.input(0).shape)[2:]
 
 det_model   = YOLO("models/yolo11m-seg_int8_openvino_model")
-ppe_model   = YOLO("models/safety-11s_int8_openvino_model")
+ppe_model   = YOLO("models/helmet-11s_int8_openvino_model")
 class_names = det_model.names
 ppe_names   = ppe_model.names
 detector    = Detector(families="tag36h11")
@@ -557,14 +557,14 @@ def processing_thread():
         frame_ai = cv2.resize(frame, (640, 640), interpolation=cv2.INTER_NEAREST)
 
         res     = det_model(frame_ai, device="intel:npu", verbose=False, conf=0.3)[0]
-        ppe_res = ppe_model(frame_ai, device="intel:npu", verbose=False, conf=0.7)[0]
+        ppe_res = ppe_model(frame_ai, device="intel:npu", verbose=False, conf=0.5)[0]
+
+        #print(ppe_res)
 
         masks   = res.masks.data.cpu().numpy().astype(np.uint8) if res.masks else []
         boxes   = res.boxes.xyxy.cpu().numpy()
         classes = res.boxes.cls.cpu().numpy().astype(int)
         scores  = res.boxes.conf.cpu().numpy()
-
-        out, face_crops = visualize_all(frame_ai, masks, boxes, classes, scores)
 
         cur_time = time.time()
         if ppe_res.boxes is not None:
@@ -573,7 +573,7 @@ def processing_thread():
                 conf   = float(ppe_res.boxes.conf.cpu().numpy()[i])
                 cls_id = int(ppe_res.boxes.cls.cpu().numpy()[i])
                 label  = ppe_names.get(cls_id, str(cls_id))
-
+                print(cur_time, label)
                 if 'helmet' in label or 'face' in label:
                     ch, cw   = frame_ai.shape[:2]
                     crop     = frame_ai[max(0, y1):min(ch, y2), max(0, x1):min(cw, x2)].copy()
@@ -603,6 +603,7 @@ def processing_thread():
 
                         def _ppe_action(img, fn):
                             def action():
+                                threading.Thread(target=_save_ppe, args=(img, fn), daemon=True).start()
                                 led(255, 255, 255)
                                 def send_ppe_request():
                                     try:
@@ -612,7 +613,6 @@ def processing_thread():
                                         print(f"PPE Network error: {e}")
                                 threading.Thread(target=send_ppe_request, daemon=True).start()
                                 threading.Thread(target=play, args=('welcome.mp3',), daemon=True).start()
-                                threading.Thread(target=_save_ppe, args=(img, fn), daemon=True).start()
                                 arm("lowWave")
                                 arm("Release_Arm")
                             run_safe_action(action)
@@ -629,6 +629,7 @@ def processing_thread():
                         def _face_action(img, fn):
                             def action():
                                 led(255, 0, 0)
+                                threading.Thread(target=_save_face, args=(img, fn), daemon=True).start()
                                 def send_face_request():
                                     try:
                                         httpx.get("http://127.0.0.1:59532/v2/img2chat",
@@ -637,7 +638,6 @@ def processing_thread():
                                         print(f"Face Network error: {e}")
                                 threading.Thread(target=send_face_request, daemon=True).start()
                                 threading.Thread(target=play, args=('alarm.mp3',), daemon=True).start()
-                                threading.Thread(target=_save_face, args=(img, fn), daemon=True).start()
                                 arm("Refuse")
                                 arm("Release_Arm")
                             run_safe_action(action)
@@ -647,6 +647,8 @@ def processing_thread():
                             args=(crop.copy(), f"face_{int(cur_time)}.jpg"),
                             daemon=True
                         ).start()
+
+        out, face_crops = visualize_all(frame_ai, masks, boxes, classes, scores)                        
 
         depth_tick += 1
         if depth_tick >= DEPTH_SKIP_N:
