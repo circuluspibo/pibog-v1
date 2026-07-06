@@ -11,7 +11,6 @@
   asyncio  FastAPI    : REST 엔드포인트
 """
 
-import base64
 import queue
 import threading
 import time
@@ -30,7 +29,7 @@ import matplotlib.colors
 import pyaudio
 from fastapi import FastAPI, File, UploadFile, Query, HTTPException
 import httpx
-
+import base64
 from scipy.io.wavfile import write as write_wav
 from scipy.io.wavfile import write as wav_write
 import audioop
@@ -136,8 +135,12 @@ face_det_h,   face_det_w   = list(face_det_compiled.input(0).shape)[2:]
 age_gender_h, age_gender_w = list(age_gender_compiled.input(0).shape)[2:]
 emotion_h,    emotion_w    = list(emotion_compiled.input(0).shape)[2:]
 
-det_model   = YOLO("models/yolo11m-seg_int8_openvino_model")
+det_model = YOLO("models/yolo11m-seg_int8_openvino_model") #yolo26s-helmet_int8_openvino_model
+ppe_model = YOLO("models/safety-11s_int8_openvino_model") #yolo26s-seg_int8_openvino_model
+
 class_names = det_model.names
+ppe_names   = ppe_model.names
+
 detector    = Detector(families="tag36h11")
 
 config_tts = {"PERFORMANCE_HINT": "LATENCY"}
@@ -241,8 +244,9 @@ recording_start_time = time.time()
 _PORT = int(open("port.txt").read())
 
 FACES_DIR = "faces"; os.makedirs(FACES_DIR, exist_ok=True)
+PPE_DIR   = "ppe";   os.makedirs(PPE_DIR,   exist_ok=True)
 last_face_saved_time = 0.0
-
+last_ppe_saved_time  = 0.0
 
 # ─────────────────────────────────────────────────────────────
 # 파일 저장
@@ -250,11 +254,17 @@ last_face_saved_time = 0.0
 def _save_face(img, filename):
     try:
         cv2.imwrite(os.path.join(FACES_DIR, filename), img)
-        files = sorted(glob.glob(os.path.join(FACES_DIR, "*.jpg")), key=os.path.getmtime)
+    except Exception as e:
+        print(f"face save error: {e}")
+
+def _save_ppe(img, filename):
+    try:
+        cv2.imwrite(os.path.join(PPE_DIR, filename), img)
+        files = sorted(glob.glob(os.path.join(PPE_DIR,"*.jpg")), key=os.path.getmtime)
         for f in files[:-20]:
             os.remove(f)
     except Exception as e:
-        print(f"face save error: {e}")
+        print(f"ppe save error: {e}")
 
 # ─────────────────────────────────────────────────────────────
 # 통합 시각화 함수
@@ -521,10 +531,111 @@ def processing_thread():
         frame_ai = cv2.resize(frame, (640, 640), interpolation=cv2.INTER_NEAREST)
 
         res     = det_model(frame_ai, device="intel:npu", verbose=False, conf=0.3)[0]
+        ppe_res = ppe_model(frame_ai, device="intel:npu", verbose=False, conf=0.7)[0]
+
+
         masks   = res.masks.data.cpu().numpy().astype(np.uint8) if res.masks else []
         boxes   = res.boxes.xyxy.cpu().numpy()
         classes = res.boxes.cls.cpu().numpy().astype(int)
         scores  = res.boxes.conf.cpu().numpy()
+
+        cur_time = time.time()
+        if ppe_res.boxes is not None:
+            for i, box in enumerate(ppe_res.boxes.xyxy.cpu().numpy()):
+                x1,y1,x2,y2 = map(int, box)
+                conf   = float(ppe_res.boxes.conf.cpu().numpy()[i])
+                cls_id = int(ppe_res.boxes.cls.cpu().numpy()[i])
+                label  = ppe_names.get(cls_id, str(cls_id))
+
+                if 'helmet' in label or 'face' in label:
+                    ch,cw    = frame_ai.shape[:2]
+                    crop     = frame_ai[max(0,y1):min(ch,y2), max(0,x1):min(cw,x2)].copy()
+                    cap_type = "ppe" if 'helmet' in label else "face"
+
+                    cv2.imwrite("capture2.jpg", frame)
+
+                    # DataChannel 캡처 전송
+                    ok, buf = cv2.imencode('.jpg', crop, [cv2.IMWRITE_JPEG_QUALITY, 75])
+                    if ok:
+                        b64 = base64.b64encode(buf).decode()
+                        msg = json.dumps({"type":cap_type,"b64":b64,
+                                          "label":label,"conf":round(conf,2)})
+                        try:
+                            capture_q.put_nowait(msg)
+                        except queue.Full:
+                            pass
+
+                    if cap_type == "ppe" and cur_time - last_ppe_saved_time > 15.0:
+                        last_ppe_saved_time = cur_time
+                        
+                        def _ppe_action(img, fn):
+                            # 1. 시각 신호(LED)는 지연이 없으므로 즉시 실행
+                            led(255, 255, 255)
+                            
+                            # 2. API 요청 비동기 스레드 실행
+                            def send_ppe_request():
+                                try:
+                                    httpx.get("http://127.0.0.1:59532/v2/img2chat", params={"prompt": "다음과 같이 사람이 안전모를 쓴 상황에서 어떤 말을 하면 좋을까?"})
+                                except Exception as e:
+                                    print(f"PPE Network error: {e}")
+                            threading.Thread(target=send_ppe_request, daemon=True).start()
+                            
+                            # 3. 안내 음성 재생 스레드 실행 (음악이 재생되는 동안 코드가 멈추지 않음)
+                            threading.Thread(target=play, args=('welcome.mp3',), daemon=True).start()
+                            
+                            # 4. 이미지 저장 스레드 실행 (디스크 I/O 병목 방지)
+                            threading.Thread(target=_save_ppe, args=(img, fn), daemon=True).start()
+                            
+                            # # 필요 시 주석 해제하여 사용 (로봇 팔 제어)
+                            # threading.Thread(target=arm, args=("lowWave",), daemon=True).start()
+                            # threading.Thread(target=arm, args=("Release_Arm",), daemon=True).start()
+
+                        # 전체 액션을 감싸는 스레드 시작
+                        threading.Thread(
+                            target=_ppe_action,
+                            args=(crop.copy(), f"ppe_{label}_{int(cur_time)}.jpg"),
+                            daemon=True
+                        ).start()
+
+                        arm("lowWave")
+                        arm("Release_Arm")
+
+                    elif cap_type == "face" and cur_time - last_face_saved_time > 15.0:
+                        last_face_saved_time = cur_time
+                        
+                        def _face_action(img, fn):
+                            # 1. 경고 LED 즉시 실행
+                            led(255, 0, 0)
+                            
+                            # 2. 위험 상황 알림 API 요청 비동기 스레드 실행
+                            def send_face_request():
+                                try:
+                                    httpx.get("http://127.0.0.1:59532/v2/img2chat", params={"prompt": "다음과 같이 사람이 안전모를 쓰지 않은 위험상황에 대해 이야기 해줘."})
+                                except Exception as e:
+                                    print(f"Face Network error: {e}")
+                            threading.Thread(target=send_face_request, daemon=True).start()
+                            
+                            # 3. 경고음 재생 스레드 실행
+                            threading.Thread(target=play, args=('alarm.mp3',), daemon=True).start()
+                            
+                            # 4. 로봇 팔 제어 스레드 실행
+                            # (주의: Refuse 동작과 Release_Arm 동작 사이에 시간 간격이 필요하다면 arm 함수 내부나 
+                            #  별도 함수에서 time.sleep()을 준 뒤 순차 실행해야 할 수 있습니다. 여기서는 동시에 던집니다.)
+                            threading.Thread(target=arm, args=("Refuse",), daemon=True).start()
+                            threading.Thread(target=arm, args=("Release_Arm",), daemon=True).start()
+                            
+                            # 5. 미착용 이미지 저장 스레드 실행
+                            threading.Thread(target=_save_face, args=(img, fn), daemon=True).start()
+
+                        # 전체 액션을 감싸는 스레드 시작
+                        threading.Thread(
+                            target=_face_action,
+                            args=(crop.copy(), f"face_{int(cur_time)}.jpg"),
+                            daemon=True
+                        ).start()
+
+                        arm("Refuse")
+                        arm("Release_Arm")
 
         out, face_crops = visualize_all(frame_ai, masks, boxes, classes, scores)
 
@@ -534,30 +645,6 @@ def processing_thread():
             depth_colored, depth_info = infer_depth(frame_ai)
             state["depth"] = depth_info
             q_put(stream_q_depth, depth_colored)
-
-        cur_time = time.time()
-        for i, (crop, x1, y1, x2, y2) in enumerate(face_crops):
-            ok, buf = cv2.imencode('.jpg', crop, [cv2.IMWRITE_JPEG_QUALITY, 75])
-            if ok:
-                msg = json.dumps({
-                    "type":    "face",
-                    "b64":     base64.b64encode(buf).decode(),
-                    "age":     state["human"]["age"],
-                    "gender":  state["human"]["gender"],
-                    "emotion": state["human"]["emotion"],
-                })
-                try:
-                    capture_q.put_nowait(msg)
-                except queue.Full:
-                    pass
-
-            if i == 0 and cur_time - last_face_saved_time > 15.0:
-                last_face_saved_time = cur_time
-                threading.Thread(
-                    target=_save_face,
-                    args=(crop, f"face_{int(cur_time)}.jpg"),
-                    daemon=True
-                ).start()
 
         tags = detector.detect(cv2.cvtColor(frame_ai, cv2.COLOR_BGR2GRAY))
         if tags:
@@ -842,6 +929,23 @@ async def proxy_stt(
     finally:
         # 파일 리소스 닫기
         await file.close()
+
+
+@app.get("/led")
+def led(r:int=0, g:int=0, b:int=0):
+    requests.get(f"http://{_IP}:59521/led?r={r}&g={g}&b={b}")
+    return {"result": True}
+
+@app.get("/color")
+def color(value:str='red'):
+    rgb = (np.array(matplotlib.colors.to_rgb(value))*255).astype(int)
+    requests.get(f"http://{_IP}:59521/led?r={rgb[0]}&g={rgb[1]}&b={rgb[2]}")
+    return {"result": True}
+
+@app.get("/arm")
+def arm(cmd:str='lowWave'):
+    requests.get(f"http://{_IP}:58521/arm?cmd={cmd}")
+    return {"result": True}
 
 @app.get("/start_collection")
 def start_collection():
