@@ -3,9 +3,9 @@ from huggingface_hub import snapshot_download
 
 # 1. 모델 리스트 정의 (Hugging Face Repo ID : 폴더명)
 model_list = {
-    "OpenVINO/Qwen3-Reranker-0.6B-fp16-ov": "Qwen3-Reranker-0.6B-fp16-ov",
+    "OpenVINO/Qwen3-Reranker-0.6B-int8-ov": "Qwen3-Reranker-0.6B-int8-ov",
     "OpenVINO/Qwen3-Embedding-0.6B-int8-ov": "Qwen3-Embedding-0.6B-int8-ov",
-    "circulus/Qwen3-VL-8B-it-ov-awq": "Qwen3-VL-8B-it-ov-awq",  #Echo9Zulu/gemma-3-4b-it-qat-int4_asym-ov": "gemma-3-4b-it-qat-int4_asym-ov",
+    "OpenVINO/Qwen3.5-4B-int4-ov": "Qwen3.5-4B-int4-ov",  #Echo9Zulu/gemma-3-4b-it-qat-int4_asym-ov": "gemma-3-4b-it-qat-int4_asym-ov",
     "circulus/whisper-large-v3-turbo-ov-int4": "whisper-large-v3-turbo-ov-int4",
     "circulus/yolo-11s-safety-ov": "safety-11s_int8_openvino_model",
     "circulus/yolo26s-helmet-ov": "yolo26s-helmet-ov",

@@ -152,7 +152,7 @@ class Chat(BaseModel):
   top_k : int = 50
   max : int = 256 #16384
 
-model_txt = "./models/gemma-4-E4B-it-int4-ov" #gemma-3-4b-it-ov-awq" #snapshot_download(repo_id='Echo9Zulu/gemma-3-4b-it-qat-int4_asym-ov') # circulus/gemma-3-4b-it-ov-awq-sym helenai/Qwen2.5-VL-3B-Instruct-ov-int4
+model_txt = "./models/Qwen3.5-4B-int4-ov" #gemma-3-4b-it-ov-awq" #snapshot_download(repo_id='Echo9Zulu/gemma-3-4b-it-qat-int4_asym-ov') # circulus/gemma-3-4b-it-ov-awq-sym helenai/Qwen2.5-VL-3B-Instruct-ov-int4
 model_stt = "./models/whisper-large-v3-turbo-ov-int4"#snapshot_download(repo_id='circulus/whisper-large-v3-turbo-ov')
 
 config = {
@@ -775,11 +775,11 @@ upload_all_csv()
 url = "http://127.0.0.1:59531/web/pion2.html"
 
 # Kiosk 모드로 Chromium 실행
-
+"""
 subprocess.Popen(['chromium', '--kiosk', url],
     stdin=subprocess.DEVNULL,       # Discard stdin from the child process
     stdout=subprocess.DEVNULL,      # Discard stdout from the child process
     stderr=subprocess.DEVNULL,      # Discard stderr from the child process
     start_new_session=True          # Start the process in a new session (POSIX only)
 )
-
+"""
