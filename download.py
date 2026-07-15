@@ -10,10 +10,11 @@ model_list = {
     "circulus/yolo-11s-safety-ov": "safety-11s_int8_openvino_model",
     "circulus/yolo26s-helmet-ov": "yolo26s-helmet-ov",
     "circulus/yolo26s-seg-ov": "yolo26s-seg-ov",
-    "HarmenWessels/gemma-4-12B-it-qat-int4-ov" : "gemma-4-12B-it-qat-int4-ov",
-    "OpenVINO/gemma-4-26b-a4b-it-int4-ov" : "gemma-4-26b-a4b-it-int4-ov",
-    "OpenVINO/Qwen3.5-9B-int4-ov" : "Qwen3.5-9B-int4-ov" ,
-    "OpenVINO/Qwen3.6-35B-A3B-int4-ov" : "Qwen3.6-35B-A3B-int4-ov"
+    #"HarmenWessels/gemma-4-12B-it-qat-int4-ov" : "gemma-4-12B-it-qat-int4-ov",
+    #"OpenVINO/gemma-4-26b-a4b-it-int4-ov" : "gemma-4-26b-a4b-it-int4-ov",
+    #"OpenVINO/Qwen3.5-9B-int4-ov" : "Qwen3.5-9B-int4-ov" ,
+    #"OpenVINO/Qwen3.6-35B-A3B-int4-ov" : "Qwen3.6-35B-A3B-int4-ov",
+    "OpenVINO/Qwen3-VL-8B-Instruct-int4-ov" : "Qwen3-VL-8B-Instruct-int4-ov"
 }
 
 base_dir = "./models"

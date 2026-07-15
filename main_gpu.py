@@ -152,7 +152,7 @@ class Chat(BaseModel):
   top_k : int = 50
   max : int = 256 #16384
 
-model_txt = "./models/Qwen3.5-4B-int4-ov" #gemma-3-4b-it-ov-awq" #snapshot_download(repo_id='Echo9Zulu/gemma-3-4b-it-qat-int4_asym-ov') # circulus/gemma-3-4b-it-ov-awq-sym helenai/Qwen2.5-VL-3B-Instruct-ov-int4
+model_txt = "./models/Qwen3-VL-8B-Instruct-int4-ov" #gemma-3-4b-it-ov-awq" #snapshot_download(repo_id='Echo9Zulu/gemma-3-4b-it-qat-int4_asym-ov') # circulus/gemma-3-4b-it-ov-awq-sym helenai/Qwen2.5-VL-3B-Instruct-ov-int4
 model_stt = "./models/whisper-large-v3-turbo-ov-int4"#snapshot_download(repo_id='circulus/whisper-large-v3-turbo-ov')
 
 config = {
@@ -477,6 +477,7 @@ def txt2chat(prompt : str ,system = _SYSTEM, isPlay = 0, lang='en', voice=31): #
   generate_kwargs = dict(
       prompt = prompt,
       config = config,
+      enable_thnking=False,
       streamer=streamer, # !do_sample || top_k > 0
   )
 
@@ -768,7 +769,7 @@ def stt(file : UploadFile = File(...), lang="ko", isPlay=0):
 
 print("Loading Complete","GPU")
 #subprocess.Popen(["aplay","-D","plughw:0,0", 'intel_inside.wav']) # async
-subprocess.Popen(["./g1_audio","enp115s0", 'intel_inside.wav'])
+subprocess.Popen(["./g1_audio","enp45s0", 'intel_inside.wav'])
 
 upload_all_csv()
 
