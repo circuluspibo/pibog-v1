@@ -13,3 +13,4 @@ __pycache__*
 recordings_wakeword
 recordings
 *.csv
+core
