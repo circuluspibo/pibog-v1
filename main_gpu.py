@@ -288,6 +288,8 @@ async def process_stream(streamer, isStream=True, isPlay=0, lang='en', voice=31)
     log_file = "GPU_log.csv"
     new_file = not os.path.exists(log_file)
 
+    pipe_txt.finish_chat()
+
     with open(log_file, mode="a", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
 
