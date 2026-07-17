@@ -34,6 +34,27 @@ import httpx
 
 app = FastAPI()
 
+def get_wired_interface():
+    result = subprocess.run(
+        ["ip", "-o", "link", "show", "up"],
+        capture_output=True,
+        text=True,
+        check=True
+    )
+
+    for line in result.stdout.splitlines():
+        name = line.split(":")[1].strip()
+
+        # 유선 인터페이스만 선택
+        if name.startswith(("enp", "eth")):
+            return name
+
+    raise RuntimeError("활성화된 유선 인터페이스를 찾을 수 없습니다.")
+
+
+INTERFACE = get_wired_interface()
+
+
 def play_sound(file_path):
     #subprocess.run(["aplay","-D","plughw:0,0", file_path], stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
     subprocess.run([
@@ -46,7 +67,7 @@ def play_sound(file_path):
         f"output/_{file_path}",
     ], check=True)
 
-    subprocess.run(["./g1_audio","enp115s0", f"output/_{file_path}"])
+    subprocess.run(["./g1_audio",INTERFACE, f"output/_{file_path}"])
 
 
 def set_volume(val):

@@ -88,13 +88,32 @@ stream_q_depth = queue.Queue(maxsize=1)
 capture_q      = queue.Queue(maxsize=4)
 import subprocess
 
+def get_wired_interface():
+    result = subprocess.run(
+        ["ip", "-o", "link", "show", "up"],
+        capture_output=True,
+        text=True,
+        check=True
+    )
+
+    for line in result.stdout.splitlines():
+        name = line.split(":")[1].strip()
+
+        # 유선 인터페이스만 선택
+        if name.startswith(("enp", "eth")):
+            return name
+
+    raise RuntimeError("활성화된 유선 인터페이스를 찾을 수 없습니다.")
+
+
+INTERFACE = get_wired_interface()
 
 def play(path):
-    subprocess.run(["./g1_audio","enp115s0", path])
+    subprocess.run(["./g1_audio",INTERFACE, path])
     if path == "alarm.wav":
-        subprocess.run(["./g1_audio","enp115s0", "safe.wav"])
+        subprocess.run(["./g1_audio",INTERFACE, "safe.wav"])
     else:
-        subprocess.run(["./g1_audio","enp115s0", "unsafe.wav"])
+        subprocess.run(["./g1_audio",INTERFACE, "unsafe.wav"])
     
 
 
@@ -682,7 +701,7 @@ def processing_thread():
 
         cnt_image += 1
         if cnt_image % 100 == 0:
-            cv2.imwrite("capture.jpg", frame)
+            cv2.imwrite("capture2.jpg", frame)
 
 def _make_vf(bgr: np.ndarray, pts: int, tb) -> VideoFrame:
     vf = VideoFrame.from_ndarray(cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB).copy(), format="rgb24")
@@ -891,7 +910,7 @@ G1_ACTION = {
 def led(r: str = "255", g: str = "255", b: str = "255"):
     try:
         subprocess.run(
-            ["./g1_vui","enp115s0", r, g, b],
+            ["./g1_vui",INTERFACE, r, g, b],
             check=True
         )
         return {
@@ -916,7 +935,7 @@ def arm(cmd: str = "lowWave"):
     try:
         print(str(G1_ACTION[cmd]))
         subprocess.run(
-            ["./g1_action","enp115s0", str(G1_ACTION[cmd])],
+            ["./g1_action",INTERFACE, str(G1_ACTION[cmd])],
             check=True
         )
         return {
