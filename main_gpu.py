@@ -37,7 +37,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from PIL import Image
 from openvino import Tensor
 from pathlib import Path
-from openvino_genai import GenerationConfig
+from openvino_genai import GenerationConfig, ChatHistory
 import time
 import csv
 import os
@@ -78,8 +78,6 @@ config.top_n = 5
 # ===============================
 # 🔥 RERANKER
 # ===============================
-#model_rerank = snapshot_download(repo_id="OpenVINO/Qwen3-Reranker-0.6B-fp16-ov")
-
 reranker = TextRerankPipeline("./models/Qwen3-Reranker-0.6B-int8-ov","GPU",config) #./models/Qwen3-Reranker-0.6B-ov
 
 
@@ -152,9 +150,26 @@ class Chat(BaseModel):
   top_k : int = 50
   max : int = 256 #16384
 
-model_txt = "./models/Qwen3-VL-8B-Instruct-int4-ov" #gemma-3-4b-it-ov-awq" #snapshot_download(repo_id='Echo9Zulu/gemma-3-4b-it-qat-int4_asym-ov') # circulus/gemma-3-4b-it-ov-awq-sym helenai/Qwen2.5-VL-3B-Instruct-ov-int4
+model_txt = "./models/Qwen3.5-35B-A3B-int4-ov" #gemma-3-4b-it-ov-awq" #snapshot_download(repo_id='Echo9Zulu/gemma-3-4b-it-qat-int4_asym-ov') # circulus/gemma-3-4b-it-ov-awq-sym helenai/Qwen2.5-VL-3B-Instruct-ov-int4
 model_stt = "./models/whisper-large-v3-turbo-ov-int4"#snapshot_download(repo_id='circulus/whisper-large-v3-turbo-ov')
 
+config = {
+    "PERFORMANCE_HINT": "LATENCY",
+    "EXECUTION_MODE_HINT" : "PERFORMANCE", # 추가 햇는데 나을지는
+    "NUM_STREAMS": "1",
+    "MODEL_PRIORITY": "HIGH",
+
+    "KV_CACHE_PRECISION": "u4",
+    "INFERENCE_PRECISION_HINT": "f16",
+    "DYNAMIC_QUANTIZATION_GROUP_SIZE": "64",
+
+    "GPU_QUEUE_PRIORITY": "HIGH",
+    "GPU_HOST_TASK_PRIORITY": "HIGH",
+
+    "CACHE_DIR": "./ov_cache",
+}
+
+"""
 config = {
     # 1. 지연시간 최소화 및 자원 집중
     "PERFORMANCE_HINT": "LATENCY",
@@ -175,10 +190,14 @@ config = {
     "CACHE_DIR": "./ov_cache",
     #"ENABLE_CPU_PINNING": "YES",# CPU-GPU 협업 효율 증대 -CPU 로 추론할때 전용으로 묶는것.. 
 }
+"""
+
 pipe_stt = ov_genai.WhisperPipeline(model_stt,device="GPU", config={"PERFORMANCE_HINT": "LATENCY", "CACHE_DIR": "./ov_cache"})
 
 token_txt = AutoTokenizer.from_pretrained(model_txt)
-pipe_txt = ov_genai.VLMPipeline(model_txt, device="GPU", config=config)
+
+#draft_model = ov_genai.draft_model("./models/Qwen3-0.6B-int4-ov", device="GPU")
+pipe_txt = ov_genai.VLMPipeline(model_txt, device="GPU", config=config) #, prompt_lookup=True)
 
 def get_rag_context(
     query: str,
@@ -445,62 +464,49 @@ def upload_all_csv():
         "total_chunks": total_chunks
     }
 
+# OpenVINO/Qwen3.5-2B-int4-ov
+
 @app.get("/v1/txt2chat", summary="문장 기반의 chatgpt 스타일 구현")
-def txt2chat(prompt : str ,system = _SYSTEM, isPlay = 0, lang='en', voice=31): # gen or med
-  streamer = IterableStreamer(pipe_txt.get_tokenizer())
+def txt2chat(prompt: str, system=_SYSTEM, isPlay=0, lang='en', voice=31):
+    streamer = IterableStreamer(pipe_txt.get_tokenizer())
 
-  messages = [
-    {"role": "system", "content": system},
-    {"role": "user", "content": prompt}
-  ] 
-  """
-  prompt = token_txt.apply_chat_template(
-    messages,
-    tokenize=False,
-    enable_thinking=True,
-    add_generation_prompt=True
-  )
-"""
-  pipe_txt.start_chat(system_message=system)
+    history = ChatHistory()
+    history.append({"role": "system","content": system})
+    history.set_extra_context({"enable_thinking": False})
+    history.append({"role": "user","content": prompt})
 
-  print(prompt)
+    config = GenerationConfig(
+        max_new_tokens=256,
+        repetition_penalty=1.0,
+        temperature=0.4,
+        do_sample=False,
+        top_k=20,
+        top_p=0.8,
+        speculative_decoding=True         
+    )
 
-  config = GenerationConfig(
-      max_new_tokens=256,
-      temperature=0.5,
-      beam_size=1,
-      do_sample=False, #fast for beam-search
-      speculative_decoding=True,
-      repetition_penalty=1.1,
-      top_k=50,
-      top_p=0.9,
-  )
 
-  generate_kwargs = dict(
-      prompt = prompt,
-      config = config,
-      enable_thnking=False,
-      streamer=streamer, # !do_sample || top_k > 0
-  )
+    generate_kwargs = dict(
+        history=history,
+        generation_config=config,
+        streamer=streamer,
+    )
 
-  """
-  generate_kwargs = dict(
-      inputs = prompt,
-      max_new_tokens= 256,
-      temperature= 0.5,
-      #do_sample=True,
-      repetition_penalty=1.1,
-      top_k=50,
-      top_p=0.9,
-      streamer=streamer, # !do_sample || top_k > 0
-  )
-  """
+    t1 = Thread(
+        target=pipe_txt.generate,
+        kwargs=generate_kwargs
+    )
+    t1.start()
 
-  t1 = Thread(target=pipe_txt.generate, kwargs=generate_kwargs)
-  t1.start()
+    out = process_stream(streamer,False,isPlay,lang,voice)
 
-  out = process_stream(streamer, False, isPlay,lang,voice)
-  return StreamingResponse(out, media_type='text/plain; charset=utf-8', headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Content-Type-Options": "nosniff"})
+    return StreamingResponse(out,media_type='text/plain; charset=utf-8',
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Content-Type-Options": "nosniff"
+        }
+    )
 
 @app.get("/v1/rag/txt2chat", summary="문장 기반의 chatgpt 스타일 구현")
 def txt2rag(prompt : str ,system = _SYSTEM, isPlay = 0, lang='en', voice=31): # gen or med
@@ -609,48 +615,46 @@ def img2chat2(prompt = "" ,system = _SYSTEM, isPlay = 0, lang='en', voice=31): #
 
 @app.post("/v1/img2chat", summary="문장 기반의 chatgpt 스타일 구현")
 def img2chat(file : UploadFile = File(...), prompt = "" ,system = _SYSTEM, isPlay = 0, lang='en', voice=31): # gen or med
-  streamer = IterableStreamer(pipe_txt.get_tokenizer())
+    streamer = IterableStreamer(pipe_txt.get_tokenizer())
 
-  messages = [
-    {"role": "system", "content": system},
-    {"role": "user", "content": prompt}
-  ] 
-  """
-  prompt = token_txt.apply_chat_template(
-    messages,
-    tokenize=False,
-    enable_thinking=True,
-    add_generation_prompt=True
-  )
-  """
+    history = ChatHistory()
+    history.append({"role": "system","content": system})
+    history.set_extra_context({"enable_thinking": False})
+    history.append({"role": "user","content": prompt})
 
-  print(prompt)
+    config = GenerationConfig(
+        max_new_tokens=256,
+        repetition_penalty=1.0,
+        temperature=0.4,
+        do_sample=False,
+        top_k=20,
+        top_p=0.8,
+        speculative_decoding=True            
+    )
 
-  config = GenerationConfig(
-      max_new_tokens=256,
-      temperature=0.5,
-      beam_size=1,
-      do_sample=False, #fast for beam-search
-      speculative_decoding=True,
-      #repetition_penalty=1.1,
-      #top_k=50,
-      #top_p=0.9,
-      
-  )
+    generate_kwargs = dict(
+        history=history,
+        images=read_image(file.file),
+        config=config,
+        streamer=streamer, # !do_sample || top_k > 0
+    )
 
-  generate_kwargs = dict(
-      prompt = prompt,
-      images=read_image(file.file),
-      config=config,
-      streamer=streamer, # !do_sample || top_k > 0
-  )
+    t1 = Thread(
+        target=pipe_txt.generate,
+        kwargs=generate_kwargs
+    )
+    t1.start()
 
-  t1 = Thread(target=pipe_txt.generate, kwargs=generate_kwargs)
-  t1.start()
+    out = process_stream(streamer,False,isPlay,lang,voice)
 
-  out = process_stream(streamer, False, isPlay, lang, voice)
-  #return StreamingResponse(out, media_type='text/event-stream')
-  return StreamingResponse(out, media_type='text/plain; charset=utf-8', headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Content-Type-Options": "nosniff"})   
+    return StreamingResponse(out,media_type='text/plain; charset=utf-8',
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Content-Type-Options": "nosniff"
+        }
+    )
+
 
 @app.post("/v1/rag/img2chat", summary="문장 기반의 chatgpt 스타일 구현")
 def img2rag(file : UploadFile = File(...), prompt = "" ,system = _SYSTEM, isPlay = 0, lang='en', voice=31): # gen or med
@@ -770,7 +774,7 @@ def stt(file : UploadFile = File(...), lang="ko", isPlay=0):
   return { "result" : True, "data" : str(out) } #txt2chat(chat, isPlay)
 
 print("Loading Complete","GPU")
-#subprocess.Popen(["aplay","-D","plughw:0,0", 'intel_inside.wav']) # async
+subprocess.Popen(["aplay","-D","plughw:0,0", 'intel_inside.wav']) # async
 subprocess.Popen(["./g1_audio","enp45s0", 'intel_inside.wav'])
 
 upload_all_csv()
