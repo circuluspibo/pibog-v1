@@ -5,17 +5,21 @@ from huggingface_hub import snapshot_download
 model_list = {
     "OpenVINO/Qwen3-Reranker-0.6B-int8-ov": "Qwen3-Reranker-0.6B-int8-ov",
     "OpenVINO/Qwen3-Embedding-0.6B-int8-ov": "Qwen3-Embedding-0.6B-int8-ov",
-    "OpenVINO/Qwen3.5-4B-int4-ov": "Qwen3.5-4B-int4-ov",  #Echo9Zulu/gemma-3-4b-it-qat-int4_asym-ov": "gemma-3-4b-it-qat-int4_asym-ov",
+    "OpenVINO/Qwen3.5-2B-int4-ov": "Qwen3.5-2B-int4-ov",
+    #"OpenVINO/Qwen3.5-9B-int4-ov": "Qwen3.5-9B-int4-ov",  #Echo9Zulu/gemma-3-4b-it-qat-int4_asym-ov": "gemma-3-4b-it-qat-int4_asym-ov",
     "circulus/whisper-large-v3-turbo-ov-int4": "whisper-large-v3-turbo-ov-int4",
     "circulus/yolo-11s-safety-ov": "safety-11s_int8_openvino_model",
     "circulus/yolo26s-helmet-ov": "yolo26s-helmet-ov",
     "circulus/yolo26s-seg-ov": "yolo26s-seg-ov",
     #"HarmenWessels/gemma-4-12B-it-qat-int4-ov" : "gemma-4-12B-it-qat-int4-ov",
     #"OpenVINO/gemma-4-26b-a4b-it-int4-ov" : "gemma-4-26b-a4b-it-int4-ov",
-    #"OpenVINO/Qwen3.5-9B-int4-ov" : "Qwen3.5-9B-int4-ov" ,
-    #"OpenVINO/Qwen3.6-35B-A3B-int4-ov" : "Qwen3.6-35B-A3B-int4-ov",
-    "OpenVINO/Qwen3-VL-8B-Instruct-int4-ov" : "Qwen3-VL-8B-Instruct-int4-ov"
+    #"circulus/Qwen3.5-4B-eagle3-ov-int4" : "Qwen3.5-4B-eagle3-ov-int4",
+    "OpenVINO/Qwen3.5-4B-int4-ov" : "Qwen3.5-4b-int4-ov",
+    "OpenVINO/Qwen3.5-2B-int4-ov" : "Qwen3.5-2B-int4-ov",
+    "OpenVINO/gemma-4-E4B-it-int4-ov" : "gemma-4-E4B-it-int4-ov",
+    "OpenVINO/gemma-4-E2B-it-int4-ov" : "gemma-4-E2B-it-int4-ov",
 }
+
 
 base_dir = "./models"
 os.makedirs(base_dir, exist_ok=True)
