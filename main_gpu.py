@@ -150,7 +150,7 @@ class Chat(BaseModel):
   top_k : int = 50
   max : int = 256 #16384
 
-model_txt = "./models/Qwen3.5-35B-A3B-int4-ov" #gemma-3-4b-it-ov-awq" #snapshot_download(repo_id='Echo9Zulu/gemma-3-4b-it-qat-int4_asym-ov') # circulus/gemma-3-4b-it-ov-awq-sym helenai/Qwen2.5-VL-3B-Instruct-ov-int4
+model_txt = "./models/gemma-4-E4B-it-int4-ov" #Qwen3.5-35B-A3B-int4-ov"  #gemma-3-4b-it-ov-awq" #snapshot_download(repo_id='Echo9Zulu/gemma-3-4b-it-qat-int4_asym-ov') # circulus/gemma-3-4b-it-ov-awq-sym helenai/Qwen2.5-VL-3B-Instruct-ov-int4
 model_stt = "./models/whisper-large-v3-turbo-ov-int4"#snapshot_download(repo_id='circulus/whisper-large-v3-turbo-ov')
 
 config = {
@@ -196,7 +196,7 @@ pipe_stt = ov_genai.WhisperPipeline(model_stt,device="GPU", config={"PERFORMANCE
 
 token_txt = AutoTokenizer.from_pretrained(model_txt)
 
-#draft_model = ov_genai.draft_model("./models/Qwen3-0.6B-int4-ov", device="GPU")
+#draft_model = ov_genai.draft_model("./models/Qwen3.5-4B-eagle3-ov-int4", device="GPU")
 pipe_txt = ov_genai.VLMPipeline(model_txt, device="GPU", config=config) #, prompt_lookup=True)
 
 def get_rag_context(
@@ -774,8 +774,8 @@ def stt(file : UploadFile = File(...), lang="ko", isPlay=0):
   return { "result" : True, "data" : str(out) } #txt2chat(chat, isPlay)
 
 print("Loading Complete","GPU")
-subprocess.Popen(["aplay","-D","plughw:0,0", 'intel_inside.wav']) # async
-subprocess.Popen(["./g1_audio","enp45s0", 'intel_inside.wav'])
+#subprocess.Popen(["aplay","-D","plughw:0,0", 'intel_inside.wav']) # async
+#subprocess.Popen(["./g1_audio","enp45s0", 'intel_inside.wav'])
 
 upload_all_csv()
 
