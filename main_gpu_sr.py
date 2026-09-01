@@ -174,6 +174,7 @@ model_txt = 'models/Qwen3.5-2B-int4-ov' #  snapshot_download(repo_id='circulus/Q
 model_stt = 'models/whisper-large-v3-turbo-ov-int4'#snapshot_download(repo_id='circulus/whisper-large-v3-turbo-ov-int4') # translate not working, only general model
 #model_img = snapshot_download(repo_id='rippertnt/pix2pix-turbo-ov')
 model_t2t = 'models/ko2en-ov-int4' #snapshot_download(repo_id='rippertnt/ko2en-ov-int4')
+model_img = 'models/on-canvers-real-v3.9.1-int8'
 
 swapper = FaceSwapOpenVINO(device_name="GPU") 
 
@@ -188,7 +189,7 @@ pipe_t2t = pipeline("text2text-generation", model=model_t2t, tokenizer=token_t2t
 pipe_stt = ov_genai.WhisperPipeline(model_stt,device="GPU", config={"PERFORMANCE_HINT": "LATENCY"})
 pipe_txt = ov_genai.VLMPipeline(model_txt, device="GPU", config={"PERFORMANCE_HINT": "LATENCY"})
 #pipe_img2anim = OVStableDiffusionPipeline.from_pretrained("circulus/on-canvers-disney-v3.9.1-int8", ov_config={"CACHE_DIR": ""})
-pipe_img2real = OVStableDiffusionPipeline.from_pretrained("circulus/on-canvers-real-v3.9.1-int8", ov_config={"CACHE_DIR": ""})
+pipe_img2real = OVStableDiffusionPipeline.from_pretrained(model_img, ov_config={"CACHE_DIR": ""})
 
 
 def load_model(vlm=True):
