@@ -5,7 +5,6 @@ from huggingface_hub import snapshot_download
 model_list = {
     "OpenVINO/Qwen3-Reranker-0.6B-int8-ov": "Qwen3-Reranker-0.6B-int8-ov",
     "OpenVINO/Qwen3-Embedding-0.6B-int8-ov": "Qwen3-Embedding-0.6B-int8-ov",
-    "OpenVINO/Qwen3.5-2B-int4-ov": "Qwen3.5-2B-int4-ov",
     #"OpenVINO/Qwen3.5-9B-int4-ov": "Qwen3.5-9B-int4-ov",  #Echo9Zulu/gemma-3-4b-it-qat-int4_asym-ov": "gemma-3-4b-it-qat-int4_asym-ov",
     "circulus/whisper-large-v3-turbo-ov-int4": "whisper-large-v3-turbo-ov-int4",
     "circulus/yolo-11s-safety-ov": "safety-11s_int8_openvino_model",
@@ -18,6 +17,8 @@ model_list = {
     "OpenVINO/Qwen3.5-2B-int4-ov" : "Qwen3.5-2B-int4-ov",
     "OpenVINO/gemma-4-E4B-it-int4-ov" : "gemma-4-E4B-it-int4-ov",
     "OpenVINO/gemma-4-E2B-it-int4-ov" : "gemma-4-E2B-it-int4-ov",
+    "rippertnt/ko2en-ov-int4" : "ko2en-ov-int4",
+    "circulus/on-canvers-real-v3.9.1-int8" : "on-canvers-real-v3.9.1-int8"
 }
 
 
