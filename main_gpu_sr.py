@@ -170,10 +170,10 @@ class Chat(BaseModel):
   top_k : int = 50
   max : int = 256 #16384
 
-model_txt = snapshot_download(repo_id='circulus/Qwen3-VL-2B-it-ov-awq') #circulus/gemma-3-4b-it-ov-awq  # helenai/Qwen3-VL-4B-Instruct-int4 Echo9Zulu/gemma-3-4b-it-qat-int4_asym-ov circulus/gemma-3-4b-it-ov-awq-sym helenai/Qwen2.5-VL-3B-Instruct-ov-int4
-model_stt = snapshot_download(repo_id='circulus/whisper-large-v3-turbo-ov-int4') # translate not working, only general model
+model_txt = 'models/Qwen3.5-2B-int4-ov' #  snapshot_download(repo_id='circulus/Qwen3-VL-2B-it-ov-awq') #circulus/gemma-3-4b-it-ov-awq  # helenai/Qwen3-VL-4B-Instruct-int4 Echo9Zulu/gemma-3-4b-it-qat-int4_asym-ov circulus/gemma-3-4b-it-ov-awq-sym helenai/Qwen2.5-VL-3B-Instruct-ov-int4
+model_stt = 'models/whisper-large-v3-turbo-ov-int4'#snapshot_download(repo_id='circulus/whisper-large-v3-turbo-ov-int4') # translate not working, only general model
 #model_img = snapshot_download(repo_id='rippertnt/pix2pix-turbo-ov')
-model_t2t = snapshot_download(repo_id='rippertnt/ko2en-ov-int4')
+model_t2t = 'models/ko2en-ov-int4' #snapshot_download(repo_id='rippertnt/ko2en-ov-int4')
 
 swapper = FaceSwapOpenVINO(device_name="GPU") 
 
