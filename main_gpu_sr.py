@@ -35,7 +35,7 @@ import io
 import random
 import torch
 from optimum.intel.openvino.modeling_diffusion import OVStableDiffusionPipeline
-from ov_faceswap import FaceSwapOpenVINO 
+from ov_faceswap import FaceSwapOpenVINO
 import cv2
 import os
 import numpy as np
@@ -57,7 +57,7 @@ def compute_partial_slices(n_samples: int, rate=1.3, min_coverage=0.75):
     samples_per_frame = int((sampling_rate * mel_window_step / 1000))
     n_frames = int(np.ceil((n_samples + 1) / samples_per_frame))
     frame_step = int(np.round((sampling_rate / rate) / samples_per_frame))
-    
+
     wav_slices, mel_slices = [], []
     steps = max(1, n_frames - partials_n_frames + frame_step + 1)
     for i in range(0, steps, frame_step):
@@ -76,7 +76,7 @@ def embed_utterance(wav: np.ndarray, smodel_compiled):
 
     mel = audio.wav_to_mel_spectrogram(wav)
     mels = np.array([mel[s] for s in mel_slices])
-    
+
     # OpenVINO 추론
     output_layer = smodel_compiled.output(0)
     partial_embeds = smodel_compiled(mels)[output_layer]
@@ -96,7 +96,7 @@ def synthesize_audio(src_path, tgt_path):
     # Source Content 추출
     wav_src, _ = librosa.load(src_path, sr=sampling_rate)
     wav_src = np.expand_dims(wav_src, axis=0).astype(np.float32)
-    
+
     # cmodel 추론
     c_output = compiled_cmodel(wav_src)[compiled_cmodel.output(0)]
     c = c_output.transpose((0, 2, 1)) # [1, channel, time]
@@ -104,7 +104,7 @@ def synthesize_audio(src_path, tgt_path):
     # net_g(Synthesizer) 최종 추론
     # 입력 순서와 타입 주의
     tgt_audio = compiled_net_g([c, g_tgt])[compiled_net_g.output(0)]
-    
+
     return tgt_audio[0][0]
 
 
@@ -131,7 +131,7 @@ app.add_middleware(
 class Param (BaseModel):
   text : str
   hash : str = Field(default='')
-  voice : str = Field(default='main') 
+  voice : str = Field(default='main')
   lang : str = Field(default='ko')
   type : str = Field(default='mp3')
   pitch : str = Field(default='medium')
@@ -139,8 +139,8 @@ class Param (BaseModel):
   volume : str = Field(default='medium')
 
 """
-너는 파이온이라는 휴머노이드 로봇으로 사람들을 지키기 위해 태어났어.  
- 
+너는 파이온이라는 휴머노이드 로봇으로 사람들을 지키기 위해 태어났어.
+
 다음과 같은 동작중 하나를 선택할 수 있어
 clamp, highFive, shakeHands_1, blowKiss, hug, hightWave, lowWave, ultramanRay, bothHandsUp, singleHandsUp, Refuse
 
@@ -164,19 +164,19 @@ class Chat(BaseModel):
   prompt : str = ''
   lang : str = 'auto'
   type : str =  _SYSTEM #" "당신은 데이비드라고 하는 10살 남자아이 성향의 유쾌하고 즐거운 인공지능입니다. 이모티콘도 잘 활용해서 젊은 말투로 대답하세요."
-  rag :  str = ''  
+  rag :  str = ''
   temp : float = 0.5
   top_p : float = 0.92
   top_k : int = 50
   max : int = 256 #16384
 
-model_txt = 'models/Qwen3.5-2B-int4-ov' #  snapshot_download(repo_id='circulus/Qwen3-VL-2B-it-ov-awq') #circulus/gemma-3-4b-it-ov-awq  # helenai/Qwen3-VL-4B-Instruct-int4 Echo9Zulu/gemma-3-4b-it-qat-int4_asym-ov circulus/gemma-3-4b-it-ov-awq-sym helenai/Qwen2.5-VL-3B-Instruct-ov-int4
+model_txt = 'models/gemma-4-E2B-it-int4-ov' #  snapshot_download(repo_id='circulus/Qwen3-VL-2B-it-ov-awq') #circulus/gemma-3-4b-it-ov-awq  # helenai/Qwen3-VL-4B-Instruct-int4 Echo9Zulu/gemma-3-4b-it-qat-int4_asym-ov circulus/gemma-3-4b-it-ov-awq-sym helenai/Qwen2.5-VL-3B-Instruct-ov-int4
 model_stt = 'models/whisper-large-v3-turbo-ov-int4'#snapshot_download(repo_id='circulus/whisper-large-v3-turbo-ov-int4') # translate not working, only general model
 #model_img = snapshot_download(repo_id='rippertnt/pix2pix-turbo-ov')
 model_t2t = 'models/ko2en-ov-int4' #snapshot_download(repo_id='rippertnt/ko2en-ov-int4')
 model_img = 'models/on-canvers-real-v3.9.1-int8'
 
-swapper = FaceSwapOpenVINO(device_name="GPU") 
+swapper = FaceSwapOpenVINO(device_name="GPU")
 
 token_txt = AutoTokenizer.from_pretrained(model_txt)
 #token_img = AutoTokenizer.from_pretrained(model_img)
@@ -198,14 +198,14 @@ def load_model(vlm=True):
 """
 def load_model(vlm=True):
 
-  
+
   global model_img
   global model_txt
   global pipe_txt
   global pipe_img
 
   print('model',vlm)
-  
+
   if vlm:
     if pipe_txt is None:
       pipe_img = None
@@ -247,7 +247,7 @@ async def process_stream(streamer, isStream=True, isPlay=0, lang='en'):
         full_txt = full_txt + new_token
         if isStart is False:
           isStart = True
-          latency =  time.time() - start_time 
+          latency =  time.time() - start_time
 
         # token count 증가
 
@@ -263,7 +263,7 @@ async def process_stream(streamer, isStream=True, isPlay=0, lang='en'):
         # 🔥 Stream 모드 처리
         # ---------------------
         if isStream:
-            await asyncio.sleep(0)          
+            await asyncio.sleep(0)
             yield new_token
 
         # ---------------------
@@ -315,7 +315,7 @@ app.add_middleware(
 
 @app.get("/")
 def main():
-  return { "result" : True, "data" : "AI-CPU-V2", "ip" : _IP, "port" : _PORT }           
+  return { "result" : True, "data" : "AI-CPU-V2", "ip" : _IP, "port" : _PORT }
 
 
 @app.get("/monitor")
@@ -325,7 +325,7 @@ def monitor():
 
 @app.get("/prepare")
 def preprare(mode : int = 0):
-  
+
   if mode == 0:
     load_model(vlm=True)
   else:
@@ -376,10 +376,10 @@ def img2chat2(prompt = "" ,system = _SYSTEM, isPlay = 0, lang='en'): # gen or me
   messages = [
     {"role": "system", "content": system},
     {"role": "user", "content": prompt}
-  ] 
+  ]
 
   pipe_txt.start_chat(system_message=system)
-    
+
   print(prompt)
 
   config = GenerationConfig(
@@ -422,7 +422,7 @@ def img2chat(file : UploadFile = File(...), prompt = "recognize this image as OC
       #repetition_penalty=1.1,
       #top_k=50,
       #top_p=0.9,
-      
+
   )
 
   generate_kwargs = dict(
@@ -445,7 +445,7 @@ def stt(file : UploadFile = File(...), lang="ko", isPlay=0):
 
   with open(location,"wb+") as file_object:
     file_object.write(file.file.read())
-  
+
   raw_speech, samplerate = librosa.load(location, sr=16000)
   print('length',librosa.get_duration(y=raw_speech, sr=samplerate))
   raw =  raw_speech.tolist()
@@ -544,7 +544,7 @@ def voice2wav(src : UploadFile = File(...), tgt : UploadFile = File(...)):
     file_object.write(src.file.read())
 
   with open(tgt_file,"wb+") as file_object:
-    file_object.write(tgt.file.read())    
+    file_object.write(tgt.file.read())
 
   ### 4. 실행 및 결과 저장
   print('추론 시작...')
@@ -606,6 +606,6 @@ async def sketch2img(file: UploadFile = File(...), prompt: str = "", seed: int =
 
   return save_path
 """
-  
+
 print("Loading Complete","GPU")
 subprocess.Popen(["play", 'intel_inside.mp3']) # async
