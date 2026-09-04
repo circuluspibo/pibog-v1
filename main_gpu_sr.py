@@ -178,7 +178,7 @@ model_img = 'models/on-canvers-real-v3.9.1-int8'
 
 swapper = FaceSwapOpenVINO(device_name="GPU")
 
-token_txt = AutoTokenizer.from_pretrained(model_txt)
+#token_txt = AutoTokenizer.from_pretrained(model_txt) # gemma-4 tokenizer_config는 transformers v5 전용(TokenizersBackend)이라 로드 실패. token/s는 스트림에서 직접 카운트
 #token_img = AutoTokenizer.from_pretrained(model_img)
 
 conf = AutoConfig.from_pretrained(model_t2t, trust_remote_code=True)
@@ -250,6 +250,7 @@ async def process_stream(streamer, isStream=True, isPlay=0, lang='en'):
           latency =  time.time() - start_time
 
         # token count 증가
+        total_tokens += 1
 
         if "assistant" in new_token:
             cnt += 1
@@ -297,7 +298,6 @@ async def process_stream(streamer, isStream=True, isPlay=0, lang='en'):
     # 🔥 token/s 계산
     # ---------------------------------
     duration = time.time() - start_time
-    total_tokens = len(token_txt(full_txt)['input_ids'])
     tokens_per_sec = total_tokens / duration if duration > 0 else 0
 
     print(f"Total tokens: {total_tokens}")
