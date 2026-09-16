@@ -18,7 +18,7 @@ model_list = {
     "circulus/whisper-large-v3-turbo-ov-int4": "whisper-large-v3-turbo-ov-int4",  # GPU STT (main_gpu_sr.py model_stt)
     "OpenVINO/gemma-4-E2B-it-int4-ov" : "gemma-4-E2B-it-int4-ov",  # GPU LLM (main_gpu_sr.py model_txt)
     "rippertnt/ko2en-ov-int4" : "ko2en-ov-int4",                   # GPU 번역 (model_t2t)
-    "circulus/on-canvers-real-v3.9.1-int8" : "on-canvers-real-v3.9.1-int8"  # GPU 이미지 생성 (model_img)
+    "OpenVINO/whisper-large-v3-turbo-int8-ov" : "whisper-large-v3-turbo-int8-ov"  # GPU 이미지 생성 (model_img)
 }
 
 
