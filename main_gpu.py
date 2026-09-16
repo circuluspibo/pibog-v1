@@ -192,7 +192,7 @@ config = {
 }
 """
 
-pipe_stt = ov_genai.ASRPipeline(model_stt,device="GPU", config={"PERFORMANCE_HINT": "LATENCY", "CACHE_DIR": "./ov_cache"})
+pipe_stt = ov_genai.WhisperPipeline(model_stt,device="GPU", config={"PERFORMANCE_HINT": "LATENCY", "CACHE_DIR": "./ov_cache"})
 
 token_txt = AutoTokenizer.from_pretrained(model_txt)
 
