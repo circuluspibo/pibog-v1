@@ -299,6 +299,7 @@ async def process_stream(streamer, isStream=True, isPlay=0, lang='en', voice=31)
     tokens_per_sec = total_tokens / duration if duration > 0 else 0
 
     print(f"Total tokens: {total_tokens}")
+    print(f"Latency: {latency}")
     print(f"Duration: {duration:.4f} sec")
     print(f"Tokens/s: {tokens_per_sec:.4f}")
 
