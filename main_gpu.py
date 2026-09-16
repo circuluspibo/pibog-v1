@@ -151,7 +151,7 @@ class Chat(BaseModel):
   max : int = 256 #16384
 
 model_txt = "./models/gemma-4-E4B-it-int4-ov" #Qwen3.5-4b-int4-ov" #Qwen3.5-35B-A3B-int4-ov"  #gemma-3-4b-it-ov-awq" #snapshot_download(repo_id='Echo9Zulu/gemma-3-4b-it-qat-int4_asym-ov') # circulus/gemma-3-4b-it-ov-awq-sym helenai/Qwen2.5-VL-3B-Instruct-ov-int4
-model_stt = "./models/whisper-large-v3-turbo-int4-ov" #whisper-large-v3-turbo-ov-int4"#snapshot_download(repo_id='circulus/whisper-large-v3-turbo-ov')
+model_stt = "./models/whisper-large-v3-turbo-int4-ov-npu" #whisper-large-v3-turbo-int4-ov whisper-large-v3-turbo-ov-int4"#snapshot_download(repo_id='circulus/whisper-large-v3-turbo-ov')
 
 config = {
     "PERFORMANCE_HINT": "LATENCY",
